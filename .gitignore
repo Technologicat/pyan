@@ -1,0 +1,15 @@
+# Python Cache
+*.pyc
+
+# Python setup install
+build
+dist
+pyan3.egg-info
+
+# Python venv
+venv
+
+# Pyan3 visualize_pyan_architecture.sh
+*.log
+*.dot
+architecture.svg
