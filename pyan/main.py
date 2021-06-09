@@ -142,6 +142,31 @@ def main(cli_args=None):
     )
 
     parser.add_argument(
+        "--dot-ranksep",
+        default="0.5",
+        dest="ranksep",
+        help=(
+            "specifies the dot graph 'ranksep' property for "
+            "controlling desired rank separation, in inches. "
+            "Allowed values: [0.02 .. 1000.0]. "
+            "[dot only]"
+        ),
+    )
+
+    parser.add_argument(
+        "--graphviz-layout",
+        default="dot",
+        dest="layout",
+        help=(
+            "specifies the graphviz 'layout' property for "
+            "the name of the layout algorithm to use. "
+            "Allowed values: ['dot', 'neato', 'fdp', 'sfdp', 'twopi', 'circo']. "
+            "Recommended values: ['dot', 'fdp']. "
+            "[graphviz only]"
+        ),
+    )
+
+    parser.add_argument(
         "-a",
         "--annotated",
         action="store_true",
@@ -159,7 +184,12 @@ def main(cli_args=None):
 
     known_args, unknown_args = parser.parse_known_args(cli_args)
 
-    filenames = [fn2 for fn in unknown_args for fn2 in glob(fn, recursive=True)]
+
+    filenames = []
+    for fn in unknown_args:
+        for fn2 in glob(fn, recursive=True):
+            abs_fn2 = os.path.abspath(fn2)
+            filenames.append(abs_fn2)
 
     # determine root
     if known_args.root is not None:
@@ -203,6 +233,11 @@ def main(cli_args=None):
         handler = logging.FileHandler(known_args.logname)
         logger.addHandler(handler)
 
+    logger.debug(f"[files] {unknown_args}")
+
+    if root:
+        root = os.path.abspath(root)
+
     v = CallGraphVisitor(filenames, logger=logger, root=root)
 
     if known_args.function or known_args.namespace:
@@ -222,13 +257,25 @@ def main(cli_args=None):
     writer = None
 
     if known_args.dot:
-        writer = DotWriter(graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger)
+        writer = DotWriter(graph, options=[
+            "rankdir=" + known_args.rankdir,
+            "ranksep=" + known_args.ranksep,
+            "layout=" + known_args.layout,
+        ], output=known_args.filename, logger=logger)
 
     if known_args.html:
-        writer = HTMLWriter(graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger)
+        writer = HTMLWriter(graph, options=[
+            "rankdir=" + known_args.rankdir,
+            "ranksep=" + known_args.ranksep,
+            "layout=" + known_args.layout,
+        ], output=known_args.filename, logger=logger)
 
     if known_args.svg:
-        writer = SVGWriter(graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger)
+        writer = SVGWriter(graph, options=[
+            "rankdir=" + known_args.rankdir,
+            "ranksep=" + known_args.ranksep,
+            "layout=" + known_args.layout,
+        ], output=known_args.filename, logger=logger)
 
     if known_args.tgf:
         writer = TgfWriter(graph, output=known_args.filename, logger=logger)
