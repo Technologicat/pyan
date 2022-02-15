@@ -39,6 +39,8 @@ def get_module_name(filename, root: str = None):
             potential_root = os.path.dirname(directories[0][0])
             is_root = any([f == "__init__.py" for f in os.listdir(potential_root)])
             directories.insert(0, (potential_root, is_root))
+            if is_root:
+                break
 
         # keep directories where itself of parent is root
         while not directories[0][1]:
