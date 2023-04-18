@@ -123,12 +123,15 @@ class DotWriter(Writer):
     def start_subgraph(self, graph):
         self.log("Start subgraph %s" % graph.label)
         # Name must begin with "cluster" to be recognized as a cluster by GraphViz.
-        self.write("subgraph cluster_%s {\n" % graph.id)
+        self.write("subgraph cluster_%s {\n" % self.sanitize_identifier(graph.id))
         self.indent()
 
         # translucent gray (no hue to avoid visual confusion with any
         # group of colored nodes)
-        self.write('graph [style="filled,rounded", fillcolor="#80808018", label="%s"];' % graph.label)
+        self.write(
+            'graph [style="filled,rounded", fillcolor="#80808018", label="%s"];' %
+            self.sanitize_identifier(graph.label)
+        )
 
     def finish_subgraph(self, graph):
         self.log("Finish subgraph %s" % graph.label)
@@ -140,7 +143,12 @@ class DotWriter(Writer):
         self.log("Write node %s" % node.label)
         self.write(
             '%s [label="%s", style="filled", fillcolor="%s",'
-            ' fontcolor="%s", group="%s"];' % (node.id, node.label, node.fill_color, node.text_color, node.group)
+            ' fontcolor="%s", group="%s"];' % (
+                self.sanitize_identifier(node.id),
+                self.sanitize_identifier(node.label),
+                node.fill_color, node.text_color,
+                node.group
+            )
         )
 
     def write_edge(self, edge):
@@ -148,12 +156,23 @@ class DotWriter(Writer):
         target = edge.target
         color = edge.color
         if edge.flavor == "defines":
-            self.write('    %s -> %s [style="dashed",  color="%s"];' % (source.id, target.id, color))
+            self.write('    %s -> %s [style="dashed",  color="%s"];' % (
+                self.sanitize_identifier(source.id),
+                self.sanitize_identifier(target.id),
+                color
+            ))
         else:  # edge.flavor == 'uses':
-            self.write('    %s -> %s [style="solid",  color="%s"];' % (source.id, target.id, color))
+            self.write('    %s -> %s [style="solid",  color="%s"];' % (
+                self.sanitize_identifier(source.id),
+                self.sanitize_identifier(target.id),
+                color
+            ))
 
     def finish_graph(self):
         self.write("}")  # terminate "digraph G {"
+
+    def sanitize_identifier(self, indentifier):
+        return "_".join(indentifier.split('-'))
 
 
 class SVGWriter(DotWriter):
