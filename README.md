@@ -84,7 +84,7 @@ See `pyan3 --help`.
 
 Example:
 
-`pyan *.py --uses --no-defines --colored --grouped --annotated --dot >myuses.dot`
+`pyan3 *.py --uses --no-defines --colored --grouped --annotated --dot >myuses.dot`
 
 Then render using your favorite GraphViz filter, mainly `dot` or `fdp`:
 
@@ -92,11 +92,11 @@ Then render using your favorite GraphViz filter, mainly `dot` or `fdp`:
 
 Or use directly
 
-`pyan *.py --uses --no-defines --colored --grouped --annotated --svg >myuses.svg`
+`pyan3 *.py --uses --no-defines --colored --grouped --annotated --svg >myuses.svg`
 
 You can also export as an interactive HTML
 
-`pyan *.py --uses --no-defines --colored --grouped --annotated --html > myuses.html`
+`pyan3 *.py --uses --no-defines --colored --grouped --annotated --html > myuses.html`
 
 Alternatively, you can call `pyan` from a script
 
