@@ -238,6 +238,17 @@ class CallGraphVisitor(ast.NodeVisitor):
             if len(to_nodes) > 0
         }
 
+    def filter_data(self, function: Union[None, str] = None, namespace: Union[None, str] = None, max_iter: int = 1000):
+        if function:
+            function_name = function.split(".")[-1]
+            function_namespace = ".".join(function.split(".")[:-1])
+            node = self.get_node(function_namespace, function_name)
+
+        else:
+            node = None
+
+        self.filter(node=node, namespace=namespace)
+
     def filter(self, node: Union[None, Node] = None, namespace: Union[str, None] = None, max_iter: int = 1000):
         """
         filter callgraph nodes that related to `node` or are in `namespace`
@@ -304,30 +315,62 @@ class CallGraphVisitor(ast.NodeVisitor):
         # use queue system to search through nodes
         # essentially add a node to the queue and then search all connected nodes which are in turn added to the queue
         # until the queue itself is empty or the maximum limit of max_iter searches have been hit
+        downstream_new_nodes = new_nodes.copy()
+        downstream_queue = queue.copy()
         i = max_iter
-        while len(queue) > 0:
-            item = queue.pop()
-            if item not in new_nodes:
-                new_nodes.add(item)
+        while len(downstream_queue) > 0:
+            item = downstream_queue.pop()
+            if item not in downstream_new_nodes:
+                downstream_new_nodes.add(item)
                 i -= 1
                 if i < 0:
                     break
-                queue.extend(
+                # add used nodes that are not already added and are in desired namespace
+                downstream_queue.extend(
                     [
                         n
                         for n in self.uses_edges.get(item, [])
-                        if n in self.uses_edges and n not in new_nodes and namespace in n.namespace
+                        if n in self.uses_edges and n not in downstream_new_nodes and namespace in n.namespace
                     ]
                 )
-                queue.extend(
+                # add defined nodes that are not already added and are in desired namespace
+                downstream_queue.extend(
                     [
                         n
                         for n in self.defines_edges.get(item, [])
-                        if n in self.defines_edges and n not in new_nodes and namespace in n.namespace
+                        if n in self.defines_edges and n not in downstream_new_nodes and namespace in n.namespace
                     ]
                 )
 
-        return new_nodes
+        # get callers of node
+        upstream_new_nodes = new_nodes.copy()
+        upstream_queue = queue.copy()
+        i = max_iter
+        while len(upstream_queue) > 0:
+            item = upstream_queue.pop()
+            if item not in upstream_new_nodes:
+                upstream_new_nodes.add(item)
+                i -= 1
+                if i < 0:
+                    break
+                # add used nodes that are not already added and are in desired namespace
+                upstream_queue.extend(
+                    [
+                        n
+                        for n in self.get_callers(self.uses_edges, item)
+                        if n in self.uses_edges and n not in upstream_new_nodes and namespace in n.namespace
+                    ]
+                )
+                # add defined nodes that are not already added and are in desired namespace
+                upstream_queue.extend(
+                    [
+                        n
+                        for n in self.get_callers(self.defines_edges, item)
+                        if n in self.defines_edges and n not in upstream_new_nodes and namespace in n.namespace
+                    ]
+                )
+
+        return downstream_new_nodes.union(upstream_new_nodes)
 
     def visit_Module(self, node):
         self.logger.debug("Module %s, %s" % (self.module_name, self.filename))
@@ -1776,3 +1819,12 @@ class CallGraphVisitor(ast.NodeVisitor):
                             self.logger.info("Collapsing inner from %s to %s, uses %s" % (n, pn, n2))
                             self.add_uses_edge(pn, n2)
                     n.defined = False
+
+
+    # return list of callers (keys) of given node in edges_dict
+    def get_callers(self, edges_dict, node):
+        ret_list = []
+        for caller, callees_list in edges_dict.items():
+            if node in callees_list:
+                ret_list.append(caller)
+        return ret_list
