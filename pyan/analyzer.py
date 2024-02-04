@@ -1713,6 +1713,38 @@ class CallGraphVisitor(ast.NodeVisitor):
             self.logger.info("Use from %s to %s resolves %s; removing wildcard" % (from_node, to_node, wild_node))
             self.remove_uses_edge(from_node, wild_node)
 
+    def remove_node(self, node):
+        # remove from edges
+        if node in self.uses_edges:
+            del self.uses_edges[node]
+        # remove to edges
+        for key in list(self.uses_edges.keys()):
+            items = self.uses_edges[key]
+            if node in items:
+                items.remove(node)
+            if not items:
+                # empty list
+                del self.uses_edges[key]
+
+        # remove nodes
+        for key in list(self.nodes.keys()):
+            items = self.nodes[key]
+            if node in items:
+                items.remove(node)
+            if not items:
+                # empty list
+                del self.nodes[key]
+
+    def remove_packages(self):
+        node_type = Flavor.MODULE
+        for key in list(self.nodes.keys()):
+            if key not in self.nodes:
+                continue
+            nodes = self.nodes[key]
+            for n in nodes.copy():
+                if n.flavor in [Flavor.MODULE]:
+                    self.remove_node(n)
+
     ###########################################################################
     # Postprocessing
 

@@ -94,6 +94,14 @@ def main(cli_args=None):
     )
 
     parser.add_argument(
+        "--no-packages",
+        action="store_false",
+        default=True,
+        dest="packages",
+        help="do not add packages and import relationships",
+    )
+
+    parser.add_argument(
         "-c",
         "--colored",
         action="store_true",
@@ -207,6 +215,9 @@ def main(cli_args=None):
 
     if known_args.function or known_args.namespace:
         v.filter_data(function=known_args.function, namespace=known_args.namespace)
+
+    if not known_args.packages:
+        v.remove_packages()
 
     graph = VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
