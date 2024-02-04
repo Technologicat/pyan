@@ -185,6 +185,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         while len(imports_to_resolve) > 0:
             from_node = imports_to_resolve.pop()
             if from_node in import_mapping:
+                # already marked to map - skip
                 continue
             to_uses = self.uses_edges.get(from_node, set([from_node]))
             assert len(to_uses) == 1
@@ -218,6 +219,9 @@ class CallGraphVisitor(ast.NodeVisitor):
                             f"{from_node.namespace}.{from_node.name}" == node.namespace
                             and from_node.flavor == Flavor.IMPORTEDITEM
                         ):
+                            if to_node not in self.defines_edges:
+                                self.logger.warning("unable to find define edges from %s", to_node)
+                                continue
                             # use define edges as potential candidates
                             for candidate_to_node in self.defines_edges[to_node]:  #
                                 if candidate_to_node.name == node.name:
@@ -752,7 +756,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                 )
                 if self.add_uses_edge(from_node, to_node):
                     self.logger.info(
-                        "New edge added for Use from {from_node} to {to_node} (target obj {obj_node} known but "
+                        f"New edge added for Use from {from_node} to {to_node} (target obj {obj_node} known but "
                         f"target attr {node.attr} not resolved; maybe fwd ref or unanalyzed import)"
                     )
 
@@ -768,6 +772,19 @@ class CallGraphVisitor(ast.NodeVisitor):
     # name access (node.ctx determines whether set (ast.Store) or get (ast.Load))
     def visit_Name(self, node):
         self.logger.debug("Name %s in context %s, %s:%s" % (node.id, type(node.ctx), self.filename, node.lineno))
+
+        in_class_ns = self.context_stack[-1].startswith("ClassDef")
+        if in_class_ns:
+            # add enum value or class static field
+            #TODO: there should be additional Flavor and proper handling of static fields
+            tgt_name = node.id
+            val_node = self.get_value(tgt_name)  # resolves "self" if needed
+            if val_node is None and tgt_name not in ["staticmethod", "classmethod"]:
+                # static field case
+                from_node = self.get_node_of_current_namespace()
+                ns = from_node.get_name()
+                to_node = self.get_node(ns, tgt_name, node, flavor=Flavor.ATTRIBUTE)
+                self.add_defines_edge(from_node, to_node)
 
         # TODO: self.last_value is a hack. Handle names in store context (LHS)
         # in analyze_binding(), so that visit_Name() only needs to handle
@@ -1593,6 +1610,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             status = True
         from_node.defined = True
         if to_node is None or to_node in self.defines_edges[from_node]:
+            # edge already defined
             return status
         self.defines_edges[from_node].add(to_node)
         to_node.defined = True

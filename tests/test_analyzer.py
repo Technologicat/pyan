@@ -20,6 +20,11 @@ def get_node(nodes, name):
     return filtered_nodes[0]
 
 
+def contains_node(nodes, name) -> bool:
+    filtered_nodes = [node for node in nodes if node.get_name() == name]
+    return len(filtered_nodes) > 0
+
+
 def get_in_dict(node_dict, name):
     return node_dict[get_node(node_dict.keys(), name)]
 
@@ -36,8 +41,7 @@ def test_resolve_import_as(callgraph):
 
 def test_resolve_import(callgraph):
     imports = get_in_dict(callgraph.uses_edges, "test_code.submodule3")
-    get_node(imports, "test_code.subpackage2.submodule_hidden1")
-    assert len(imports) == 1, "only one effective import"
+    assert contains_node(imports, "test_code.subpackage2.submodule_hidden1")
 
 
 def test_import_relative(callgraph):
@@ -80,3 +84,18 @@ def test_filter_function_parent(callgraph):
     # get parent of filtered function
     uses = get_in_dict(callgraph.uses_edges, "test_code.subpackage1.submodule1.A.__init__")
     get_node(uses, "test_code.submodule2.test_2")
+
+
+def test_staticmethod_decorator(callgraph):
+    members = get_in_dict(callgraph.uses_edges, "test_code.subpackage1.submodule1.A")
+    assert not contains_node(members, "test_code.subpackage1.submodule1.A.staticmethod")
+
+
+def test_use_enum_value(callgraph):
+    imports = get_in_dict(callgraph.uses_edges, "test_code.submodule3.test_3")
+    assert contains_node(imports, "test_code.subpackage1.enum.EnumType.ENUM_1")
+
+
+def test_use_class_static(callgraph):
+    imports = get_in_dict(callgraph.uses_edges, "test_code.submodule3.test_3")
+    assert contains_node(imports, "test_code.subpackage1.submodule1.A2.STATIC_VAL")
