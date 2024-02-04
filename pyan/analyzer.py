@@ -611,6 +611,14 @@ class CallGraphVisitor(ast.NodeVisitor):
             alias_name = mod_node.name
         self.add_uses_edge(from_node, mod_node)
         self.logger.info("New edge added for Use import %s in %s" % (mod_node, from_node))
+
+        curr_scope = self.scope_stack[-1]
+        if alias_name not in curr_scope.defs:
+            # seems that symtable module does not handle following "import aaa.bbb" as expected in pyan
+            # it returns "aaa", but the analyzer expects full symbol "aaa.bbb"
+            # workaround is to add missing empty symbol
+            curr_scope.defs[alias_name] = None
+
         self.set_value(alias_name, mod_node)  # set node to be discoverable in module
         self.logger.info("From setting name %s to %s" % (alias_name, mod_node))
 
@@ -1188,6 +1196,12 @@ class CallGraphVisitor(ast.NodeVisitor):
                     if attr_name in sc.defs:
                         self.logger.debug("Resolved to attr %s of %s" % (ast_node.attr, sc.defs[attr_name]))
                         return sc.defs[attr_name], ast_node.attr
+
+            attr_name = get_ast_node_name(ast_node.value)
+            obj_node = self.get_value(attr_name)  # resolves chained calls and imports ("aaa.bbb") if needed
+            if obj_node is not None:
+                self.logger.debug("Resolved to attr %s of %s" % (attr_name, obj_node))
+                return obj_node, attr_name
 
             # It may happen that ast_node.value has no corresponding graph Node,
             # if this is a forward-reference, or a reference to a file

@@ -34,6 +34,12 @@ def test_resolve_import_as(callgraph):
     get_node(imports, "test_code.subpackage1")
 
 
+def test_resolve_import(callgraph):
+    imports = get_in_dict(callgraph.uses_edges, "test_code.submodule3")
+    get_node(imports, "test_code.subpackage2.submodule_hidden1")
+    assert len(imports) == 1, "only one effective import"
+
+
 def test_import_relative(callgraph):
     imports = get_in_dict(callgraph.uses_edges, "test_code.subpackage1.submodule1")
     get_node(imports, "test_code.submodule2.test_2")
@@ -48,6 +54,11 @@ def test_resolve_use_in_function(callgraph):
     uses = get_in_dict(callgraph.uses_edges, "test_code.submodule2.test_2")
     get_node(uses, "test_code.submodule1.test_func1")
     get_node(uses, "test_code.submodule1.test_func2")
+
+
+def test_resolve_use_in_function_02(callgraph):
+    uses = get_in_dict(callgraph.uses_edges, "test_code.submodule3.test_3")
+    get_node(uses, "test_code.subpackage2.submodule_hidden1.test_func1")
 
 
 def test_resolve_package_without___init__(callgraph):
