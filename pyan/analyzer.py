@@ -1754,13 +1754,24 @@ class CallGraphVisitor(ast.NodeVisitor):
                 del self.nodes[key]
 
     def remove_packages(self):
-        node_type = Flavor.MODULE
         for key in list(self.nodes.keys()):
             if key not in self.nodes:
                 continue
             nodes = self.nodes[key]
             for n in nodes.copy():
-                if n.flavor in [Flavor.MODULE]:
+                if n.flavor is Flavor.MODULE:
+                    self.remove_node(n)
+
+        # remove parent class nodes that are not used
+        for key in list(self.nodes.keys()):
+            if key not in self.nodes:
+                continue
+            nodes = self.nodes[key]
+            for n in nodes.copy():
+                if n.flavor is not Flavor.CLASS:
+                    continue
+                callers = self.get_callers(self.uses_edges, n)
+                if not callers:
                     self.remove_node(n)
 
     ###########################################################################
