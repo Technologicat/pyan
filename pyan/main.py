@@ -45,6 +45,10 @@ def main(cli_args=None):
 
     parser.add_argument("--function", dest="function", help="filter for FUNCTION (generates call subtree)", metavar="FUNCTION", default=None)
 
+    parser.add_argument("--filterdown", dest="filterdown", help="filter downstream (FUNCTION will be root in call tree)", action="store", default=True)
+
+    parser.add_argument("--filterup", dest="filterup", help="filter upstream (FUNCTION will be a leaf in call tree)", action="store", default=False)
+
     parser.add_argument("-l", "--log", dest="logname", help="write log to LOG", metavar="LOG")
 
     parser.add_argument("-v", "--verbose", action="store_true", default=False, dest="verbose", help="verbose output")
@@ -214,7 +218,9 @@ def main(cli_args=None):
     v = CallGraphVisitor(filenames, logger=logger, root=root)
 
     if known_args.function or known_args.namespace:
-        v.filter_data(function=known_args.function, namespace=known_args.namespace)
+        filter_down = known_args.filterdown in ["T", "t", "True", "true", True]
+        filter_up = known_args.filterup in ["T", "t", "True", "true", True]
+        v.filter_data(function=known_args.function, namespace=known_args.namespace, filter_down=filter_down, filter_up=filter_up)
 
     if not known_args.packages:
         v.remove_packages()

@@ -79,8 +79,15 @@ def test_resolve_package_with_known_root():
     get_node(defines, f"{dirname_base}.test_code.subpackage2.submodule_hidden1.test_func1")
 
 
-def test_filter_function_parent(callgraph):
-    callgraph.filter_data(function="test_code.submodule2.test_2")
+def test_filter_function_downward(callgraph):
+    callgraph.filter_data(function="test_code.subpackage1.submodule1.A.__init__", filter_down=True, filter_up=False)
+    # get parent of filtered function
+    uses = get_in_dict(callgraph.uses_edges, "test_code.submodule2.test_2")
+    get_node(uses, "test_code.submodule1.test_func1")
+
+
+def test_filter_function_upward(callgraph):
+    callgraph.filter_data(function="test_code.submodule2.test_2", filter_down=False, filter_up=True)
     # get parent of filtered function
     uses = get_in_dict(callgraph.uses_edges, "test_code.subpackage1.submodule1.A.__init__")
     get_node(uses, "test_code.submodule2.test_2")
