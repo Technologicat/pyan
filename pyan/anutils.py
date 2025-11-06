@@ -4,6 +4,7 @@
 
 import ast
 import os.path
+from pathlib import Path
 
 from .node import Flavor
 
@@ -37,6 +38,9 @@ def get_module_name(filename, root: str = None):
     if root is None:
         while directories[0][0] != os.path.dirname(directories[0][0]):
             potential_root = os.path.dirname(directories[0][0])
+            # Check if potential_root is valid and exists before listing
+            if not potential_root or not os.path.exists(potential_root) or not os.path.isdir(potential_root):
+                break
             is_root = any([f == "__init__.py" for f in os.listdir(potential_root)])
             directories.insert(0, (potential_root, is_root))
 

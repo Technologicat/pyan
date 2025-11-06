@@ -1,2 +1,11 @@
 #!/bin/bash
-python3 setup.py sdist bdist_wheel
+# Build distribution using UV
+# Usage: ./makedist.sh
+
+set -e
+
+echo "Building distribution with UV..."
+uv build
+
+echo "Distribution built successfully!"
+ls -lh dist/
