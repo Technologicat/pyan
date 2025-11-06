@@ -159,7 +159,7 @@ def main(cli_args=None):
 
     known_args, unknown_args = parser.parse_known_args(cli_args)
 
-    filenames = [fn2 for fn in unknown_args for fn2 in glob(fn, recursive=True)]
+    filenames = [os.path.abspath(fn2) for fn in unknown_args for fn2 in glob(fn, recursive=True)]
 
     # determine root
     if known_args.root is not None:
@@ -202,6 +202,9 @@ def main(cli_args=None):
     if known_args.logname:
         handler = logging.FileHandler(known_args.logname)
         logger.addHandler(handler)
+
+    if root:
+        root = os.path.abspath(root)
 
     v = CallGraphVisitor(filenames, logger=logger, root=root)
 
