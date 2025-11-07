@@ -1,26 +1,140 @@
-[tool.isort]
-profile = "black"
-honor_noqa = true
-line_length = 120
-combine_as_imports = true
-force_sort_within_sections = true
-known_first_party = "pyan"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.black]
+[project]
+name = "pyan3"
+version = "1.2.1"
+description = "Generate approximate call graphs for Python programs"
+readme = {file = "README.md", content-type = "text/markdown"}
+requires-python = ">=3.9"
+license = {text = "GPL-2.0-or-later"}
+authors = [
+    {name = "Juha Jeronen", email = "juha.m.jeronen@gmail.com"}
+]
+keywords = ["call-graph", "static-code-analysis", "code-visualization", "dependency-analysis"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "jinja2",
+    "graphviz",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.14.0",
+    'twine>=3.8.0',
+]
+
+test = [
+    "coverage>=5.3",
+    "pytest>=6.1.2",
+    "pytest-cov>=2.10.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/Technologicat/pyan"
+Documentation = "https://github.com/Technologicat/pyan"
+Repository = "https://github.com/Technologicat/pyan"
+"Bug Tracker" = "https://github.com/Technologicat/pyan/issues"
+
+[project.scripts]
+pyan3 = "pyan.main:main"
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["pyan"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/pyan",
+    "/README.md",
+    "/LICENSE.md",
+    "/AUTHORS.md",
+    "/pyproject.toml",
+    "/pytest.ini",
+    "/requirements.txt",
+]
+
+[tool.ruff]
 line-length = 120
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | egg-info
-  | buck-out
-  | build
-  | dist
-  | env
-)/
-'''
+target-version = "py39"
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E203",  # whitespace before ':' (needed for slicing)
+    "E402",  # module level import not at top of file
+    "E731",  # do not assign a lambda expression, use a def
+    "E741",  # ambiguous variable name
+    "E501",  # line too long (handled by formatter)
+    "W605",  # invalid escape sequence (e.g. for LaTeX)
+    "C408",  # unnecessary dict call
+    "C409",  # unnecessary list passed to tuple()
+    "C406",  # unnecessary list literal
+    "F401",  # unused imports (too noisy for legacy code)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pyan"]
+force-sort-within-sections = true
+combine-as-imports = true
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports in __init__.py are common
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
