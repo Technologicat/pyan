@@ -89,31 +89,39 @@ This repository uses [uv](https://github.com/astral-sh/uv) for local builds and 
 # install uv if needed
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# set up a development environment
-uv pip install --editable .[dev]
-
-or
-
-uv sync --extra dev
-
-# for tests
-uv sync --extra test
-
-# for both
+# set up a development environment (editable install + dev/test extras)
 uv sync --extra dev --extra test
+
+# alternatively, use the helper wrapper
+scripts/uv-dev.sh setup
 
 # run the CLI locally
 uv run pyan3 --help
 
 # build distribution artifacts
 uv build
+
+# run the default test suite
+uv run pytest tests -q
 ```
 
 Helper scripts are provided for common workflows:
 
 - `./makedist.sh` – builds wheels and source distributions via `uv build`.
 - `./uploaddist.sh <version>` – publishes artifacts, preferring `uv publish` when available.
-- `./test-python-versions.sh` – smoke-tests the package across the Python interpreters detected on your system.
+- `scripts/test-python-versions.sh` – smoke-tests the package across the Python interpreters detected on your system.
+- `scripts/uv-dev.sh` – wraps the most common uv commands (setup, test, lint, build, matrix tests). Run with no arguments for an interactive menu.
+
+If you are new to uv, read [CONTRIBUTING.md](CONTRIBUTING.md) for a concise
+onboarding guide that covers:
+
+- Installing uv and managing Python versions.
+- Creating project environments, installing an editable copy, and running
+  tests/builds/lint.
+- Using helper scripts such as `scripts/uv-dev.sh` and `scripts/test-python-versions.sh`.
+- Links to the [ROADMAP](ROADMAP.md) and open issues (e.g.,
+  [#105](https://github.com/Technologicat/pyan/issues/105)) if you are looking
+  for contribution ideas.
 
 # Usage
 
