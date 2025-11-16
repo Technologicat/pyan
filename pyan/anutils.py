@@ -33,6 +33,9 @@ def get_module_name(filename, root: str = None):
         # otherwise it is the filename without extension
         module_path = filename.replace(".py", "")
 
+    # will enter infinite loop or exception in case of non-absolute path (starting with ".")
+    module_path = os.path.abspath(module_path)
+
     # find the module root - walk up the tree and check if it contains .py files - if yes. it is the new root
     directories = [(module_path, True)]
     if root is None:
@@ -51,6 +54,9 @@ def get_module_name(filename, root: str = None):
     else:  # root is already known - just walk up until it is matched
         while directories[0][0] != root:
             potential_root = os.path.dirname(directories[0][0])
+            if potential_root == directories[0][0]:
+                # root directory reached - stop iteration
+                break
             directories.insert(0, (potential_root, True))
 
     mod_name = ".".join([os.path.basename(f[0]) for f in directories])

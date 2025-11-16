@@ -162,3 +162,10 @@ htmlcov
 .idea/
 .history/
 .vscode/
+# Eclipse
+/.settings
+.project
+.pydevproject
+
+
+/tmp/

@@ -43,7 +43,11 @@ def main(cli_args=None):
 
     parser.add_argument("--namespace", dest="namespace", help="filter for NAMESPACE", metavar="NAMESPACE", default=None)
 
-    parser.add_argument("--function", dest="function", help="filter for FUNCTION", metavar="FUNCTION", default=None)
+    parser.add_argument("--function", dest="function", help="filter for FUNCTION (generates call subtree)", metavar="FUNCTION", default=None)
+
+    parser.add_argument("--filterdown", dest="filterdown", help="filter downstream (FUNCTION will be root in call tree)", action="store", default=True)
+
+    parser.add_argument("--filterup", dest="filterup", help="filter upstream (FUNCTION will be a leaf in call tree)", action="store", default=False)
 
     parser.add_argument("-l", "--log", dest="logname", help="write log to LOG", metavar="LOG")
 
@@ -91,6 +95,14 @@ def main(cli_args=None):
         default=True,
         dest="draw_uses",
         help="do not add edges for 'uses' relationships",
+    )
+
+    parser.add_argument(
+        "--no-packages",
+        action="store_false",
+        default=True,
+        dest="packages",
+        help="do not add packages and import relationships",
     )
 
     parser.add_argument(
@@ -209,16 +221,12 @@ def main(cli_args=None):
     v = CallGraphVisitor(filenames, logger=logger, root=root)
 
     if known_args.function or known_args.namespace:
+        filter_down = known_args.filterdown in ["T", "t", "True", "true", True]
+        filter_up = known_args.filterup in ["T", "t", "True", "true", True]
+        v.filter_data(function=known_args.function, namespace=known_args.namespace, filter_down=filter_down, filter_up=filter_up)
 
-        if known_args.function:
-            function_name = known_args.function.split(".")[-1]
-            namespace = ".".join(known_args.function.split(".")[:-1])
-            node = v.get_node(namespace, function_name)
-
-        else:
-            node = None
-
-        v.filter(node=node, namespace=known_args.namespace)
+    if not known_args.packages:
+        v.remove_packages()
 
     graph = VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
