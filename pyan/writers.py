@@ -58,7 +58,7 @@ class Writer(object):
 
     def write_edges(self):
         self.start_edges()
-        for edge in self.graph.edges:
+        for edge in sorted(self.graph.edges, key=lambda x: (x.source.id, x.target.id)):
             self.write_edge(edge)
         self.finish_edges()
 
