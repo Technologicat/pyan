@@ -74,8 +74,9 @@ In Pyan3, the analyzer was ported from `compiler` ([good riddance](https://stack
 
     pip install pyan3
 
-> ⚠️ Pyan3 now requires Python 3.9 or newer. Support for Python 3.9 itself is deprecated and will be
-> removed in an upcoming release—please plan to run on Python 3.10+.
+Pyan3 requires Python 3.10 or newer.
+
+For SVG and HTML output, you need the `dot` command from [Graphviz](https://graphviz.org/) installed on your system (e.g. `sudo apt-get install graphviz` on Debian/Ubuntu, `brew install graphviz` on macOS). Dot output requires no extra system dependencies.
 
 ## Development setup
 

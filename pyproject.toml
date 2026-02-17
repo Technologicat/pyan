@@ -33,10 +33,14 @@ classifiers = [
 ]
 dependencies = [
     "jinja2",
-    "graphviz",
 ]
 
 [project.optional-dependencies]
+sphinx = [
+    "sphinx",
+    "docutils",
+]
+
 dev = [
     "ruff>=0.14.0",
     'twine>=3.8.0',
