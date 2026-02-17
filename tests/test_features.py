@@ -1,7 +1,8 @@
-"""Baseline feature coverage tests for the analyzer.
+"""Feature coverage tests for the analyzer.
 
 Exercises: decorators, inheritance, MRO, lambdas, closures,
-context managers, async functions, for-loop calls.
+context managers, async functions, for-loop calls, walrus operator,
+async with, match statement, type annotations.
 
 Uses tests/test_code/features.py as input.
 """
@@ -110,3 +111,86 @@ def test_for_loop_call(v):
     """Function call inside for loop creates uses edge."""
     uses = get_in_dict(v.uses_edges, f"{PREFIX}.process_items")
     get_node(uses, f"{PREFIX}.handle")
+
+
+# --- Walrus operator ---
+
+def test_walrus_uses_len(v):
+    """Walrus `if (n := len(data))` creates uses edge to len."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.walrus_caller")
+    get_node(uses, "*.len")
+
+
+def test_walrus_uses_target(v):
+    """After walrus binding, walrus_target(n) is called."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.walrus_caller")
+    get_node(uses, f"{PREFIX}.walrus_target")
+
+
+def test_walrus_attr_resolution(v):
+    """Walrus-bound name resolves attribute access: (r := Result()).process()."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.walrus_method")
+    get_node(uses, f"{PREFIX}.Result")
+    get_node(uses, f"{PREFIX}.Result.process")
+
+
+# --- Async with ---
+
+def test_async_with(v):
+    """async with AsyncCM() creates uses edges to __aenter__ and __aexit__."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.use_async_cm")
+    get_node(uses, f"{PREFIX}.AsyncCM")
+    get_node(uses, f"{PREFIX}.AsyncCM.__aenter__")
+    get_node(uses, f"{PREFIX}.AsyncCM.__aexit__")
+
+
+# --- Match statement ---
+
+def test_match_class_pattern(v):
+    """MatchClass patterns create uses edges to the matched classes."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.match_example")
+    get_node(uses, f"{PREFIX}.Point")
+    get_node(uses, f"{PREFIX}.Circle")
+
+
+def test_match_class_str(v):
+    """case str() as s: creates uses edge to str (builtin)."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.match_example")
+    get_node(uses, "*.str")
+
+
+def test_match_body_calls(v):
+    """Body functions inside match cases produce uses edges."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.match_example")
+    get_node(uses, f"{PREFIX}.handle_point")
+    get_node(uses, f"{PREFIX}.handle_circle")
+    get_node(uses, f"{PREFIX}.handle_str")
+    get_node(uses, f"{PREFIX}.handle_list")
+    get_node(uses, f"{PREFIX}.handle_action")
+    get_node(uses, f"{PREFIX}.handle_default")
+
+
+# --- Type annotations ---
+
+def test_annassign_annotation_uses(v):
+    """result: MyType = None creates uses edge to MyType (from annotation)."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.annotated_func")
+    get_node(uses, f"{PREFIX}.MyType")
+
+
+def test_funcdef_return_annotation_uses(v):
+    """def annotated_func(...) -> ReturnType creates uses edge to ReturnType."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.annotated_func")
+    get_node(uses, f"{PREFIX}.ReturnType")
+
+
+def test_funcdef_arg_annotation_uses(v):
+    """def annotated_func(x: MyType) creates uses edge to MyType (from arg annotation)."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.annotated_func")
+    get_node(uses, f"{PREFIX}.MyType")
+
+
+def test_class_body_annotation_uses(v):
+    """Class-level `value: MyType` (no RHS) creates uses edge to MyType."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.Holder")
+    get_node(uses, f"{PREFIX}.MyType")

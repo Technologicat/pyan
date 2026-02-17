@@ -451,6 +451,22 @@ class CallGraphVisitor(ast.NodeVisitor):
         # record bindings of args to the given default values, if present
         self.analyze_arguments(node.args)
 
+        # Visit type annotations to create uses edges for referenced types.
+        self.last_value = None
+        if node.returns is not None:
+            self.visit(node.returns)
+            self.last_value = None
+        for arg in node.args.args + node.args.posonlyargs + node.args.kwonlyargs:
+            if arg.annotation is not None:
+                self.visit(arg.annotation)
+                self.last_value = None
+        if node.args.vararg is not None and node.args.vararg.annotation is not None:
+            self.visit(node.args.vararg.annotation)
+            self.last_value = None
+        if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
+            self.visit(node.args.kwarg.annotation)
+            self.last_value = None
+
         # Analyze the function body
         #
         for stmt in node.body:
@@ -787,8 +803,26 @@ class CallGraphVisitor(ast.NodeVisitor):
             )
             self.last_value = None
             self.visit(target[0])
-        # TODO: use the type annotation from node.annotation?
-        # http://greentreesnakes.readthedocs.io/en/latest/nodes.html#AnnAssign
+        # Visit the type annotation to create uses edges for referenced types.
+        if node.annotation is not None:
+            saved = self.last_value
+            self.last_value = None
+            try:
+                self.visit(node.annotation)
+            finally:
+                self.last_value = saved
+
+    def visit_NamedExpr(self, node):  # PEP 572, Python 3.8+  (walrus operator :=)
+        self.logger.debug(
+            "NamedExpr %s, %s:%s" % (get_ast_node_name(node.target), self.filename, node.lineno)
+        )
+        targets = sanitize_exprs(node.target)
+        values = sanitize_exprs(node.value)
+        self.analyze_binding(targets, values)
+        # Unlike plain assignment, walrus is an *expression* — the enclosing
+        # context needs the bound value.  analyze_binding zeroes last_value,
+        # so restore it by looking up the just-bound name.
+        self.last_value = self.get_value(node.target.id)
 
     def visit_AugAssign(self, node):
         targets = sanitize_exprs(node.target)
@@ -935,17 +969,17 @@ class CallGraphVisitor(ast.NodeVisitor):
                         "New edge added for Use from %s to %s (call creates an instance)" % (from_node, to_node)
                     )
 
-    def visit_With(self, node):
+    def _visit_with(self, node, enter_method, exit_method):
+        """Shared implementation for With and AsyncWith."""
         self.logger.debug("With (context manager), %s:%s" % (self.filename, node.lineno))
 
         def add_uses_enter_exit_of(graph_node):
-            # add uses edges to __enter__ and __exit__ methods of given Node
             if isinstance(graph_node, Node):
                 from_node = self.get_node_of_current_namespace()
                 withed_obj_node = graph_node
 
                 self.logger.debug("Use from %s to With %s" % (from_node, withed_obj_node))
-                for methodname in ("__enter__", "__exit__"):
+                for methodname in (enter_method, exit_method):
                     to_node = self.get_node(withed_obj_node.get_name(), methodname, None, flavor=Flavor.METHOD)
                     if self.add_uses_edge(from_node, to_node):
                         self.logger.info("New edge added for Use from %s to %s" % (from_node, to_node))
@@ -977,6 +1011,64 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         for stmt in node.body:
             self.visit(stmt)
+
+    def visit_With(self, node):
+        self._visit_with(node, "__enter__", "__exit__")
+
+    def visit_AsyncWith(self, node):
+        self._visit_with(node, "__aenter__", "__aexit__")
+
+    # --- Match statement (PEP 634, Python 3.10+) ---
+
+    def visit_Match(self, node):
+        self.logger.debug("Match, %s:%s" % (self.filename, node.lineno))
+        self.visit(node.subject)
+        self.last_value = None
+        for case in node.cases:
+            self.visit(case.pattern)
+            if case.guard is not None:
+                self.visit(case.guard)
+            for stmt in case.body:
+                self.visit(stmt)
+
+    def visit_MatchValue(self, node):
+        self.visit(node.value)
+
+    def visit_MatchSingleton(self, node):
+        pass
+
+    def visit_MatchSequence(self, node):
+        for pattern in node.patterns:
+            self.visit(pattern)
+
+    def visit_MatchMapping(self, node):
+        for key in node.keys:
+            self.visit(key)
+        for pattern in node.patterns:
+            self.visit(pattern)
+        if node.rest is not None:
+            self.set_value(node.rest, None)
+
+    def visit_MatchClass(self, node):
+        self.visit(node.cls)
+        for pattern in node.patterns:
+            self.visit(pattern)
+        for pattern in node.kwd_patterns:
+            self.visit(pattern)
+
+    def visit_MatchStar(self, node):
+        if node.name is not None:
+            self.set_value(node.name, None)
+
+    def visit_MatchAs(self, node):
+        if node.pattern is not None:
+            self.visit(node.pattern)
+        if node.name is not None:
+            self.set_value(node.name, None)
+
+    def visit_MatchOr(self, node):
+        for pattern in node.patterns:
+            self.visit(pattern)
 
     ###########################################################################
     # Analysis helpers

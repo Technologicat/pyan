@@ -103,3 +103,110 @@ def process_items(items):
 
 def handle(x):
     return x
+
+
+# --- Walrus operator (NamedExpr, PEP 572) ---
+
+def walrus_caller(data):
+    if (n := len(data)) > 10:
+        walrus_target(n)
+
+
+def walrus_target(x):
+    pass
+
+
+class Result:
+    def process(self):
+        pass
+
+
+def walrus_method():
+    if (r := Result()):
+        r.process()
+
+
+# --- Async with ---
+
+class AsyncCM:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
+
+async def use_async_cm():
+    async with AsyncCM() as cm:
+        pass
+
+
+# --- Match statement (PEP 634) ---
+
+class Point:
+    def __init__(self, x, y):
+        pass
+
+
+class Circle:
+    def __init__(self, r):
+        pass
+
+
+def handle_point(px, py):
+    pass
+
+
+def handle_circle(r):
+    pass
+
+
+def handle_str(s):
+    pass
+
+
+def handle_list(first):
+    pass
+
+
+def handle_action(action):
+    pass
+
+
+def handle_default():
+    pass
+
+
+def match_example(cmd):
+    match cmd:
+        case Point(x=px, y=py):
+            handle_point(px, py)
+        case Circle(r=cr):
+            handle_circle(cr)
+        case str() as s:
+            handle_str(s)
+        case [first, *others]:
+            handle_list(first)
+        case {"action": action, **rest}:
+            handle_action(action)
+        case _:
+            handle_default()
+
+
+# --- Type annotations ---
+
+class MyType:
+    pass
+
+
+class ReturnType:
+    pass
+
+
+def annotated_func(x: MyType) -> ReturnType:
+    result: MyType = None
+    return result
+
+
+class Holder:
+    value: MyType
