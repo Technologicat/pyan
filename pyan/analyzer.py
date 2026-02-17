@@ -1199,9 +1199,11 @@ class CallGraphVisitor(ast.NodeVisitor):
             self.logger.debug("Unresolved, returning attr %s of unknown" % (ast_node.attr))
             return None, ast_node.attr
         else:
-            # detect str.join() and similar (attributes of constant literals)
-            if isinstance(ast_node.value, (ast.Num, ast.Str)):  # TODO: other types?
-                t = type(ast_node.value)
+            # detect str.join() and similar (attributes of constant literals,
+            # such as "hello".upper())
+            if isinstance(ast_node.value, ast.Constant):
+                theliteral = ast_node.value
+                t = type(theliteral.value)
                 tn = t.__name__
                 # Create a namespace-like Node with no associated AST node.
                 # Constants are builtins, so they should live in the
