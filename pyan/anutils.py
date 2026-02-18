@@ -236,6 +236,15 @@ class ExecuteInInnerScope:
     Will add a defines edge from the current namespace to the inner scope,
     marking both nodes as defined.
     !!!
+
+    Use as a context manager::
+
+        with ExecuteInInnerScope(analyzer, "lambda") as scope_ctx:
+            # scope_ctx.inner_ns is the fully qualified inner namespace name (str),
+            # available immediately on entry.
+            ...
+        # scope_ctx.inner_scope_node is the Node for the inner scope,
+        # available after exit.
     """
 
     def __init__(self, analyzer, scopename):
@@ -260,6 +269,7 @@ class ExecuteInInnerScope:
         analyzer.scope_stack.append(analyzer.scopes[inner_ns])
         analyzer.context_stack.append(scopename)
 
+        self.inner_ns = inner_ns
         return self
 
     def __exit__(self, errtype, errvalue, traceback):
@@ -284,4 +294,4 @@ class ExecuteInInnerScope:
         to_node = analyzer.get_node(ns, scopename, None, flavor=Flavor.NAMESPACE)
         if analyzer.add_defines_edge(from_node, to_node):
             analyzer.logger.info("Def from %s to %s %s" % (from_node, scopename, to_node))
-        analyzer.last_value = to_node  # Make this inner scope node assignable to track its uses.
+        self.inner_scope_node = to_node  # Available to callers via `with ... as scope_ctx:`.

@@ -79,7 +79,6 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.scope_stack = []  # the Scope objects currently in scope
         self.class_stack = []  # Nodes for class definitions currently in scope
         self.context_stack = []  # for detecting which FunctionDefs are methods
-        self.last_value = None
 
         # Analyze.
         self.process()
@@ -344,7 +343,6 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.context_stack.pop()
         self.scope_stack.pop()
         self.name_stack.pop()
-        self.last_value = None
 
         if self.add_defines_edge(module_node, None):
             self.logger.info("Def Module %s" % node)
@@ -452,20 +450,15 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.analyze_arguments(node.args)
 
         # Visit type annotations to create uses edges for referenced types.
-        self.last_value = None
         if node.returns is not None:
             self.visit(node.returns)
-            self.last_value = None
         for arg in node.args.args + node.args.posonlyargs + node.args.kwonlyargs:
             if arg.annotation is not None:
                 self.visit(arg.annotation)
-                self.last_value = None
         if node.args.vararg is not None and node.args.vararg.annotation is not None:
             self.visit(node.args.vararg.annotation)
-            self.last_value = None
         if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
             self.visit(node.args.kwarg.annotation)
-            self.last_value = None
 
         # Analyze the function body
         #
@@ -484,11 +477,11 @@ class CallGraphVisitor(ast.NodeVisitor):
     def visit_Lambda(self, node):
         # TODO: avoid lumping together all lambdas in the same namespace.
         self.logger.debug("Lambda, %s:%s" % (self.filename, node.lineno))
-        with ExecuteInInnerScope(self, "lambda"):
-            inner_ns = self.get_node_of_current_namespace().get_name()
-            self.generate_args_nodes(node.args, inner_ns)
+        with ExecuteInInnerScope(self, "lambda") as scope_ctx:
+            self.generate_args_nodes(node.args, scope_ctx.inner_ns)
             self.analyze_arguments(node.args)
             self.visit(node.body)  # single expr
+        return scope_ctx.inner_scope_node
 
     def generate_args_nodes(self, ast_args, inner_ns):
         """Capture which names correspond to function args.
@@ -644,30 +637,16 @@ class CallGraphVisitor(ast.NodeVisitor):
         t = type(node.value)
         ns = self.get_node_of_current_namespace().get_name()
         tn = t.__name__
-        self.last_value = self.get_node(ns, tn, node, flavor=Flavor.ATTRIBUTE)
+        return self.get_node(ns, tn, node, flavor=Flavor.ATTRIBUTE)
 
-    # attribute access (node.ctx determines whether set (ast.Store) or get (ast.Load))
+    # attribute access (node.ctx is ast.Load/Store/Del; Store is handled by _bind_target)
     def visit_Attribute(self, node):
         objname = get_ast_node_name(node.value)
         self.logger.debug(
             "Attribute %s of %s in context %s, %s:%s" % (node.attr, objname, type(node.ctx), self.filename, node.lineno)
         )
 
-        # TODO: self.last_value is a hack. Handle names in store context (LHS)
-        # in analyze_binding(), so that visit_Attribute() only needs to handle
-        # the load context (i.e. detect uses of the name).
-        #
-        if isinstance(node.ctx, ast.Store):
-            new_value = self.last_value
-            try:
-                if self.set_attribute(node, new_value):
-                    self.logger.info("setattr %s on %s to %s" % (node.attr, objname, new_value))
-            except UnresolvedSuperCallError:
-                # Trying to set something belonging to an unresolved super()
-                # of something; just ignore this attempt to setattr.
-                return
-
-        elif isinstance(node.ctx, ast.Load):
+        if isinstance(node.ctx, ast.Load):
             try:
                 obj_node, attr_node = self.get_attribute(node)
             except UnresolvedSuperCallError:
@@ -689,7 +668,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                 if attr_node.namespace is not None:
                     self.remove_wild(from_node, attr_node, node.attr)
 
-                self.last_value = attr_node
+                return attr_node
 
             # Object known, but attr unknown. Create node and add a uses edge.
             #
@@ -724,25 +703,18 @@ class CallGraphVisitor(ast.NodeVisitor):
                 # remove resolved wildcard from current site to <Node *.attr>
                 self.remove_wild(from_node, obj_node, node.attr)
 
-                self.last_value = to_node
+                return to_node
 
             # pass on
             else:
-                self.visit(node.value)
+                return self.visit(node.value)
+        # Store/Del contexts: no action (Store handled by _bind_target)
 
-    # name access (node.ctx determines whether set (ast.Store) or get (ast.Load))
+    # name access (node.ctx is ast.Load/Store/Del; Store is handled by _bind_target)
     def visit_Name(self, node):
         self.logger.debug("Name %s in context %s, %s:%s" % (node.id, type(node.ctx), self.filename, node.lineno))
 
-        # TODO: self.last_value is a hack. Handle names in store context (LHS)
-        # in analyze_binding(), so that visit_Name() only needs to handle
-        # the load context (i.e. detect uses of the name).
-        if isinstance(node.ctx, ast.Store):
-            # when we get here, self.last_value has been set by visit_Assign()
-            self.set_value(node.id, self.last_value)
-
-        # A name in a load context is a use of the object the name points to.
-        elif isinstance(node.ctx, ast.Load):
+        if isinstance(node.ctx, ast.Load):
             tgt_name = node.id
             to_node = self.get_value(tgt_name)  # resolves "self" if needed
             current_class = self.get_current_class()
@@ -758,7 +730,8 @@ class CallGraphVisitor(ast.NodeVisitor):
                 if self.add_uses_edge(from_node, to_node):
                     self.logger.info("New edge added for Use from %s to Name %s" % (from_node, to_node))
 
-            self.last_value = to_node
+            return to_node
+        # Store/Del contexts: no action (Store handled by _bind_target)
 
     def visit_Assign(self, node):
         # - chaining assignments like "a = b = c" produces multiple targets
@@ -786,31 +759,24 @@ class CallGraphVisitor(ast.NodeVisitor):
             self.analyze_binding(targets, values)
 
     def visit_AnnAssign(self, node):  # PEP 526, Python 3.6+
-        target = sanitize_exprs(node.target)
-        self.last_value = None
         if node.value is not None:
-            value = sanitize_exprs(node.value)
+            targets = sanitize_exprs(node.target)
+            values = sanitize_exprs(node.value)
             # issue #62: value may be an empty list, so it doesn't always have any elements
             # even after `sanitize_exprs`.
             self.logger.debug(
                 "AnnAssign %s %s, %s:%s"
-                % (get_ast_node_name(target[0]), get_ast_node_name(value), self.filename, node.lineno)
+                % (get_ast_node_name(node.target), get_ast_node_name(node.value), self.filename, node.lineno)
             )
-            self.analyze_binding(target, value)
+            self.analyze_binding(targets, values)
         else:  # just a type declaration
             self.logger.debug(
-                "AnnAssign %s <no value>, %s:%s" % (get_ast_node_name(target[0]), self.filename, node.lineno)
+                "AnnAssign %s <no value>, %s:%s" % (get_ast_node_name(node.target), self.filename, node.lineno)
             )
-            self.last_value = None
-            self.visit(target[0])
+            self._bind_target(node.target, None)
         # Visit the type annotation to create uses edges for referenced types.
         if node.annotation is not None:
-            saved = self.last_value
-            self.last_value = None
-            try:
-                self.visit(node.annotation)
-            finally:
-                self.last_value = saved
+            self.visit(node.annotation)
 
     def visit_NamedExpr(self, node):  # PEP 572, Python 3.8+  (walrus operator :=)
         self.logger.debug(
@@ -820,9 +786,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         values = sanitize_exprs(node.value)
         self.analyze_binding(targets, values)
         # Unlike plain assignment, walrus is an *expression* — the enclosing
-        # context needs the bound value.  analyze_binding zeroes last_value,
-        # so restore it by looking up the just-bound name.
-        self.last_value = self.get_value(node.target.id)
+        # context needs the bound value.
+        return self.get_value(node.target.id)
 
     def visit_AugAssign(self, node):
         targets = sanitize_exprs(node.target)
@@ -866,21 +831,29 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     def visit_ListComp(self, node):
         self.logger.debug("ListComp, %s:%s" % (self.filename, node.lineno))
-        self.analyze_comprehension(node, "listcomp")
+        return self.analyze_comprehension(node, "listcomp")
 
     def visit_SetComp(self, node):
         self.logger.debug("SetComp, %s:%s" % (self.filename, node.lineno))
-        self.analyze_comprehension(node, "setcomp")
+        return self.analyze_comprehension(node, "setcomp")
 
     def visit_DictComp(self, node):
         self.logger.debug("DictComp, %s:%s" % (self.filename, node.lineno))
-        self.analyze_comprehension(node, "dictcomp", field1="key", field2="value")
+        return self.analyze_comprehension(node, "dictcomp", field1="key", field2="value")
 
     def visit_GeneratorExp(self, node):
         self.logger.debug("GeneratorExp, %s:%s" % (self.filename, node.lineno))
-        self.analyze_comprehension(node, "genexpr")
+        return self.analyze_comprehension(node, "genexpr")
 
     def analyze_comprehension(self, node, label, field1="elt", field2=None):
+        """Analyze a comprehension node (listcomp, setcomp, dictcomp, genexpr).
+
+        field1 and field2 name the AST attributes holding the output expression(s):
+        ListComp/SetComp/GeneratorExp use ``elt``; DictComp uses ``key`` and ``value``.
+
+        Returns the inner scope Node representing the comprehension, so that
+        callers (e.g. ``analyze_binding``) can bind it to a target.
+        """
         # The outermost iterator is evaluated in the current scope;
         # everything else in the new inner scope.
         #
@@ -896,13 +869,15 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         outermost_iters = sanitize_exprs(outermost.iter)
         outermost_targets = sanitize_exprs(outermost.target)
+        # Evaluate outermost iterator in current scope.
+        iter_node = None
         for expr in outermost_iters:
-            self.visit(expr)  # set self.last_value (to something and hope for the best)
+            iter_node = self.visit(expr)
 
-        with ExecuteInInnerScope(self, label):
-            for expr in outermost_targets:
-                self.visit(expr)  # use self.last_value
-            self.last_value = None
+        with ExecuteInInnerScope(self, label) as scope_ctx:
+            # Bind outermost targets to the iterator value in inner scope.
+            for tgt in outermost_targets:
+                self._bind_target(tgt, iter_node)
             for expr in outermost.ifs:
                 self.visit(expr)
 
@@ -917,6 +892,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             self.visit(getattr(node, field1))  # e.g. node.elt
             if field2:
                 self.visit(getattr(node, field2))
+        return scope_ctx.inner_scope_node
 
     def visit_Call(self, node):
         self.logger.debug("Call %s, %s:%s" % (get_ast_node_name(node.func), self.filename, node.lineno))
@@ -934,8 +910,6 @@ class CallGraphVisitor(ast.NodeVisitor):
             result_node = None
 
         if isinstance(result_node, Node):  # resolved result
-            self.last_value = result_node
-
             from_node = self.get_node_of_current_namespace()
             to_node = result_node
             self.logger.debug("Use from %s to %s (via resolved call to built-ins)" % (from_node, to_node))
@@ -943,31 +917,22 @@ class CallGraphVisitor(ast.NodeVisitor):
                 self.logger.info(
                     "New edge added for Use from %s to %s (via resolved call to built-ins)" % (from_node, to_node)
                 )
+            return result_node
 
-        else:  # generic function call
-            # Visit the function name part last, so that inside a binding form,
-            # it will be left standing as self.last_value.
-            self.visit(node.func)
+        else:  # unresolved call — general case
+            func_node = self.visit(node.func)
 
-            # If self.last_value matches a known class i.e. the call was of the
-            # form MyClass(), add a uses edge to MyClass.__init__().
-            #
-            # We need to do this manually, because there is no text "__init__"
-            # at the call site.
-            #
-            # In this lookup to self.class_base_ast_nodes we don't care about
-            # the AST nodes; the keys just conveniently happen to be the Nodes
-            # of known classes.
-            #
-            if self.last_value in self.class_base_ast_nodes:
+            # If the call target is a known class (e.g. MyClass()),
+            # add a uses edge to MyClass.__init__().
+            if func_node in self.class_base_ast_nodes:
                 from_node = self.get_node_of_current_namespace()
-                class_node = self.last_value
-                to_node = self.get_node(class_node.get_name(), "__init__", None, flavor=Flavor.METHOD)
+                to_node = self.get_node(func_node.get_name(), "__init__", None, flavor=Flavor.METHOD)
                 self.logger.debug("Use from %s to %s (call creates an instance)" % (from_node, to_node))
                 if self.add_uses_edge(from_node, to_node):
                     self.logger.info(
                         "New edge added for Use from %s to %s (call creates an instance)" % (from_node, to_node)
                     )
+            return func_node
 
     def _visit_with(self, node, enter_method, exit_method):
         """Shared implementation for With and AsyncWith."""
@@ -989,10 +954,8 @@ class CallGraphVisitor(ast.NodeVisitor):
             vars = withitem.optional_vars
 
             # XXX: we currently visit expr twice (again in analyze_binding()) if vars is not None
-            self.last_value = None
-            self.visit(expr)
-            add_uses_enter_exit_of(self.last_value)
-            self.last_value = None
+            cm_node = self.visit(expr)
+            add_uses_enter_exit_of(cm_node)
 
             if vars is not None:
                 # bind optional_vars
@@ -1023,7 +986,6 @@ class CallGraphVisitor(ast.NodeVisitor):
     def visit_Match(self, node):
         self.logger.debug("Match, %s:%s" % (self.filename, node.lineno))
         self.visit(node.subject)
-        self.last_value = None
         for case in node.cases:
             self.visit(case.pattern)
             if case.guard is not None:
@@ -1087,14 +1049,11 @@ class CallGraphVisitor(ast.NodeVisitor):
             raise TypeError("Expected ast.FunctionDef; got %s" % (type(ast_node)))
 
         # Visit decorators
-        self.last_value = None
         deco_names = []
         for deco in ast_node.decorator_list:
-            self.visit(deco)  # capture function name of decorator (self.last_value hack)
-            deco_node = self.last_value
+            deco_node = self.visit(deco)
             if isinstance(deco_node, Node):
                 deco_names.append(deco_node.name)
-            self.last_value = None
 
         # Analyze flavor
         in_class_ns = self.context_stack[-1].startswith("ClassDef")
@@ -1125,57 +1084,42 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         return None, flavor
 
+    def _bind_target(self, target, value):
+        """Bind an AST target node to a resolved value (a graph Node or None).
+
+        Dispatches on target type: Name and Attribute perform scalar binding,
+        Tuple/List/Starred recurse (overapproximating — all sub-targets get
+        the same value), and ast.arg handles function parameter defaults.
+        """
+        if isinstance(target, ast.Name):
+            self.set_value(target.id, value)
+        elif isinstance(target, ast.Attribute):
+            try:
+                if self.set_attribute(target, value):
+                    self.logger.info("setattr %s.%s to %s" % (get_ast_node_name(target.value), target.attr, value))
+            except UnresolvedSuperCallError:
+                pass
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for elt in target.elts:
+                self._bind_target(elt, value)
+        elif isinstance(target, ast.Starred):
+            self._bind_target(target.value, value)
+        elif isinstance(target, ast.arg):
+            self.set_value(target.arg, value)
+
     def analyze_binding(self, targets, values):
         """Generic handler for binding forms. Inputs must be sanitize_exprs()d."""
-
-        # Before we begin analyzing the assignment, clean up any leftover self.last_value.
-        #
-        # (e.g. from any Name in load context (including function names in a Call)
-        #  that did not assign anything.)
-        #
-        self.last_value = None
-
-        # TODO: properly support tuple unpacking
-        #
-        #  - the problem is:
-        #      a,*b,c = [1,2,3,4,5]  --> Name,Starred,Name = List
-        #    so a simple analysis of the AST won't get us far here.
-        #
-        #  To fix this:
-        #
-        #  - find the index of Starred on the LHS
-        #  - unpack the RHS into a tuple/list (if possible)
-        #    - unpack just one level; the items may be tuples/lists and that's just fine
-        #    - if not possible to unpack directly (e.g. enumerate(foo) is a **call**),
-        #      don't try to be too smart; just do some generic fallback handling (or give up)
-        #  - if RHS unpack successful:
-        #    - map the non-starred items directly (one-to-one)
-        #    - map the remaining sublist of the RHS to the Starred term
-        #      - requires support for tuples/lists of AST nodes as values of Nodes
-        #        - but generally, we need that anyway: consider self.a = (f, g, h)
-        #          --> any use of self.a should detect the possible use of f, g, and h;
-        #              currently this is simply ignored.
-        #
-        # TODO: support Additional Unpacking Generalizations (Python 3.6+):
-        #       https://www.python.org/dev/peps/pep-0448/
-
-        if len(targets) == len(values):  # handle correctly the most common trivial case "a1,a2,... = b1,b2,..."
-            captured_values = []
-            for value in values:
-                self.visit(value)  # RHS -> set self.last_value
-                captured_values.append(self.last_value)
-                self.last_value = None
-            for tgt, val in zip(targets, captured_values):
-                self.last_value = val
-                self.visit(tgt)  # LHS, name in a store context
-            self.last_value = None
-        else:  # FIXME: for now, do the wrong thing in the non-trivial case
-            # old code, no tuple unpacking support
-            for value in values:
-                self.visit(value)  # set self.last_value to **something** on the RHS and hope for the best
-            for tgt in targets:  # LHS, name in a store context
-                self.visit(tgt)
-            self.last_value = None
+        captured = [self.visit(value) for value in values]
+        if len(targets) == len(captured):
+            for tgt, val in zip(targets, captured):
+                self._bind_target(tgt, val)
+        else:
+            # Mismatched lengths (e.g. starred unpacking).
+            # Overapproximate: each target gets every RHS value.
+            # _bind_target handles Tuple/List/Starred recursion.
+            for tgt in targets:
+                for val in captured:
+                    self._bind_target(tgt, val)
 
     def resolve_builtins(self, ast_node):
         """Resolve those calls to built-in functions whose return values
