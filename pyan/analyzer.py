@@ -789,6 +789,31 @@ class CallGraphVisitor(ast.NodeVisitor):
         # context needs the bound value.
         return self.get_value(node.target.id)
 
+    def visit_TypeAlias(self, node):  # PEP 695, Python 3.12+
+        self.logger.debug("TypeAlias %s, %s:%s" % (node.name.id, self.filename, node.lineno))
+
+        # Create defines edge for the alias name.
+        from_node = self.get_node_of_current_namespace()
+        ns = from_node.get_name()
+        to_node = self.get_node(ns, node.name.id, node, flavor=Flavor.NAME)
+        if self.add_defines_edge(from_node, to_node):
+            self.logger.info("Def from %s to TypeAlias %s" % (from_node, to_node))
+        self.associate_node(to_node, node, self.filename)
+        self.set_value(node.name.id, to_node)
+
+        # Visit the type value inside its scope. Parameterized aliases have
+        # two nested scopes (type parameter scope → type alias scope); simple
+        # aliases have just one (type alias scope). CPython's symtable names
+        # both scopes after the alias (e.g. "Matrix" and "Matrix.Matrix"),
+        # hence the repeated name in ExecuteInInnerScope calls.
+        if node.type_params:
+            with ExecuteInInnerScope(self, node.name.id):  # type parameter scope
+                with ExecuteInInnerScope(self, node.name.id):  # type alias scope
+                    self.visit(node.value)
+        else:
+            with ExecuteInInnerScope(self, node.name.id):
+                self.visit(node.value)
+
     def visit_AugAssign(self, node):
         targets = sanitize_exprs(node.target)
         values = sanitize_exprs(node.value)  # values is the same for each set of targets
@@ -873,6 +898,18 @@ class CallGraphVisitor(ast.NodeVisitor):
         iter_node = None
         for expr in outermost_iters:
             iter_node = self.visit(expr)
+
+        # Ensure comprehension scope exists. On Python 3.12+ (PEP 709),
+        # symtable no longer reports listcomp/setcomp/dictcomp as child scopes.
+        # Create a synthetic scope with the iteration target names to preserve
+        # variable isolation during analysis.
+        parent_ns = self.get_node_of_current_namespace().get_name()
+        inner_ns = "%s.%s" % (parent_ns, label)
+        if inner_ns not in self.scopes:
+            target_names = set()
+            for gen in gens:
+                self._collect_target_names(gen.target, target_names)
+            self.scopes[inner_ns] = Scope.from_names(label, target_names)
 
         with ExecuteInInnerScope(self, label) as scope_ctx:
             # Bind outermost targets to the iterator value in inner scope.
@@ -1106,6 +1143,17 @@ class CallGraphVisitor(ast.NodeVisitor):
             self._bind_target(target.value, value)
         elif isinstance(target, ast.arg):
             self.set_value(target.arg, value)
+
+    @staticmethod
+    def _collect_target_names(target, names):
+        """Collect all Name identifiers from an assignment target AST node."""
+        if isinstance(target, ast.Name):
+            names.add(target.id)
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for elt in target.elts:
+                CallGraphVisitor._collect_target_names(elt, names)
+        elif isinstance(target, ast.Starred):
+            CallGraphVisitor._collect_target_names(target.value, names)
 
     def analyze_binding(self, targets, values):
         """Generic handler for binding forms. Inputs must be sanitize_exprs()d."""

@@ -221,6 +221,20 @@ class Scope:
         self.type = table.get_type()  # useful for __repr__()
         self.defs = {iden: None for iden in table.get_identifiers()}  # name:assigned_value
 
+    @classmethod
+    def from_names(cls, name, identifiers):
+        """Create a synthetic scope for inlined comprehensions (Python 3.12+, PEP 709).
+
+        On 3.12+, symtable no longer reports comprehension scopes as children.
+        This creates a minimal scope containing only the specified identifiers,
+        preserving variable isolation during analysis.
+        """
+        sc = cls.__new__(cls)
+        sc.name = name
+        sc.type = "function"
+        sc.defs = {iden: None for iden in identifiers}
+        return sc
+
     def __repr__(self):
         return "<Scope: %s %s>" % (self.type, self.name)
 

@@ -2,13 +2,14 @@
 
 Exercises: decorators, inheritance, MRO, lambdas, closures,
 context managers, async functions, for-loop calls, walrus operator,
-async with, match statement, type annotations.
+async with, match statement, type annotations, type aliases (3.12+).
 
-Uses tests/test_code/features.py as input.
+Uses tests/test_code/features.py as input (and tests/test_code_312/ for 3.12+ syntax).
 """
 
 import logging
 import os
+import sys
 
 import pytest
 
@@ -194,3 +195,42 @@ def test_class_body_annotation_uses(v):
     """Class-level `value: MyType` (no RHS) creates uses edge to MyType."""
     uses = get_in_dict(v.uses_edges, f"{PREFIX}.Holder")
     get_node(uses, f"{PREFIX}.MyType")
+
+
+# --- Type aliases (PEP 695, Python 3.12+) ---
+
+PREFIX_312 = "test_code_312.type_aliases"
+
+
+@pytest.fixture
+def v312():
+    filenames = [os.path.join(TESTS_DIR, "test_code_312/type_aliases.py")]
+    return CallGraphVisitor(filenames, logger=logging.getLogger())
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="type statement requires Python 3.12+")
+def test_type_alias_defined(v312):
+    """type Point = ... creates a defines edge under the module."""
+    defines = get_in_dict(v312.defines_edges, PREFIX_312)
+    get_node(defines, f"{PREFIX_312}.Point")
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="type statement requires Python 3.12+")
+def test_type_alias_uses_class(v312):
+    """type PairAlias = Pair creates uses edge to user-defined Pair."""
+    uses = get_in_dict(v312.uses_edges, f"{PREFIX_312}.PairAlias")
+    get_node(uses, f"{PREFIX_312}.Pair")
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="type statement requires Python 3.12+")
+def test_parameterized_type_alias_defined(v312):
+    """type Matrix[T] = ... creates a defines edge under the module."""
+    defines = get_in_dict(v312.defines_edges, PREFIX_312)
+    get_node(defines, f"{PREFIX_312}.Matrix")
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="type statement requires Python 3.12+")
+def test_type_alias_in_function(v312):
+    """Type alias inside a function creates a defines edge under the function."""
+    defines = get_in_dict(v312.defines_edges, f"{PREFIX_312}.make_alias")
+    get_node(defines, f"{PREFIX_312}.make_alias.LocalAlias")
