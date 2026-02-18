@@ -43,7 +43,9 @@ sphinx = [
 
 dev = [
     "ruff>=0.14.0",
-    'twine>=3.8.0',
+    'twine>=6.0.0',
+    'urllib3>=2.6.3',       # transitive via twine → requests; floor for CVE fixes
+    'cryptography>=46.0.5', # transitive via twine → keyring; floor for CVE fixes
 ]
 
 test = [
