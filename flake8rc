@@ -25,6 +25,8 @@ ignore =
     E704,
     # do not assign a lambda expression, use a def (because autopep8 applies it blindly)
     E731,
+    # whitespace before ':' (false positive on alignment and slices; Black/Ruff agree)
+    E203,
     # line break before binary operator (PEP 8 recommends Knuth's style, i.e. break before)
     W503,
     # line break after binary operator
