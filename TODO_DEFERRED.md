@@ -16,7 +16,7 @@
 - **D8: Iterator protocol tracking + `is_async`**: We already track the context manager protocol (`__enter__`/`__exit__` for `with`). Tracking the iterator protocol (`__iter__`/`__next__`) would be a natural addition — and would make `analyze_comprehension`'s ignored `ast.comprehension.is_async` field relevant too (`__aiter__`/`__anext__` vs `__iter__`/`__next__`).
 - **D9: modvis `filename_to_module_name` cwd fragility**: ✓ Done (`c9cc075`+`a310477`). Added `root` parameter to `filename_to_module_name`, `ImportVisitor`, `create_modulegraph`, and CLI `--root`. Root is inferred by default (walk up past `__init__.py` dirs).
 - **D10: `visit_Name` local variable noise**: When a local has no known value, a wildcard `UNKNOWN`-flavored node is created (analyzer.py:721–725). The existing TODO suggests skipping node creation for locals in the innermost scope — would reduce graph noise and postprocessor cleanup work.
-- **D11: modvis plain-text output**: Commented-out plaintext report in `main()` would show spurious deps (speculative `__init__` and submodule entries) because it reads raw `self.modules` instead of going through `prepare_graph()` which filters to analyzed-set-only. Fix: always go through `prepare_graph`, use the filtered graph for any output format including plaintext. Also consider adding plain-text output for the call-graph analyzer (D3).
+- **D11: Plain-text output**: ✓ Done (`d2a5b6a`). `TextWriter` added to `writers.py`; `--text` CLI flag and `"text"` format for both call-graph and module-level modes. Old commented-out plaintext code removed from modvis.
 
 ## Large
 

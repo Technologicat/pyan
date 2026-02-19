@@ -9,6 +9,11 @@
   dest over `--no-defines`' explicit `default=True`.  Defines edges
   (dashed gray arrows) now appear by default as documented.
 
+### New features
+
+- Plain-text output format (`--text` / `format="text"`) for both call-graph
+  and module-level modes.  Sorted adjacency list with `[D]`/`[U]` edge tags.
+
 ### Other
 
 - Regenerate example graph image (pyan analyzing its own `modvis.py`).

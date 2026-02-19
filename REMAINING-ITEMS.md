@@ -18,7 +18,6 @@ v2.0.0 released 2026-02-19.
 | D7 | `Del` context tracking |
 | D8 | Iterator protocol tracking + `is_async` |
 | D10 | `visit_Name` local variable noise |
-| D11 | modvis plain-text output |
 
 ### Large
 
@@ -31,7 +30,7 @@ v2.0.0 released 2026-02-19.
 
 ## Completed (shipped in 2.0.0)
 
-All M, S, and N1–N7 items. D1–D6, D9, D16. CI, badges, flake8.
+All M, S, and N1–N7 items. D1–D6, D9, D11, D16. CI, badges, flake8.
 See `CHANGELOG.md` for the full list.
 
 ## Canonical detail
