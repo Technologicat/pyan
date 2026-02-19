@@ -51,14 +51,14 @@ def split_module_name(m):
 #     return py_files
 
 
-def resolve(current_module, target_module, level):
-    """Return fully qualified name of the target_module in an import.
+def resolve(*, current, target, level):
+    """Return fully qualified name of *target* in an import.
 
-    If level == 0, the import is absolute, hence target_module is already the
+    If level == 0, the import is absolute, hence *target* is already the
     fully qualified name (and will be returned as-is).
 
     Relative imports (level > 0) are resolved by stripping *level* trailing
-    components from current_module, then appending target_module.  This matches
+    components from *current*, then appending *target*.  This matches
     CPython's resolution against ``__package__``: both regular modules and
     ``__init__`` modules have their own name as the final component, so
     stripping one level always lands on the containing package.
@@ -74,18 +74,18 @@ def resolve(current_module, target_module, level):
     if level < 0:
         raise ValueError("Relative import level must be >= 0, got {}".format(level))
     if level == 0:  # absolute import
-        return target_module
+        return target
     # level > 0
-    if level > current_module.count(".") + 1:  # foo.bar.baz -> max level 3, pointing to top level
-        raise ValueError("Relative import level {} too large for module name {}".format(level, current_module))
-    base = current_module
+    if level > current.count(".") + 1:  # foo.bar.baz -> max level 3, pointing to top level
+        raise ValueError("Relative import level {} too large for module name {}".format(level, current))
+    base = current
     for _ in range(level):
         k = base.rfind(".")
         if k == -1:
             base = ""
             break
         base = base[:k]
-    return ".".join((base, target_module))
+    return ".".join((base, target))
 
 
 class ImportVisitor(ast.NodeVisitor):
@@ -145,7 +145,7 @@ class ImportVisitor(ast.NodeVisitor):
                     self.current_module, node.lineno, node.module, node.level
                 )
             )
-            absname = resolve(self.current_module, node.module, node.level)
+            absname = resolve(current=self.current_module, target=node.module, level=node.level)
             if node.level > 0:
                 self.logger.debug("    resolved relative import to '{}'".format(absname))
             self.add_dependency(absname)
@@ -168,7 +168,7 @@ class ImportVisitor(ast.NodeVisitor):
                         self.current_module, node.lineno, "." * node.level, alias.name, node.level
                     )
                 )
-                absname = resolve(self.current_module, alias.name, node.level)
+                absname = resolve(current=self.current_module, target=alias.name, level=node.level)
                 if node.level > 0:
                     self.logger.debug("    resolved relative import to '{}'".format(absname))
                 self.add_dependency(absname)

@@ -50,24 +50,24 @@ class TestSplitModuleName:
 
 class TestResolve:
     def test_absolute(self):
-        assert resolve("anything", "os.path", 0) == "os.path"
+        assert resolve(current="anything", target="os.path", level=0) == "os.path"
 
     def test_relative_level1(self):
-        assert resolve("pkg.sub.mod", "sibling", 1) == "pkg.sub.sibling"
+        assert resolve(current="pkg.sub.mod", target="sibling", level=1) == "pkg.sub.sibling"
 
     def test_relative_level2(self):
-        assert resolve("pkg.sub.mod", "other", 2) == "pkg.other"
+        assert resolve(current="pkg.sub.mod", target="other", level=2) == "pkg.other"
 
     def test_relative_level3_to_top(self):
-        assert resolve("pkg.sub.mod", "top", 3) == ".top"
+        assert resolve(current="pkg.sub.mod", target="top", level=3) == ".top"
 
     def test_negative_level(self):
         with pytest.raises(ValueError, match="must be >= 0"):
-            resolve("pkg.mod", "target", -1)
+            resolve(current="pkg.mod", target="target", level=-1)
 
     def test_level_too_large(self):
         with pytest.raises(ValueError, match="too large"):
-            resolve("pkg.mod", "target", 5)
+            resolve(current="pkg.mod", target="target", level=5)
 
 
 # ---------------------------------------------------------------------------
