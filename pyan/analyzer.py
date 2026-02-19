@@ -15,7 +15,7 @@ from .anutils import (
     get_ast_node_name,
     get_module_name,
     resolve_method_resolution_order,
-    sanitize_exprs,
+    canonize_exprs,
     tail,
 )
 from .node import Flavor, Node
@@ -520,15 +520,15 @@ class CallGraphVisitor(ast.NodeVisitor):
         if ast_args.defaults:
             n = len(ast_args.defaults)
             for tgt, val in zip(ast_args.args[-n:], ast_args.defaults):
-                targets = sanitize_exprs(tgt)
-                values = sanitize_exprs(val)
+                targets = canonize_exprs(tgt)
+                values = canonize_exprs(val)
                 self.analyze_binding(targets, values)
         if ast_args.kw_defaults:
             n = len(ast_args.kw_defaults)
             for tgt, val in zip(ast_args.kwonlyargs, ast_args.kw_defaults):
                 if val is not None:
-                    targets = sanitize_exprs(tgt)
-                    values = sanitize_exprs(val)
+                    targets = canonize_exprs(tgt)
+                    values = canonize_exprs(val)
                     self.analyze_binding(targets, values)
 
     def visit_Import(self, node):
@@ -744,9 +744,9 @@ class CallGraphVisitor(ast.NodeVisitor):
         # TODO: begin with supporting empty lists, dicts, sets
         # TODO: need to be more careful in sanitizing; currently destroys a bare list
 
-        values = sanitize_exprs(node.value)  # values is the same for each set of targets
+        values = canonize_exprs(node.value)  # values is the same for each set of targets
         for targets in node.targets:
-            targets = sanitize_exprs(targets)
+            targets = canonize_exprs(targets)
             self.logger.debug(
                 "Assign %s %s, %s:%s"
                 % (
@@ -760,10 +760,10 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     def visit_AnnAssign(self, node):  # PEP 526, Python 3.6+
         if node.value is not None:
-            targets = sanitize_exprs(node.target)
-            values = sanitize_exprs(node.value)
+            targets = canonize_exprs(node.target)
+            values = canonize_exprs(node.value)
             # issue #62: value may be an empty list, so it doesn't always have any elements
-            # even after `sanitize_exprs`.
+            # even after `canonize_exprs`.
             self.logger.debug(
                 "AnnAssign %s %s, %s:%s"
                 % (get_ast_node_name(node.target), get_ast_node_name(node.value), self.filename, node.lineno)
@@ -782,8 +782,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.logger.debug(
             "NamedExpr %s, %s:%s" % (get_ast_node_name(node.target), self.filename, node.lineno)
         )
-        targets = sanitize_exprs(node.target)
-        values = sanitize_exprs(node.value)
+        targets = canonize_exprs(node.target)
+        values = canonize_exprs(node.value)
         self.analyze_binding(targets, values)
         # Unlike plain assignment, walrus is an *expression* — the enclosing
         # context needs the bound value.
@@ -815,8 +815,8 @@ class CallGraphVisitor(ast.NodeVisitor):
                 self.visit(node.value)
 
     def visit_AugAssign(self, node):
-        targets = sanitize_exprs(node.target)
-        values = sanitize_exprs(node.value)  # values is the same for each set of targets
+        targets = canonize_exprs(node.target)
+        values = canonize_exprs(node.value)  # values is the same for each set of targets
 
         self.logger.debug(
             "AugAssign %s %s %s, %s:%s"
@@ -842,8 +842,8 @@ class CallGraphVisitor(ast.NodeVisitor):
     def visit_For(self, node):
         self.logger.debug("For-loop, %s:%s" % (self.filename, node.lineno))
 
-        targets = sanitize_exprs(node.target)
-        values = sanitize_exprs(node.iter)
+        targets = canonize_exprs(node.target)
+        values = canonize_exprs(node.iter)
         self.analyze_binding(targets, values)
 
         for stmt in node.body:
@@ -892,8 +892,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         outermost = gens[0]
         moregens = gens[1:] if len(gens) > 1 else []
 
-        outermost_iters = sanitize_exprs(outermost.iter)
-        outermost_targets = sanitize_exprs(outermost.target)
+        outermost_iters = canonize_exprs(outermost.iter)
+        outermost_targets = canonize_exprs(outermost.target)
         # Evaluate outermost iterator in current scope.
         iter_node = None
         for expr in outermost_iters:
@@ -920,8 +920,8 @@ class CallGraphVisitor(ast.NodeVisitor):
 
             # TODO: there's also an is_async field we might want to use in a future version of Pyan.
             for gen in moregens:
-                targets = sanitize_exprs(gen.target)
-                values = sanitize_exprs(gen.iter)
+                targets = canonize_exprs(gen.target)
+                values = canonize_exprs(gen.iter)
                 self.analyze_binding(targets, values)
                 for expr in gen.ifs:
                     self.visit(expr)
@@ -1005,7 +1005,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                 #     to finish with "return self")
                 #
                 if isinstance(vars, ast.Name):
-                    self.analyze_binding(sanitize_exprs(vars), sanitize_exprs(expr))
+                    self.analyze_binding(canonize_exprs(vars), canonize_exprs(expr))
                 else:
                     self.visit(vars)  # just capture any uses on the With line itself
 
@@ -1156,7 +1156,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             CallGraphVisitor._collect_target_names(target.value, names)
 
     def analyze_binding(self, targets, values):
-        """Generic handler for binding forms. Inputs must be sanitize_exprs()d."""
+        """Generic handler for binding forms. Inputs must be canonize_exprs()d."""
         captured = [self.visit(value) for value in values]
         if len(targets) == len(captured):
             for tgt, val in zip(targets, captured):

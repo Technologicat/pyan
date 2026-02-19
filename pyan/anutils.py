@@ -80,8 +80,8 @@ def get_ast_node_name(x):
 
 
 # Helper for handling binding forms.
-def sanitize_exprs(exprs):
-    """Convert ast.Tuples in exprs to Python tuples; wrap result in a Python tuple."""
+def canonize_exprs(exprs):
+    """Normalize ast.Tuple/ast.List to Python lists for uniform processing."""
 
     def process(expr):
         if isinstance(expr, (ast.Tuple, ast.List)):
