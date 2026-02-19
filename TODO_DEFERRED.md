@@ -2,7 +2,6 @@
 
 - **sphinx.py**: Verify the Sphinx extension still works with current Sphinx. (Optional deps now declared; functional test still needed.)
 - **README badges**: Add badges similar to `unpythonic`/`mcpyrate` (Python version, PyPI, etc.). Also announce Claude-assisted revival after completing the recon plan steps.
-- **Dependabot**: Dev dep floors bumped (commit `8d778e9`). Check if alerts cleared; if not, investigate further.
 - **Tuple unpacking with `Starred`**: `analyze_binding` (analyzer.py:1106–1112) overapproximates when target/value counts don't match — each target gets every RHS value. Could do positional matching for the non-starred targets (e.g. `a, b, *c = x, y, z, foo, bar` → bind `a=x`, `b=y`, `c={z, foo, bar}`). The architecture supports it; `_bind_target` already recurses into `Starred`.
 - **`visit_Name` local variable noise**: When a local has no known value, a wildcard `UNKNOWN`-flavored node is created (analyzer.py:721–725). The existing TODO suggests skipping node creation for locals in the innermost scope — would reduce graph noise and postprocessor cleanup work.
 - **"Node" terminology overload**: Three concepts share the name "node": (1) AST node (`ast.AST`), (2) Pyan's analysis graph node (`Node` class), (3) visualization/output node. Check whether all three are still conflated and consider introducing distinct terminology to reduce confusion.
