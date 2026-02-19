@@ -7,7 +7,7 @@ Offline call graph generator for Python 3
 ![license: GPL v2+](https://img.shields.io/pypi/l/pyan3) ![open issues](https://img.shields.io/github/issues/Technologicat/pyan) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](http://makeapullrequest.com/)
 
 
-Pyan takes one or more Python source files, performs a (rather superficial) static analysis, and constructs a directed graph of the objects in the combined source, and how they define or use each other. The graph can be output for rendering by GraphViz or yEd.
+Pyan takes one or more Python source files, performs a (rather superficial) static analysis, and constructs a directed graph of the objects in the combined source, and how they define or use each other. The graph can be output for rendering by GraphViz or yEd, or as a plain-text dependency list.
 
 This project has 2 official repositories:
 
@@ -123,6 +123,10 @@ You can also export as an interactive HTML
 
 `pyan *.py --uses --no-defines --colored --grouped --annotated --html > myuses.html`
 
+Or as a plain-text dependency list
+
+`pyan *.py --uses --no-defines --text`
+
 Alternatively, you can call `pyan` from a script
 
 ```shell script
@@ -199,7 +203,7 @@ pyan3 --module-level pkg/**/*.py --dot -c -e | dot -Tsvg >modules.svg
 
 The module-level mode has its own set of options (separate from the call-graph mode). Use `pyan3 --module-level --help` for the full list. Key options:
 
-- `--dot`, `--svg`, `--html`, `--tgf`, `--yed` — output format (default: dot)
+- `--dot`, `--svg`, `--html`, `--tgf`, `--yed`, `--text` — output format (default: dot)
 - `-c`, `--colored` — color by package
 - `-g`, `--grouped` — group by namespace
 - `-e`, `--nested-groups` — nested subgraph clusters (implies `-g`)
@@ -228,7 +232,7 @@ import pyan
 dot_source = pyan.create_modulegraph(
     filenames="pkg/**/*.py",
     root=".",            # project root; paths made relative to this
-    format="dot",        # also: "svg", "html", "tgf", "yed"
+    format="dot",        # also: "svg", "html", "tgf", "yed", "text"
     colored=True,
     nested_groups=True,
 )
