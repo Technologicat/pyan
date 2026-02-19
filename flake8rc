@@ -1,0 +1,30 @@
+[flake8]
+# ignore silly style items
+ignore =
+    # too complex (mcgabe)
+    C901,
+    # overhanging indent
+    E126,
+    # continuation line over-indented for visual indent
+    E127,
+    # block comment should start with #
+    E265,
+    # expected 1 blank line, found 0
+    E301,
+    # expected 2 blank lines before def
+    E302,
+    # expected 2 blank lines after def
+    E305,
+    # expected blank line before nested def
+    E306,
+    # module level import not at top of file (can cause problems when autopep8 applies it without thinking)
+    E402,
+    # line too long >79 chars
+    E501,
+    # multiple statements on one line (def)
+    E704,
+    # do not assign a lambda expression, use a def (because autopep8 applies it blindly)
+    E731,
+    # line break after binary operator
+    W504
+exclude = .git,__pycache__,docs/source/conf.py,old,build,dist,node_modules,instance,00_tmp,00_stuff,00_old,tests/test_code_312

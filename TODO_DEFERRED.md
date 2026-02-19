@@ -2,7 +2,8 @@
 
 ## Small
 
-- **D1: Rename `sanitize_exprs` → `canonize_exprs`**: It's really `canonize_exprs` — it normalizes AST Tuple/List to Python lists for uniform processing, not sanitizing anything. Rename + update callers.
+- **D1: Rename `sanitize_exprs` → `canonize_exprs`**: ✓ Done (`38fffd0`).
+- **D16: Review flake8 warnings (W503, E203, E741)**: Decide whether to fix, suppress per-file with `# noqa`, or add to `flake8rc` ignore list. Currently ~5 instances across `analyzer.py`, `modvis.py`, and `test_writers.py`.
 - **D2: `resolve()` keyword-only params**: `resolve("anything", "os.path", 0)` isn't self-documenting. Make `current_module`, `target_module`, and `level` keyword-only (or at least `level`) to force explicit call sites. Update all callers (in `ImportVisitor` and tests).
 - **D3: Unify output format support**: `create_callgraph()` only supports dot/svg/html; `main()` also supports tgf/yed. Should support all formats from both entry points.
 - **D4: README badges**: Add badges similar to `unpythonic`/`mcpyrate` (Python version, PyPI, etc.).

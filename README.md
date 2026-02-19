@@ -2,7 +2,7 @@
 
 Offline call graph generator for Python 3
 
-![100% Python](https://img.shields.io/github/languages/top/Technologicat/pyan) ![supported language versions](https://img.shields.io/pypi/pyversions/pyan3) ![supported implementations](https://img.shields.io/pypi/implementation/pyan3)
+![100% Python](https://img.shields.io/github/languages/top/Technologicat/pyan) ![supported language versions](https://img.shields.io/pypi/pyversions/pyan3) ![supported implementations](https://img.shields.io/pypi/implementation/pyan3) ![CI status](https://img.shields.io/github/actions/workflow/status/Technologicat/pyan/tests.yml?branch=master) [![codecov](https://codecov.io/gh/Technologicat/pyan/branch/master/graph/badge.svg)](https://codecov.io/gh/Technologicat/pyan)
 ![version on PyPI](https://img.shields.io/pypi/v/pyan3) ![PyPI package format](https://img.shields.io/pypi/format/pyan3) ![dependency status](https://img.shields.io/librariesio/github/Technologicat/pyan)
 ![license: GPL v2+](https://img.shields.io/pypi/l/pyan3) ![open issues](https://img.shields.io/github/issues/Technologicat/pyan) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](http://makeapullrequest.com/)
 
