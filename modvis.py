@@ -128,7 +128,7 @@ class ImportVisitor(ast.NodeVisitor):
             self.add_dependency(alias.name)  # alias.asname not relevant for our purposes
 
     def visit_ImportFrom(self, node):
-        # from foo import some_symbol
+        # from foo import bar — bar could be a symbol or a submodule.
         if node.module:
             self.logger.debug(
                 "{}:{}: ImportFrom '{}', relative import level {}".format(
@@ -139,6 +139,16 @@ class ImportVisitor(ast.NodeVisitor):
             if node.level > 0:
                 self.logger.debug("    resolved relative import to '{}'".format(absname))
             self.add_dependency(absname)
+
+            # Each imported name might be a submodule (e.g. `from pkg import mod`
+            # where mod is a .py file). We speculatively add "{module}.{name}" as
+            # a dependency for every imported name. This is safe because both
+            # prepare_graph() and detect_cycles() only follow dependencies whose
+            # target exists in the analyzed module set — speculative deps that
+            # don't match a real module are silently ignored. This is the same
+            # pattern add_dependency() already uses for __init__ speculation.
+            for alias in node.names:
+                self.add_dependency("{}.{}".format(absname, alias.name))
 
         # from . import foo  -->  module = None; now the **names** refer to modules
         else:

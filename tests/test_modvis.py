@@ -122,10 +122,31 @@ class TestImportVisitor:
         # alpha.py: import pkg_b.beta
         assert "pkg_b.beta" in visitor.modules["pkg_a.alpha"]
 
-    def test_from_import(self, visitor):
-        # alpha.py: from pkg_b import gamma  →  registers pkg_b as dependency
-        # (modvis tracks module-level deps, not individual symbols)
-        assert "pkg_b" in visitor.modules["pkg_a.alpha"]
+    def test_from_import_module(self, visitor):
+        # alpha.py: from pkg_b import gamma  →  gamma is a submodule,
+        # so both pkg_b and pkg_b.gamma should appear as dependencies
+        deps = visitor.modules["pkg_a.alpha"]
+        assert "pkg_b" in deps
+        assert "pkg_b.gamma" in deps
+
+    def test_from_import_symbol(self, visitor):
+        # alpha.py: from pkg_b.gamma import MY_CONST  →  MY_CONST is a symbol,
+        # not a module. pkg_b.gamma should appear as the base module dep.
+        # The speculative dep "pkg_b.gamma.MY_CONST" will also be in the raw
+        # dep set (that's harmless by design — see test_from_import_symbol_no_graph_edge).
+        deps = visitor.modules["pkg_a.alpha"]
+        assert "pkg_b.gamma" in deps
+
+    def test_from_import_symbol_no_graph_edge(self, visitor):
+        # The speculative dep "pkg_b.gamma.MY_CONST" is added to the raw dep
+        # set (that's fine), but prepare_graph must not create an edge for it
+        # since no module by that name exists in the analyzed set.
+        visitor.prepare_graph()
+        all_edge_targets = set()
+        for targets in visitor.uses_edges.values():
+            for t in targets:
+                all_edge_targets.add(t.get_name())
+        assert "pkg_b.gamma.MY_CONST" not in all_edge_targets
 
     def test_relative_import(self, visitor):
         # pkg_b/beta.py: from . import gamma
