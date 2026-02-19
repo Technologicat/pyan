@@ -391,7 +391,7 @@ def create_modulegraph(
 
 
 def main(cli_args=None):
-    usage = """%(prog)s FILENAME... [--dot|--tgf|--yed|--svg|--html]"""
+    usage = """%(prog)s FILENAME... [--dot|--tgf|--yed|--svg|--html|--text]"""
     desc = "Analyse one or more Python source files and generate an approximate module dependency graph."
     parser = ArgumentParser(usage=usage, description=desc)
     parser.add_argument("--dot", action="store_true", default=False, help="output in GraphViz dot format")
