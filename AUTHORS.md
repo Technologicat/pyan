@@ -16,4 +16,10 @@ HTML and SVG export by Jan Beitner.
 
 Support for relative imports by Jan Beitner and Rakan Alanazi.
 
+Relative path fix by Joenio Marques da Costa.
+
+Migration to [uv](https://github.com/astral-sh/uv) build system by [A M](https://github.com/amw007) (BackBenchDevs).
+
 Further contributions by Ioannis Filippidis, Jan Malek, José Eduardo Montenegro Cavalcanti de Oliveira, Mantas Zimnickas, Sam Basak, Brady Deetz, and GitHub user dmfreemon.
+
+2026 revival, modernization for Python 3.10–3.14, module-level dependency analysis, and comprehensive test suite by Juha Jeronen, with [Claude](https://claude.ai/) (Anthropic) as AI pair programmer.

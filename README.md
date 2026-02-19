@@ -13,39 +13,18 @@ This project has 2 official repositories:
 > The PyPI package [pyan3](https://pypi.org/project/pyan3/) is built from development
 
 
-# Help wanted! [November 2023]
+# Revived! [February 2026]
 
-The last major analyzer upgrades to `pyan` were made several years ago, for Python 3.6. If `pyan` has worked at all for Python 3.7+, that is pure luck.
+Pyan3 is back in active development. The analyzer has been modernized and tested on **Python 3.10–3.14**, with fixes for all modern syntax (walrus operator, `match` statements, `async with`, type aliases, inlined comprehension scopes in 3.12+, and more).
 
-It pains me to say, but as I am sure you all have noticed by the inactivity, I do not have the resources to keep `pyan` alive, nor to fix its many design issues.
+**What's new in the revival:**
 
-**Therefore**:
+- Full support for Python 3.10–3.14 syntax
+- Module-level import dependency analysis (`--module-level` flag and `create_modulegraph()` API), with import cycle detection
+- Comprehensive test suite (80+ tests)
+- Modernized build system and dependencies
 
-Since there is a continuing community interest in `pyan`, I would like to hand over the `pyan` project to the community, including write access to the PyPI package.
-
-If interested, you can contact me by posting a comment on [this issue](https://github.com/Technologicat/pyan/issues/94).
-
-**Background**
-
-I'm in a position that is rather peculiar for a software developer, where I have not needed a static analyzer in many years. Although as a computational scientist, I write my own research codes in Python, in practice:
-
- - 90% of the time, I am writing new code to solve some new problem, or writing sufficiently different code that existing implementations are not applicable. For some concrete examples:
-   - The FEnICS-based PDE solvers in [extrafeathers](https://github.com/Technologicat/extrafeathers); the [discontinuous Galerkin time integrator](https://github.com/Technologicat/pydgq) for ODE systems.
-   - The GPU implementation of the least-squares meshfree differentiator in [randomthought](https://github.com/Technologicat/randomthought) vs. the much older CPU implementation of the same algorithm, in [python-wlsqm](https://github.com/Technologicat/python-wlsqm). Different use case, different hardware, different assumptions, needed 100% new code.
- - The other 10% of the time, I am looking at either my own old code, or at something modular enough (e.g. how some particular feature of TensorFlow works internally), so that a local manual analysis is sufficient.
- - As a subfield of software engineering, numerics is an odd one out. Typical features are:
-   - Control flow is almost fully linear. Most solvers are scripts with hardcoded parameters (which are, at most, imported from a `config.py` -- which is as good as a configuration plaintext file as any).
-   - The dependency tree is very simple, and the degree of modularization is very high.
-   - The functional programming paradigm (or [REST](https://en.wikipedia.org/wiki/REST) paradigm) is readily applicable: data in, data out, no internal state.
-   - *Algorithms* are the highly nontrivial part.
-
-Therefore, in my work, a structural analyzer such as `pyan` does not help much. As we all know, this is not the case in most other kinds of software engineering.
-
-Of my Python metaprogramming projects, I am semi-actively using some parts of [unpythonic](https://github.com/Technologicat/unpythonic). I also have some interest in keeping the [mcpyrate](https://github.com/Technologicat/mcpyrate/) macro expander alive, because it goes much further than earlier designs, and no one else seems to have run off with the mantle yet. But that is basically all I can afford in the foreseeable future.
-
-Even for those two projects, as of this writing, the most recent opportunity I had to work on them was almost two years ago. So even the projects I **am** maintaining, currently only support up to Python 3.10.
-
- --Technologicat
+This revival was carried out by [Technologicat](https://github.com/Technologicat) with [Claude](https://claude.ai/) (Anthropic) as AI pair programmer. See [AUTHORS.md](AUTHORS.md) for the full contributor history.
 
 
 ## About
@@ -201,7 +180,7 @@ Usually either old or new rank (but often not both) works; this is a long-standi
 
 If the graph is visually unreadable due to too much detail, consider visualizing only a subset of the files in your project. Any references to files outside the analyzed set will be considered as undefined, and will not be drawn.
 
-Currently Pyan always operates at the level of individual functions and methods; an option to visualize only relations between namespaces may (or may not) be added in a future version.
+For a higher-level view, use `pyan3 --module-level` to visualize dependencies between modules instead of individual functions and methods. See `pyan3 --module-level --help` for module-level analysis options.
 
 # Features
 
@@ -241,47 +220,24 @@ _Items tagged with ☆ are new in Pyan3._
 
 ## TODO
 
-- Determine confidence of detected edges (probability that the edge is correct). Start with a binary system, with only values 1.0 and 0.0.
-  - A fully resolved reference to a name, based on lexical scoping, has confidence 1.0.
-  - A reference to an unknown name has confidence 0.0.
-  - Attributes:
-    - A fully resolved reference to a known attribute of a known object has confidence 1.0.
-    - A reference to an unknown attribute of a known object has confidence 1.0. These are mainly generated by imports, when the imported file is not in the analyzed set. (Does this need a third value, such as 0.5?)
-    - A reference to an attribute of an unknown object has confidence 0.0.
-  - A wildcard and its expansions have confidence 0.0.
-  - Effects of binding analysis? The system should not claim full confidence in a bound value, unless it fully understands both the binding syntax and the value. (Note that this is very restrictive. A function call or a list in the expression for the value will currently spoil the full analysis.)
-  - Confidence values may need updating in pass 2.
-- Make the analyzer understand `del name` (probably seen as `isinstance(node.ctx, ast.Del)` in `visit_Name()`, `visit_Attribute()`)
-- Prefix methods by class name in the graph; create a legend for annotations. See the discussion [here](https://github.com/johnyf/pyan/issues/4).
-- Improve the wildcard resolution mechanism, see discussion [here](https://github.com/johnyf/pyan/issues/5).
-  - Could record the namespace of the use site upon creating the wildcard, and check any possible resolutions against that (requiring that the resolved name is in scope at the use site)?
-- Add an option to visualize relations only between namespaces, useful for large projects.
-  - Scan the nodes and edges, basically generate a new graph and visualize that.
-- Publish test cases.
-- Get rid of `self.last_value`?
-  - Consider each specific kind of expression or statement being handled; get the relevant info directly (or by a more controlled kind of recursion) instead of `self.visit()`.
-  - At some point, may need a second visitor class that is just a catch-all that extracts names, which is then applied to only relevant branches of the AST.
-  - On the other hand, maybe `self.last_value` is the simplest implementation that extracts a value from an expression, and it only needs to be used in a controlled manner (as `analyze_binding()` currently does); i.e. reset before visiting, and reset immediately when done.
+For the full list of planned improvements and known limitations, see [TODO_DEFERRED.md](TODO_DEFERRED.md).
+
+- Determine confidence of detected edges (probability that the edge is correct)
+- Improve the wildcard resolution mechanism, see discussion [here](https://github.com/johnyf/pyan/issues/5)
+- Type inference for function arguments (would reduce wildcard noise)
+- Prefix methods by class name in the graph; create a legend for annotations. See the discussion [here](https://github.com/johnyf/pyan/issues/4)
 
 The analyzer **does not currently support**:
 
-- Tuples/lists as first-class values (currently ignores any assignment of a tuple/list to a single name).
-  - Support empty lists, too (for resolving method calls to `.append()` and similar).
-- Starred assignment `a,*b,c = d,e,f,g,h`
+- Tuples/lists as first-class values (currently ignores any assignment of a tuple/list to a single name)
+- Starred assignment `a,*b,c = d,e,f,g,h` (basic tuple unpacking works; starred targets overapproximate)
 - Slicing and indexing in assignment (`ast.Subscript`)
-- Additional unpacking generalizations ([PEP 448](https://www.python.org/dev/peps/pep-0448/), Python 3.5+).
+- Additional unpacking generalizations ([PEP 448](https://www.python.org/dev/peps/pep-0448/), Python 3.5+)
   - Any **uses** on the RHS _at the binding site_ in all of the above are already detected by the name and attribute analyzers, but the binding information from assignments of these forms will not be recorded (at least not correctly).
-- Enums; need to mark the use of any of their attributes as use of the Enum. Need to detect `Enum` in `bases` during analysis of ClassDef; then tag the class as an enum and handle differently.
-- Resolving results of function calls, except for a very limited special case for `super()`.
-  - Any binding of a name to a result of a function (or method) call - provided that the binding itself is understood by Pyan - will instead show in the output as binding the name to that function (or method). (This may generate some unintuitive uses edges in the graph.)
-- Distinguishing between different Lambdas in the same namespace (to report uses of a particular `lambda` that has been stored in `self.something`).
-- Type hints ([PEP 484](https://www.python.org/dev/peps/pep-0484/), Python 3.5+).
+- Enums; need to mark the use of any of their attributes as use of the Enum
+- Resolving results of function calls, except for a very limited special case for `super()`
+- Distinguishing between different Lambdas in the same namespace
 - Type inference for function arguments
-  - Either of these two could be used to bind function argument names to the appropriate object types, avoiding the need for wildcard references (especially for attribute accesses on objects passed in as function arguments).
-  - Type inference could run as pass 3, using additional information from the state of the graph after pass 2 to connect call sites to function definitions. Alternatively, no additional pass; store the AST nodes in the earlier pass. Type inference would allow resolving some wildcards by finding the method of the actual object instance passed in.
-  - Must understand, at the call site, whether the first positional argument in the function def is handled implicitly or not. This is found by looking at the flavor of the Node representing the call target.
-- Async definitions are detected, but passed through to the corresponding non-async analyzers; could be annotated.
-- Cython; could strip or comment out Cython-specific code as a preprocess step, then treat as Python (will need to be careful to get line numbers right).
 
 # How it works
 
