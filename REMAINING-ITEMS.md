@@ -27,7 +27,7 @@
 | D6 | README: document `--module-level` + svg/html in modvis CLI | ✓ `831f31c` |
 | D7 | `Del` context tracking | deferred |
 | D8 | Iterator protocol tracking + `is_async` | deferred |
-| D9 | modvis `filename_to_module_name` cwd fragility | **next** |
+| D9 | modvis `filename_to_module_name` cwd fragility | ✓ `c9cc075`+`a310477` |
 | D10 | `visit_Name` local variable noise | deferred |
 | D11 | modvis plain-text output | deferred |
 
