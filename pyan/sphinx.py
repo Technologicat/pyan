@@ -16,7 +16,7 @@ Options are
   uses other functions
 - **:no-colors:** (boolean flag): if to not color in callgraph (default is
   coloring)
-- **:nested-grops:** (boolean flag): if to group by modules and submodules
+- **:nested-groups:** (boolean flag): if to group by modules and submodules
 - **:annotated:** (boolean flag): annotate callgraph with file names
 - **:direction:** (string): "horizontal" or "vertical" callgraph
 - **:toctree:** (string): path to toctree (as used with autosummary) to link
