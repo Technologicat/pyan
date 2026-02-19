@@ -1,4 +1,4 @@
-"""Tests for output format writers (DOT, TGF, yEd GraphML, SVG, HTML)."""
+"""Tests for output format writers (DOT, TGF, yEd GraphML, SVG, HTML, text)."""
 
 import io
 import logging
@@ -11,7 +11,7 @@ import pytest
 
 from pyan.analyzer import CallGraphVisitor
 from pyan.visgraph import VisualGraph
-from pyan.writers import DotWriter, HTMLWriter, SVGWriter, TgfWriter, YedWriter
+from pyan.writers import DotWriter, HTMLWriter, SVGWriter, TextWriter, TgfWriter, YedWriter
 
 
 has_dot = shutil.which("dot") is not None
@@ -209,3 +209,39 @@ class TestHTMLWriter:
         html = buf.getvalue()
         # The SVG should contain graph content (not just an empty SVG)
         assert "<text" in html
+
+
+# ---------------------------------------------------------------------------
+# Plain text
+# ---------------------------------------------------------------------------
+
+class TestTextWriter:
+    def test_contains_nodes_and_edges(self, graph):
+        buf = io.StringIO()
+        writer = TextWriter(graph, output=buf, logger=logging.getLogger())
+        writer.run()
+        text = buf.getvalue()
+        lines = text.strip().split("\n")
+        # Should have non-indented node lines and indented edge lines
+        node_lines = [line for line in lines if not line.startswith("    ")]
+        edge_lines = [line for line in lines if line.startswith("    ")]
+        assert len(node_lines) > 0
+        assert len(edge_lines) > 0
+
+    def test_edge_tags(self, graph):
+        buf = io.StringIO()
+        writer = TextWriter(graph, output=buf, logger=logging.getLogger())
+        writer.run()
+        text = buf.getvalue()
+        # Edges should be tagged [D] or [U]
+        assert "[D]" in text
+        assert "[U]" in text
+
+    def test_sorted_output(self, graph):
+        buf = io.StringIO()
+        writer = TextWriter(graph, output=buf, logger=logging.getLogger())
+        writer.run()
+        text = buf.getvalue()
+        lines = text.strip().split("\n")
+        node_lines = [line for line in lines if not line.startswith("    ")]
+        assert node_lines == sorted(node_lines)

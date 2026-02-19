@@ -106,6 +106,39 @@ class TgfWriter(Writer):
         self.write("%s %s %s" % (self.id_map[edge.source], self.id_map[edge.target], flavor))
 
 
+class TextWriter(Writer):
+    """Plain-text dependency list.
+
+    Each node is printed with its outgoing edges indented below it,
+    tagged ``[D]`` for defines or ``[U]`` for uses.
+    """
+    def run(self):
+        self.log("%s running" % type(self))
+        try:
+            if isinstance(self.output, io.StringIO):
+                self.outstream = self.output
+            else:
+                self.outstream = open(self.output, "w")
+        except TypeError:
+            self.outstream = sys.stdout
+
+        # Build adjacency: source label → sorted list of (flavor, target label)
+        adj = {}
+        for edge in self.graph.edges:
+            src = edge.source.label
+            tgt = edge.target.label
+            tag = "D" if edge.flavor == "defines" else "U"
+            adj.setdefault(src, []).append((tag, tgt))
+
+        for src in sorted(adj):
+            self.outstream.write(src + "\n")
+            for tag, tgt in sorted(adj[src]):
+                self.outstream.write("    [%s] %s\n" % (tag, tgt))
+
+        if self.output and not isinstance(self.output, io.StringIO):
+            self.outstream.close()
+
+
 class DotWriter(Writer):
     def __init__(self, graph, options=None, output=None, logger=None, tabstop=4):
         Writer.__init__(self, graph, output=output, logger=logger, tabstop=tabstop)

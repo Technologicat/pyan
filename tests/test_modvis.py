@@ -245,6 +245,13 @@ class TestCLI:
         captured = capsys.readouterr()
         assert "import cycles" in captured.out.lower() or "cycle" in captured.out.lower()
 
+    def test_text_output(self, capsys):
+        main(fixture_files() + ["--text", "--root", FIXTURE_DIR])
+        captured = capsys.readouterr()
+        assert "[U]" in captured.out
+        # Should not contain spurious deps (prepare_graph filters them)
+        assert "MY_CONST" not in captured.out
+
 
 # ---------------------------------------------------------------------------
 # CLI integration (--module-level dispatch through pyan.main)

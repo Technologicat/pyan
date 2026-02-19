@@ -333,7 +333,7 @@ def create_modulegraph(
             relative to *root* before deriving dotted module names.
             Inferred by default.
         format: output format — one of ``"dot"``, ``"svg"``, ``"html"``,
-            ``"tgf"``, ``"yed"``.
+            ``"tgf"``, ``"yed"``, ``"text"``.
             SVG and HTML require the Graphviz ``dot`` binary to be installed.
         rankdir: graph layout direction (Graphviz ``rankdir`` attribute).
             ``"LR"`` for left-to-right, ``"TB"`` for top-to-bottom,
@@ -381,6 +381,8 @@ def create_modulegraph(
         writer = writers.TgfWriter(graph, output=stream, logger=logger)
     elif format == "yed":
         writer = writers.YedWriter(graph, output=stream, logger=logger)
+    elif format == "text":
+        writer = writers.TextWriter(graph, output=stream, logger=logger)
     else:
         raise ValueError(f"format {format!r} is unknown")
     writer.run()
@@ -397,6 +399,7 @@ def main(cli_args=None):
     parser.add_argument("--html", action="store_true", default=False, help="output in HTML format")
     parser.add_argument("--tgf", action="store_true", default=False, help="output in Trivial Graph Format")
     parser.add_argument("--yed", action="store_true", default=False, help="output in yEd GraphML Format")
+    parser.add_argument("--text", action="store_true", default=False, help="output in plain text")
     parser.add_argument("-f", "--file", dest="filename", help="write graph to FILE", metavar="FILE", default=None)
     parser.add_argument("-l", "--log", dest="logname", help="write log to LOG", metavar="LOG")
     parser.add_argument("-v", "--verbose", action="store_true", default=False, dest="verbose", help="verbose output")
@@ -533,18 +536,11 @@ def main(cli_args=None):
             for c in sorted(unique_cycles):
                 print("    {}".format(c))
 
-    # # we could generate a plaintext report like this (with caveats; see TODO above)
-    # ms = v.modules
-    # for m in sorted(ms):
-    #     print(m)
-    #     for d in sorted(ms[m]):
-    #         print("    {}".format(d))
-
     # Postprocessing: format graph report
-    make_graph = known_args.dot or known_args.svg or known_args.html or known_args.tgf or known_args.yed
+    make_graph = (known_args.dot or known_args.svg or known_args.html
+                  or known_args.tgf or known_args.yed or known_args.text)
     if make_graph:
         v.prepare_graph()
-        # print(v.nodes, v.uses_edges)
         graph = visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
     if known_args.dot:
@@ -563,6 +559,8 @@ def main(cli_args=None):
         writer = writers.TgfWriter(graph, output=known_args.filename, logger=logger)
     if known_args.yed:
         writer = writers.YedWriter(graph, output=known_args.filename, logger=logger)
+    if known_args.text:
+        writer = writers.TextWriter(graph, output=known_args.filename, logger=logger)
     if make_graph:
         writer.run()
 

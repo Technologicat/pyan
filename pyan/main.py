@@ -19,7 +19,7 @@ from typing import List, Union
 
 from .analyzer import CallGraphVisitor
 from .visgraph import VisualGraph
-from .writers import DotWriter, HTMLWriter, SVGWriter, TgfWriter, YedWriter
+from .writers import DotWriter, HTMLWriter, SVGWriter, TextWriter, TgfWriter, YedWriter
 
 
 def _build_graph(filenames, root=None, function=None, namespace=None,
@@ -70,7 +70,7 @@ def create_callgraph(
             function will be included.
         namespace: namespace to filter for, e.g. ``"my_module"``.
         format: output format — one of ``"dot"``, ``"svg"``, ``"html"``,
-            ``"tgf"``, ``"yed"``.
+            ``"tgf"``, ``"yed"``, ``"text"``.
             SVG and HTML require the Graphviz ``dot`` binary to be installed.
         rankdir: graph layout direction (Graphviz ``rankdir`` attribute).
             ``"LR"`` for left-to-right, ``"TB"`` for top-to-bottom,
@@ -134,8 +134,10 @@ def create_callgraph(
         writer = TgfWriter(graph, output=stream, logger=logger)
     elif format == "yed":
         writer = YedWriter(graph, output=stream, logger=logger)
+    elif format == "text":
+        writer = TextWriter(graph, output=stream, logger=logger)
     else:
-        raise ValueError(f"Unknown format {format!r}; expected one of: dot, svg, html, tgf, yed")
+        raise ValueError(f"Unknown format {format!r}; expected one of: dot, svg, html, tgf, yed, text")
     writer.run()
 
     return stream.getvalue()
@@ -168,6 +170,8 @@ def main(cli_args=None):
     parser.add_argument("--html", action="store_true", default=False, help="output in HTML Format")
 
     parser.add_argument("--yed", action="store_true", default=False, help="output in yEd GraphML Format")
+
+    parser.add_argument("--text", action="store_true", default=False, help="output in plain text")
 
     parser.add_argument("--file", dest="filename", help="write graph to FILE", metavar="FILE", default=None)
 
@@ -363,6 +367,9 @@ def main(cli_args=None):
 
     if known_args.yed:
         writer = YedWriter(graph, output=known_args.filename, logger=logger)
+
+    if known_args.text:
+        writer = TextWriter(graph, output=known_args.filename, logger=logger)
 
     if writer:
         writer.run()
