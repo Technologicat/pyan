@@ -155,7 +155,7 @@ and in addition:
 - **:no-defines:** (boolean flag): if to not draw edges that show which functions, methods and classes are defined by a class or module
 - **:no-uses:** (boolean flag): if to not draw edges that show how a function uses other functions
 - **:no-colors:** (boolean flag): if to not color in callgraph (default is coloring)
-- **:nested-grops:** (boolean flag): if to group by modules and submodules
+- **:nested-groups:** (boolean flag): if to group by modules and submodules
 - **:annotated:** (boolean flag): annotate callgraph with file names
 - **:direction:** (string): "horizontal" or "vertical" callgraph
 - **:toctree:** (string): path to toctree (as used with autosummary) to link elements of callgraph to documentation (makes all nodes clickable)
@@ -184,7 +184,55 @@ Usually either old or new rank (but often not both) works; this is a long-standi
 
 If the graph is visually unreadable due to too much detail, consider visualizing only a subset of the files in your project. Any references to files outside the analyzed set will be considered as undefined, and will not be drawn.
 
-For a higher-level view, use `pyan3 --module-level` to visualize dependencies between modules instead of individual functions and methods. See `pyan3 --module-level --help` for module-level analysis options.
+For a higher-level view, use `--module-level` mode (see below).
+
+## Module-level analysis
+
+The `--module-level` flag switches pyan3 from call-graph mode to **module-level import dependency analysis**. Instead of graphing individual functions and methods, it shows which modules import which other modules.
+
+### CLI usage
+
+```
+pyan3 --module-level pkg/**/*.py --dot -c -e >modules.dot
+pyan3 --module-level pkg/**/*.py --dot -c -e | dot -Tsvg >modules.svg
+```
+
+The module-level mode has its own set of options (separate from the call-graph mode). Use `pyan3 --module-level --help` for the full list. Key options:
+
+- `--dot`, `--svg`, `--html`, `--tgf`, `--yed` — output format (default: dot)
+- `-c`, `--colored` — color by package
+- `-g`, `--grouped` — group by namespace
+- `-e`, `--nested-groups` — nested subgraph clusters (implies `-g`)
+- `-C`, `--cycles` — detect and report import cycles to stdout
+- `--dot-rankdir` — layout direction (`TB`, `LR`, `BT`, `RL`)
+
+### Cycle detection
+
+The `-C` flag performs exhaustive import cycle detection using depth-first search (DFS) from every module:
+
+```
+pyan3 --module-level pkg/**/*.py -C
+```
+
+This finds all unique import cycles in the analyzed module set, and reports statistics (count, min/average/median/max cycle length). Note that for large codebases, the number of cycles can be large — most are harmless consequences of cross-package imports.
+
+If a cycle is actually causing an `ImportError`, you usually already know which cycle from the traceback. The `-C` flag provides a broader view of what other cycles exist.
+
+### Python API
+
+```python
+import pyan
+
+# Generate a module dependency graph as a DOT string
+dot_source = pyan.create_modulegraph(
+    filenames="pkg/**/*.py",
+    format="dot",       # also: "svg", "html", "tgf", "yed"
+    colored=True,
+    nested_groups=True,
+)
+```
+
+See `pyan.create_modulegraph()` for the full list of parameters.
 
 # Features
 

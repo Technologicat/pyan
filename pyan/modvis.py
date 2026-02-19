@@ -348,10 +348,12 @@ def create_modulegraph(
 
 
 def main(cli_args=None):
-    usage = """%(prog)s FILENAME... [--dot|--tgf|--yed]"""
+    usage = """%(prog)s FILENAME... [--dot|--tgf|--yed|--svg|--html]"""
     desc = "Analyse one or more Python source files and generate an approximate module dependency graph."
     parser = ArgumentParser(usage=usage, description=desc)
     parser.add_argument("--dot", action="store_true", default=False, help="output in GraphViz dot format")
+    parser.add_argument("--svg", action="store_true", default=False, help="output in SVG format")
+    parser.add_argument("--html", action="store_true", default=False, help="output in HTML format")
     parser.add_argument("--tgf", action="store_true", default=False, help="output in Trivial Graph Format")
     parser.add_argument("--yed", action="store_true", default=False, help="output in yEd GraphML Format")
     parser.add_argument("-f", "--file", dest="filename", help="write graph to FILE", metavar="FILE", default=None)
@@ -487,7 +489,7 @@ def main(cli_args=None):
     #         print("    {}".format(d))
 
     # Postprocessing: format graph report
-    make_graph = known_args.dot or known_args.tgf or known_args.yed
+    make_graph = known_args.dot or known_args.svg or known_args.html or known_args.tgf or known_args.yed
     if make_graph:
         v.prepare_graph()
         # print(v.nodes, v.uses_edges)
@@ -495,6 +497,14 @@ def main(cli_args=None):
 
     if known_args.dot:
         writer = writers.DotWriter(
+            graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger
+        )
+    if known_args.svg:
+        writer = writers.SVGWriter(
+            graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger
+        )
+    if known_args.html:
+        writer = writers.HTMLWriter(
             graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger
         )
     if known_args.tgf:
