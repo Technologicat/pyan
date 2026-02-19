@@ -14,6 +14,7 @@ from glob import glob
 import io
 import logging
 import os
+import sys
 from typing import List, Union
 
 from .analyzer import CallGraphVisitor
@@ -137,11 +138,19 @@ def create_callgraph(
 
 
 def main(cli_args=None):
+    if cli_args is None:
+        cli_args = sys.argv[1:]
+
+    # Dispatch to module-level analysis mode before building the call-graph parser.
+    if "--module-level" in cli_args:
+        from .modvis import main as modvis_main
+        return modvis_main([a for a in cli_args if a != "--module-level"])
+
     usage = """%(prog)s FILENAME... [--dot|--tgf|--yed|--svg|--html]"""
     desc = (
-        "Analyse one or more Python source files and generate an"
-        "approximate call graph of the modules, classes and functions"
-        " within them."
+        "Analyse one or more Python source files and generate an "
+        "approximate call graph of the modules, classes and functions "
+        "within them."
     )
 
     parser = ArgumentParser(usage=usage, description=desc)
@@ -272,6 +281,14 @@ def main(cli_args=None):
         default=None,
         dest="root",
         help="Package root directory. Is inferred by default.",
+    )
+
+    parser.add_argument(
+        "--module-level",
+        action="store_true",
+        default=False,
+        dest="module_level",
+        help="module-level import dependency analysis (use --module-level --help for full options)",
     )
 
     known_args, unknown_args = parser.parse_known_args(cli_args)

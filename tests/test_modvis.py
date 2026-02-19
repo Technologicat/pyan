@@ -1,15 +1,13 @@
-"""Tests for modvis.py — module-level import dependency analyzer."""
+"""Tests for pyan.modvis — module-level import dependency analyzer."""
 
 import logging
 import os
-import sys
 
 import pytest
 
-# modvis.py lives at repo root, not inside the pyan package
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from modvis import (
+from pyan.modvis import (
     ImportVisitor,
+    create_modulegraph,
     filename_to_module_name,
     main,
     resolve,
@@ -227,3 +225,76 @@ class TestCLI:
             os.chdir(old_cwd)
         captured = capsys.readouterr()
         assert "import cycles" in captured.out.lower() or "cycle" in captured.out.lower()
+
+
+# ---------------------------------------------------------------------------
+# CLI integration (--module-level dispatch through pyan.main)
+# ---------------------------------------------------------------------------
+
+class TestCLIIntegration:
+    def test_module_level_help(self, capsys):
+        """pyan3 --module-level --help dispatches to modvis help."""
+        from pyan.main import main as pyan_main
+        with pytest.raises(SystemExit) as exc_info:
+            pyan_main(["--module-level", "--help"])
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "approximate module" in captured.out
+
+    def test_module_level_dot(self, capsys):
+        """pyan3 --module-level produces dot output."""
+        from pyan.main import main as pyan_main
+        old_cwd = os.getcwd()
+        os.chdir(FIXTURE_DIR)
+        try:
+            files = [os.path.relpath(f, FIXTURE_DIR) for f in fixture_files()]
+            pyan_main(["--module-level"] + files + ["--dot"])
+        finally:
+            os.chdir(old_cwd)
+        captured = capsys.readouterr()
+        assert "digraph G" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Library API
+# ---------------------------------------------------------------------------
+
+class TestCreateModulegraph:
+    def test_dot_format(self):
+        old_cwd = os.getcwd()
+        os.chdir(FIXTURE_DIR)
+        try:
+            files = [os.path.relpath(f, FIXTURE_DIR) for f in fixture_files()]
+            result = create_modulegraph(files, format="dot")
+        finally:
+            os.chdir(old_cwd)
+        assert "digraph G" in result
+
+    def test_tgf_format(self):
+        old_cwd = os.getcwd()
+        os.chdir(FIXTURE_DIR)
+        try:
+            files = [os.path.relpath(f, FIXTURE_DIR) for f in fixture_files()]
+            result = create_modulegraph(files, format="tgf")
+        finally:
+            os.chdir(old_cwd)
+        assert "#" in result  # TGF separator
+
+    def test_yed_format(self):
+        old_cwd = os.getcwd()
+        os.chdir(FIXTURE_DIR)
+        try:
+            files = [os.path.relpath(f, FIXTURE_DIR) for f in fixture_files()]
+            result = create_modulegraph(files, format="yed")
+        finally:
+            os.chdir(old_cwd)
+        assert "graphml" in result.lower()
+
+    def test_unknown_format_raises(self):
+        with pytest.raises(ValueError, match="unknown"):
+            create_modulegraph(["nonexistent.py"], format="bogus")
+
+    def test_importable_from_pyan(self):
+        """create_modulegraph is re-exported from the pyan package."""
+        from pyan import create_modulegraph as cg
+        assert callable(cg)

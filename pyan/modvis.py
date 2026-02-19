@@ -8,15 +8,18 @@ from glob import glob
 import logging
 import os
 
-import pyan.node
-import pyan.visgraph
-import pyan.writers
+import io
 
-# from pyan.anutils import get_module_name
+from . import node, visgraph, writers
 
 
-def filename_to_module_name(fullpath):  # we need to see __init__, hence we don't use anutils.get_module_name.
-    """'some/path/module.py' -> 'some.path.module'"""
+def filename_to_module_name(fullpath):  # Not anutils.get_module_name: module-level analysis needs __init__ as a distinct node (not folded into the package name), and works relative to cwd without root inference.
+    """'some/path/module.py' -> 'some.path.module'
+
+    .. warning:: Converts the path as-is, so the caller must ensure paths are
+       relative to the project root.  Absolute paths or wrong cwd will produce
+       incorrect module names (and break relative import resolution downstream).
+    """
     if not fullpath.endswith(".py"):
         raise ValueError("Expected a .py filename, got '{}'".format(fullpath))
     rel = ".{}".format(os.path.sep)  # ./
@@ -54,20 +57,25 @@ def resolve(current_module, target_module, level):
     If level == 0, the import is absolute, hence target_module is already the
     fully qualified name (and will be returned as-is).
 
-    Relative imports (level > 0) are resolved using current_module as the
-    starting point. Usually this is good enough (especially if you analyze your
-    project by invoking modvis in its top-level directory).
+    Relative imports (level > 0) are resolved by stripping *level* trailing
+    components from current_module, then appending target_module.  This matches
+    CPython's resolution against ``__package__``: both regular modules and
+    ``__init__`` modules have their own name as the final component, so
+    stripping one level always lands on the containing package.
 
-    For the exact implications, see the section "Import sibling packages" in:
+    The resolution is correct given correct module names.  The actual fragility
+    is upstream, in ``filename_to_module_name``, which derives dotted names from
+    paths relative to cwd — so cwd must be the project root.
+
+    For background on Python's import resolution, see:
         https://alex.dzyoba.com/blog/python-import/
-    and this SO discussion:
         https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time
     """
     if level < 0:
         raise ValueError("Relative import level must be >= 0, got {}".format(level))
     if level == 0:  # absolute import
         return target_module
-    # level > 0 (let's have some simplistic support for relative imports)
+    # level > 0
     if level > current_module.count(".") + 1:  # foo.bar.baz -> max level 3, pointing to top level
         raise ValueError("Relative import level {} too large for module name {}".format(level, current_module))
     base = current_module
@@ -111,7 +119,9 @@ class ImportVisitor(ast.NodeVisitor):
         # Since nonexistent modules are not in the analyzed set (i.e. do not
         # appear as keys of self.modules), prepare_graph will ignore them.
         #
-        # TODO: This would be a problem for a simple plain-text output that doesn't use the graph.
+        # NOTE: A plain-text output reading raw self.modules would see these
+        # spurious deps.  Fix: always go through prepare_graph().
+        # See TODO_DEFERRED.md "modvis plain-text output".
         modpath = target_module.split(".")
         for k in range(1, len(modpath) + 1):
             base = ".".join(modpath[:k])
@@ -166,11 +176,36 @@ class ImportVisitor(ast.NodeVisitor):
     # --------------------------------------------------------------------------------
 
     def detect_cycles(self):
-        """Postprocessing. Detect import cycles.
+        """Detect import cycles via exhaustive DFS from every module.
 
-        Return format is `[(prefix, cycle), ...]` where `prefix` is the
-        non-cyclic prefix of the import chain, and `cycle` contains only
-        the cyclic part (where the first and last elements are the same).
+        Because this is a static analysis, it doesn't care about the order
+        the code runs in any particular invocation of the software.  Every
+        analyzed module is considered as a possible entry point, and all
+        cycles (considering *all* possible branches at *any* step of *each*
+        import chain) are mapped recursively.
+
+        This easily leads to combinatorial explosion.  In a mid-size project
+        (~20k SLOC), the analysis may find thousands of unique import cycles,
+        most of which are harmless.
+
+        Many cycles appear because package A imports from package B (possibly
+        from one of its submodules) and vice versa, when both packages have an
+        ``__init__`` module.  If they don't actually try to import any names
+        that only become defined after the init has finished running, it's
+        usually fine.  (Init modules often import names from their submodules
+        to the package's top-level namespace; those names can be reliably
+        accessed only after the init module has finished running.  But
+        importing names directly from the submodule where they are defined is
+        fine also during the init.)
+
+        In practice, if your program is crashing due to a cyclic import, you
+        already know *which* cycle is causing it from the stack trace.  This
+        analysis provides extra information about what *other* cycles exist.
+
+        Returns:
+            List of ``(prefix, cycle)`` tuples, where *prefix* is the
+            non-cyclic part of the import chain and *cycle* contains only
+            the cyclic part (first and last elements are the same module).
         """
         cycles = []
 
@@ -197,8 +232,8 @@ class ImportVisitor(ast.NodeVisitor):
             out.append((cycle[:k], cycle[k:]))
         return out
 
-    def prepare_graph(self):  # same format as in pyan.analyzer
-        """Postprocessing. Prepare data for pyan.visgraph for graph file generation."""
+    def prepare_graph(self):  # same format as in analyzer
+        """Postprocessing. Prepare data for visgraph for graph file generation."""
         self.nodes = {}  # Node name: list of Node objects (in possibly different namespaces)
         self.uses_edges = {}
         # we have no defines_edges, which doesn't matter as long as we don't enable that option in visgraph.
@@ -212,11 +247,8 @@ class ImportVisitor(ast.NodeVisitor):
             # print("{}: ns={}, mod={}, fn={}".format(m, ns, mod, fn))
             # HACK: The `filename` attribute of the node determines the visual color.
             # HACK: We are visualizing at module level, so color by package.
-            # TODO: If we are analyzing files from several projects in the same run,
-            # TODO: it could be useful to decide the hue by the top-level directory name
-            # TODO: (after the './' if any), and lightness by the depth in each tree.
-            # TODO: This would be most similar to how Pyan does it for functions/classes.
-            n = pyan.node.Node(namespace=ns, name=mod, ast_node=None, filename=package, flavor=pyan.node.Flavor.MODULE)
+            # See TODO_DEFERRED.md "modvis multi-project coloring".
+            n = node.Node(namespace=ns, name=mod, ast_node=None, filename=package, flavor=node.Flavor.MODULE)
             n.defined = True
             # Pyan's analyzer.py allows several nodes to share the same short name,
             # which is used as the key to self.nodes; but we use the fully qualified
@@ -241,6 +273,77 @@ class ImportVisitor(ast.NodeVisitor):
             assert m.get_name() in self.nodes
             for d in deps:
                 assert d.get_name() in self.nodes
+
+
+def create_modulegraph(
+    filenames,
+    format="dot",
+    rankdir="LR",
+    nested_groups=True,
+    colored=True,
+    annotated=False,
+    grouped=True,
+    logger=None,
+):
+    """Create a module-level dependency graph based on static import analysis.
+
+    Args:
+        filenames: glob pattern or list of glob patterns
+            to identify filenames to parse (``**`` for multiple directories).
+            Example: ``"pkg/**/*.py"`` for all Python files in a package.
+        format: output format — one of ``"dot"``, ``"svg"``, ``"html"``,
+            ``"tgf"``, ``"yed"``.
+            SVG and HTML require the Graphviz ``dot`` binary to be installed.
+        rankdir: graph layout direction (Graphviz ``rankdir`` attribute).
+            ``"LR"`` for left-to-right, ``"TB"`` for top-to-bottom,
+            ``"RL"`` and ``"BT"`` for the reverse directions.
+        nested_groups: create nested subgraph clusters for nested
+            namespaces (implies ``grouped``). [dot only]
+        colored: color nodes by package directory. [dot only]
+        annotated: annotate nodes with module location.
+        grouped: group nodes into subgraph clusters by namespace.
+            [dot only]
+        logger: optional ``logging.Logger`` instance.
+
+    Returns:
+        The module dependency graph as a string in the requested format.
+    """
+    if isinstance(filenames, str):
+        filenames = [filenames]
+    filenames = [fn2 for fn in filenames for fn2 in glob(fn, recursive=True)]
+
+    if nested_groups:
+        grouped = True
+    graph_options = {
+        "draw_defines": False,
+        "draw_uses": True,
+        "colored": colored,
+        "grouped_alt": False,
+        "grouped": grouped,
+        "nested_groups": nested_groups,
+        "annotated": annotated,
+    }
+
+    v = ImportVisitor(filenames, logger or logging.getLogger(__name__))
+    v.prepare_graph()
+    graph = visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
+
+    stream = io.StringIO()
+    if format == "dot":
+        writer = writers.DotWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+    elif format == "svg":
+        writer = writers.SVGWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+    elif format == "html":
+        writer = writers.HTMLWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+    elif format == "tgf":
+        writer = writers.TgfWriter(graph, output=stream, logger=logger)
+    elif format == "yed":
+        writer = writers.YedWriter(graph, output=stream, logger=logger)
+    else:
+        raise ValueError(f"format {format!r} is unknown")
+    writer.run()
+
+    return stream.getvalue()
 
 
 def main(cli_args=None):
@@ -342,33 +445,7 @@ def main(cli_args=None):
     # run the analysis
     v = ImportVisitor(filenames, logger)
 
-    # Postprocessing: detect import cycles
-    #
-    # NOTE: Because this is a static analysis, it doesn't care about the order
-    # the code runs in any particular invocation of the software. Every
-    # analyzed module is considered as a possible entry point to the program,
-    # and all cycles (considering *all* possible branches *at any step* of
-    # *each* import chain) will be mapped recursively.
-    #
-    # Obviously, this easily leads to a combinatoric explosion. In a mid-size
-    # project (~20k SLOC), the analysis may find thousands of unique import
-    # cycles, most of which are harmless.
-    #
-    # Many cycles appear due to package A importing something from package B
-    # (possibly from one of its submodules) and vice versa, when both packages
-    # have an __init__ module. If they don't actually try to import any names
-    # that only become defined after the init has finished running, it's
-    # usually fine.
-    #
-    # (Init modules often import names from their submodules to the package's
-    # top-level namespace; those names can be reliably accessed only after the
-    # init module has finished running. But importing names directly from the
-    # submodule where they are defined is fine also during the init.)
-    #
-    # But if your program is crashing due to a cyclic import, you already know
-    # in any case *which* import cycle is causing it, just by looking at the
-    # stack trace. So this analysis is just extra information that says what
-    # other cycles exist, if any.
+    # Cycle detection (see detect_cycles() docstring for semantics)
     if known_args.cycles:
         cycles = v.detect_cycles()
         if not cycles:
@@ -413,16 +490,16 @@ def main(cli_args=None):
     if make_graph:
         v.prepare_graph()
         # print(v.nodes, v.uses_edges)
-        graph = pyan.visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
+        graph = visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
     if known_args.dot:
-        writer = pyan.writers.DotWriter(
+        writer = writers.DotWriter(
             graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger
         )
     if known_args.tgf:
-        writer = pyan.writers.TgfWriter(graph, output=known_args.filename, logger=logger)
+        writer = writers.TgfWriter(graph, output=known_args.filename, logger=logger)
     if known_args.yed:
-        writer = pyan.writers.YedWriter(graph, output=known_args.filename, logger=logger)
+        writer = writers.YedWriter(graph, output=known_args.filename, logger=logger)
     if make_graph:
         writer.run()
 
