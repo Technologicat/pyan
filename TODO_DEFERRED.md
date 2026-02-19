@@ -3,15 +3,15 @@
 ## Small
 
 - **D1: Rename `sanitize_exprs` → `canonize_exprs`**: ✓ Done (`38fffd0`).
-- **D16: Review flake8 warnings (W503, E203, E741)**: Decide whether to fix, suppress per-file with `# noqa`, or add to `flake8rc` ignore list. Currently ~5 instances across `analyzer.py`, `modvis.py`, and `test_writers.py`.
-- **D2: `resolve()` keyword-only params**: `resolve("anything", "os.path", 0)` isn't self-documenting. Make `current_module`, `target_module`, and `level` keyword-only (or at least `level`) to force explicit call sites. Update all callers (in `ImportVisitor` and tests).
-- **D3: Unify output format support**: `create_callgraph()` only supports dot/svg/html; `main()` also supports tgf/yed. Should support all formats from both entry points.
-- **D4: README badges**: Add badges similar to `unpythonic`/`mcpyrate` (Python version, PyPI, etc.).
-- **D5: Sphinx extension verification**: Verify the Sphinx extension still works with current Sphinx. (Optional deps now declared; functional test still needed.)
+- **D2: `resolve()` keyword-only params**: ✓ Done (`a402739`).
+- **D3: Unify output format support**: ✓ Done (`600f724`).
+- **D4: README badges**: ✓ Done (`6f48a78`).
+- **D5: Sphinx extension verification**: ✓ Done (`4d1e196`). Smoke tests added; typo fix.
+- **D16: Review flake8 warnings (W503, E203, E741)**: ✓ Done (`1af4e31`..`9c9c45c`). W503/E203 added to ignore list; E741 renamed; F401/F841 tagged in test fixtures; unused Path import removed. Zero warnings.
 
 ## Medium
 
-- **D6: README: document `--module-level` mode**: Cover CLI usage (`pyan3 --module-level`), the `create_modulegraph()` API, cycle detection semantics (combinatorial explosion, most cycles harmless, etc.), and how it differs from the call-graph analyzer.
+- **D6: README: document `--module-level` mode**: ✓ Done (`831f31c`). Also added --svg/--html to modvis CLI.
 - **D7: `Del` context tracking**: Currently silently ignored (falls through the `ast.Load` guard) in `visit_Attribute`/`visit_Name`. Could track `__delattr__`/`__del__` protocol calls for completeness, similar to how `__enter__`/`__exit__` are tracked for `with`.
 - **D8: Iterator protocol tracking + `is_async`**: We already track the context manager protocol (`__enter__`/`__exit__` for `with`). Tracking the iterator protocol (`__iter__`/`__next__`) would be a natural addition — and would make `analyze_comprehension`'s ignored `ast.comprehension.is_async` field relevant too (`__aiter__`/`__anext__` vs `__iter__`/`__next__`).
 - **D9: modvis `filename_to_module_name` cwd fragility**: Converts file paths to dotted module names by simple string manipulation relative to cwd. Absolute paths or wrong cwd produce incorrect names, breaking relative import resolution downstream. Could accept an explicit `root` parameter (like the call-graph analyzer does) and strip the root prefix before conversion.

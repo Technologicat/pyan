@@ -13,15 +13,21 @@ import io
 from . import node, visgraph, writers
 
 
-def filename_to_module_name(fullpath):  # Not anutils.get_module_name: module-level analysis needs __init__ as a distinct node (not folded into the package name), and works relative to cwd without root inference.
+def filename_to_module_name(fullpath, root=None):  # Not anutils.get_module_name: module-level analysis needs __init__ as a distinct node (not folded into the package name).
     """'some/path/module.py' -> 'some.path.module'
 
-    .. warning:: Converts the path as-is, so the caller must ensure paths are
-       relative to the project root.  Absolute paths or wrong cwd will produce
-       incorrect module names (and break relative import resolution downstream).
+    Args:
+        fullpath: path to a ``.py`` file (relative or absolute).
+        root: project root directory.  When given, *fullpath* is made
+            relative to *root* before conversion.  When ``None``
+            (default), the path is converted as-is — so it must
+            already be relative to the project root (or cwd must be
+            the project root).
     """
     if not fullpath.endswith(".py"):
         raise ValueError("Expected a .py filename, got '{}'".format(fullpath))
+    if root is not None:
+        fullpath = os.path.relpath(os.path.abspath(fullpath), os.path.abspath(root))
     rel = ".{}".format(os.path.sep)  # ./
     if fullpath.startswith(rel):
         fullpath = fullpath[len(rel) :]
@@ -63,9 +69,9 @@ def resolve(*, current, target, level):
     ``__init__`` modules have their own name as the final component, so
     stripping one level always lands on the containing package.
 
-    The resolution is correct given correct module names.  The actual fragility
-    is upstream, in ``filename_to_module_name``, which derives dotted names from
-    paths relative to cwd — so cwd must be the project root.
+    The resolution is correct given correct module names.  When using
+    ``filename_to_module_name``, pass the ``root`` parameter (or ensure
+    cwd is the project root) so that dotted names are derived correctly.
 
     For background on Python's import resolution, see:
         https://alex.dzyoba.com/blog/python-import/
@@ -89,17 +95,18 @@ def resolve(*, current, target, level):
 
 
 class ImportVisitor(ast.NodeVisitor):
-    def __init__(self, filenames, logger):
+    def __init__(self, filenames, logger, root=None):
         self.modules = {}  # modname: {dep0, dep1, ...}
         self.fullpaths = {}  # modname: fullpath
         self.logger = logger
+        self.root = root
         self.analyze(filenames)
 
     def analyze(self, filenames):
         for fullpath in filenames:
             with open(fullpath, "rt", encoding="utf-8") as f:
                 content = f.read()
-            m = filename_to_module_name(fullpath)
+            m = filename_to_module_name(fullpath, root=self.root)
             self.current_module = m
             self.fullpaths[m] = fullpath
             self.visit(ast.parse(content, fullpath))
@@ -277,6 +284,7 @@ class ImportVisitor(ast.NodeVisitor):
 
 def create_modulegraph(
     filenames,
+    root=None,
     format="dot",
     rankdir="LR",
     nested_groups=True,
@@ -291,6 +299,11 @@ def create_modulegraph(
         filenames: glob pattern or list of glob patterns
             to identify filenames to parse (``**`` for multiple directories).
             Example: ``"pkg/**/*.py"`` for all Python files in a package.
+        root: path to the project root directory.  File paths are made
+            relative to *root* before deriving dotted module names.
+            When ``None`` (default), paths are used as-is — they must
+            already be relative to the project root, or cwd must be
+            the project root.
         format: output format — one of ``"dot"``, ``"svg"``, ``"html"``,
             ``"tgf"``, ``"yed"``.
             SVG and HTML require the Graphviz ``dot`` binary to be installed.
@@ -325,7 +338,7 @@ def create_modulegraph(
         "annotated": annotated,
     }
 
-    v = ImportVisitor(filenames, logger or logging.getLogger(__name__))
+    v = ImportVisitor(filenames, logger or logging.getLogger(__name__), root=root)
     v.prepare_graph()
     graph = visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
@@ -413,6 +426,12 @@ def main(cli_args=None):
     parser.add_argument(
         "-a", "--annotated", action="store_true", default=False, dest="annotated", help="annotate with module location"
     )
+    parser.add_argument(
+        "--root",
+        default=None,
+        dest="root",
+        help="Package root directory. Default: cwd.",
+    )
 
     known_args, unknown_args = parser.parse_known_args(cli_args)
     filenames = [fn2 for fn in unknown_args for fn2 in glob(fn, recursive=True)]
@@ -445,8 +464,13 @@ def main(cli_args=None):
         handler = logging.FileHandler(known_args.logname)
         logger.addHandler(handler)
 
+    # determine root
+    root = None
+    if known_args.root is not None:
+        root = os.path.abspath(known_args.root)
+
     # run the analysis
-    v = ImportVisitor(filenames, logger)
+    v = ImportVisitor(filenames, logger, root=root)
 
     # Cycle detection (see detect_cycles() docstring for semantics)
     if known_args.cycles:

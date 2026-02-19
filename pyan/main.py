@@ -284,7 +284,7 @@ def main(cli_args=None):
         "--root",
         default=None,
         dest="root",
-        help="Package root directory. Is inferred by default.",
+        help="Package root directory. Inferred by default.",
     )
 
     parser.add_argument(

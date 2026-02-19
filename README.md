@@ -205,6 +205,7 @@ The module-level mode has its own set of options (separate from the call-graph m
 - `-e`, `--nested-groups` — nested subgraph clusters (implies `-g`)
 - `-C`, `--cycles` — detect and report import cycles to stdout
 - `--dot-rankdir` — layout direction (`TB`, `LR`, `BT`, `RL`)
+- `--root` — project root directory (file paths are made relative to this before deriving module names; if omitted, cwd is assumed)
 
 ### Cycle detection
 
@@ -226,7 +227,8 @@ import pyan
 # Generate a module dependency graph as a DOT string
 dot_source = pyan.create_modulegraph(
     filenames="pkg/**/*.py",
-    format="dot",       # also: "svg", "html", "tgf", "yed"
+    root=".",            # project root; paths made relative to this
+    format="dot",        # also: "svg", "html", "tgf", "yed"
     colored=True,
     nested_groups=True,
 )

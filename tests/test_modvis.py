@@ -36,6 +36,20 @@ class TestFilenameToModuleName:
         with pytest.raises(ValueError, match="Expected a .py filename"):
             filename_to_module_name("module.txt")
 
+    def test_root_strips_prefix(self):
+        # Absolute path + root → correct relative module name
+        abspath = os.path.join("/project", "src", "pkg", "mod.py")
+        assert filename_to_module_name(abspath, root="/project/src") == "pkg.mod"
+
+    def test_root_with_absolute_init(self):
+        abspath = os.path.join("/project", "pkg", "__init__.py")
+        assert filename_to_module_name(abspath, root="/project") == "pkg.__init__"
+
+    def test_root_with_relative_paths(self):
+        # Even when both are relative, root normalizes correctly
+        relpath = os.path.join("src", "pkg", "mod.py")
+        assert filename_to_module_name(relpath, root="src") == "pkg.mod"
+
 
 class TestSplitModuleName:
     def test_dotted(self):
@@ -92,17 +106,7 @@ def visitor():
     """Create an ImportVisitor over the modvis test fixtures."""
     logger = logging.getLogger("test_modvis")
     logger.setLevel(logging.WARNING)
-    # ImportVisitor uses filename_to_module_name, which expects paths
-    # relative to cwd. Run from fixture dir.
-    old_cwd = os.getcwd()
-    os.chdir(FIXTURE_DIR)
-    try:
-        files = fixture_files()
-        rel_files = [os.path.relpath(f, FIXTURE_DIR) for f in files]
-        v = ImportVisitor(rel_files, logger)
-    finally:
-        os.chdir(old_cwd)
-    return v
+    return ImportVisitor(fixture_files(), logger, root=FIXTURE_DIR)
 
 
 class TestImportVisitor:
@@ -203,26 +207,12 @@ class TestCLI:
         assert exc_info.value.code != 0
 
     def test_dot_output(self, capsys):
-        old_cwd = os.getcwd()
-        os.chdir(FIXTURE_DIR)
-        try:
-            files = [os.path.relpath(f, FIXTURE_DIR)
-                     for f in fixture_files()]
-            main(files + ["--dot"])
-        finally:
-            os.chdir(old_cwd)
+        main(fixture_files() + ["--dot", "--root", FIXTURE_DIR])
         captured = capsys.readouterr()
         assert "digraph G" in captured.out
 
     def test_cycles_output(self, capsys):
-        old_cwd = os.getcwd()
-        os.chdir(FIXTURE_DIR)
-        try:
-            files = [os.path.relpath(f, FIXTURE_DIR)
-                     for f in fixture_files()]
-            main(files + ["--cycles"])
-        finally:
-            os.chdir(old_cwd)
+        main(fixture_files() + ["--cycles", "--root", FIXTURE_DIR])
         captured = capsys.readouterr()
         assert "import cycles" in captured.out.lower() or "cycle" in captured.out.lower()
 
@@ -244,13 +234,7 @@ class TestCLIIntegration:
     def test_module_level_dot(self, capsys):
         """pyan3 --module-level produces dot output."""
         from pyan.main import main as pyan_main
-        old_cwd = os.getcwd()
-        os.chdir(FIXTURE_DIR)
-        try:
-            files = [os.path.relpath(f, FIXTURE_DIR) for f in fixture_files()]
-            pyan_main(["--module-level"] + files + ["--dot"])
-        finally:
-            os.chdir(old_cwd)
+        pyan_main(["--module-level"] + fixture_files() + ["--dot", "--root", FIXTURE_DIR])
         captured = capsys.readouterr()
         assert "digraph G" in captured.out
 
@@ -261,33 +245,15 @@ class TestCLIIntegration:
 
 class TestCreateModulegraph:
     def test_dot_format(self):
-        old_cwd = os.getcwd()
-        os.chdir(FIXTURE_DIR)
-        try:
-            files = [os.path.relpath(f, FIXTURE_DIR) for f in fixture_files()]
-            result = create_modulegraph(files, format="dot")
-        finally:
-            os.chdir(old_cwd)
+        result = create_modulegraph(fixture_files(), root=FIXTURE_DIR, format="dot")
         assert "digraph G" in result
 
     def test_tgf_format(self):
-        old_cwd = os.getcwd()
-        os.chdir(FIXTURE_DIR)
-        try:
-            files = [os.path.relpath(f, FIXTURE_DIR) for f in fixture_files()]
-            result = create_modulegraph(files, format="tgf")
-        finally:
-            os.chdir(old_cwd)
+        result = create_modulegraph(fixture_files(), root=FIXTURE_DIR, format="tgf")
         assert "#" in result  # TGF separator
 
     def test_yed_format(self):
-        old_cwd = os.getcwd()
-        os.chdir(FIXTURE_DIR)
-        try:
-            files = [os.path.relpath(f, FIXTURE_DIR) for f in fixture_files()]
-            result = create_modulegraph(files, format="yed")
-        finally:
-            os.chdir(old_cwd)
+        result = create_modulegraph(fixture_files(), root=FIXTURE_DIR, format="yed")
         assert "graphml" in result.lower()
 
     def test_unknown_format_raises(self):
