@@ -297,6 +297,7 @@ def create_modulegraph(
         rankdir: graph layout direction (Graphviz ``rankdir`` attribute).
             ``"LR"`` for left-to-right, ``"TB"`` for top-to-bottom,
             ``"RL"`` and ``"BT"`` for the reverse directions.
+            [dot/svg/html only]
         nested_groups: create nested subgraph clusters for nested
             namespaces (implies ``grouped``). [dot only]
         colored: color nodes by package directory. [dot only]

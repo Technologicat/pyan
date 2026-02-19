@@ -69,11 +69,13 @@ def create_callgraph(
             ``"my_module.my_function"``. Only calls related to this
             function will be included.
         namespace: namespace to filter for, e.g. ``"my_module"``.
-        format: output format — one of ``"dot"``, ``"svg"``, ``"html"``.
+        format: output format — one of ``"dot"``, ``"svg"``, ``"html"``,
+            ``"tgf"``, ``"yed"``.
             SVG and HTML require the Graphviz ``dot`` binary to be installed.
         rankdir: graph layout direction (Graphviz ``rankdir`` attribute).
             ``"LR"`` for left-to-right, ``"TB"`` for top-to-bottom,
             ``"RL"`` and ``"BT"`` for the reverse directions.
+            [dot/svg/html only]
         nested_groups: create nested subgraph clusters for nested
             namespaces (implies ``grouped``). [dot only]
         draw_defines: draw "defines" edges. A defines edge from A to B
@@ -124,15 +126,17 @@ def create_callgraph(
     stream = io.StringIO()
     if format == "dot":
         writer = DotWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
-        writer.run()
     elif format == "html":
         writer = HTMLWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
-        writer.run()
     elif format == "svg":
         writer = SVGWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
-        writer.run()
+    elif format == "tgf":
+        writer = TgfWriter(graph, output=stream, logger=logger)
+    elif format == "yed":
+        writer = YedWriter(graph, output=stream, logger=logger)
     else:
-        raise ValueError(f"format {format} is unknown")
+        raise ValueError(f"Unknown format {format!r}; expected one of: dot, svg, html, tgf, yed")
+    writer.run()
 
     return stream.getvalue()
 
