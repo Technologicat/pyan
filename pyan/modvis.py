@@ -13,6 +13,36 @@ import io
 from . import node, visgraph, writers
 
 
+def _infer_root(filenames):
+    """Infer the project root from a list of ``.py`` file paths.
+
+    Finds the deepest common ancestor directory of all *filenames*,
+    then walks up while the directory contains ``__init__.py`` (those
+    are packages, not the root).  The first directory without
+    ``__init__.py`` is returned as the root.
+
+    Falls back to cwd when *filenames* is empty.
+    """
+    abspaths = [os.path.abspath(f) for f in filenames]
+    if not abspaths:
+        return os.getcwd()
+    if len(abspaths) == 1:
+        common = os.path.dirname(abspaths[0])
+    else:
+        common = os.path.commonpath(abspaths)
+    # If commonpath landed on a file (single file, or all files share a name prefix),
+    # step up to the containing directory.
+    if not os.path.isdir(common):
+        common = os.path.dirname(common)
+    # Walk up while directory is a package (contains __init__.py).
+    while os.path.isfile(os.path.join(common, "__init__.py")):
+        parent = os.path.dirname(common)
+        if parent == common:  # filesystem root
+            break
+        common = parent
+    return common
+
+
 def filename_to_module_name(fullpath, root=None):  # Not anutils.get_module_name: module-level analysis needs __init__ as a distinct node (not folded into the package name).
     """'some/path/module.py' -> 'some.path.module'
 
@@ -99,7 +129,7 @@ class ImportVisitor(ast.NodeVisitor):
         self.modules = {}  # modname: {dep0, dep1, ...}
         self.fullpaths = {}  # modname: fullpath
         self.logger = logger
-        self.root = root
+        self.root = root if root is not None else _infer_root(filenames)
         self.analyze(filenames)
 
     def analyze(self, filenames):
@@ -301,9 +331,7 @@ def create_modulegraph(
             Example: ``"pkg/**/*.py"`` for all Python files in a package.
         root: path to the project root directory.  File paths are made
             relative to *root* before deriving dotted module names.
-            When ``None`` (default), paths are used as-is — they must
-            already be relative to the project root, or cwd must be
-            the project root.
+            Inferred by default.
         format: output format — one of ``"dot"``, ``"svg"``, ``"html"``,
             ``"tgf"``, ``"yed"``.
             SVG and HTML require the Graphviz ``dot`` binary to be installed.
@@ -430,7 +458,7 @@ def main(cli_args=None):
         "--root",
         default=None,
         dest="root",
-        help="Package root directory. Default: cwd.",
+        help="Package root directory. Inferred by default.",
     )
 
     known_args, unknown_args = parser.parse_known_args(cli_args)

@@ -7,6 +7,7 @@ import pytest
 
 from pyan.modvis import (
     ImportVisitor,
+    _infer_root,
     create_modulegraph,
     filename_to_module_name,
     main,
@@ -49,6 +50,25 @@ class TestFilenameToModuleName:
         # Even when both are relative, root normalizes correctly
         relpath = os.path.join("src", "pkg", "mod.py")
         assert filename_to_module_name(relpath, root="src") == "pkg.mod"
+
+
+class TestInferRoot:
+    def test_infers_fixture_dir(self):
+        # Given absolute paths inside the fixture packages,
+        # inference should land on FIXTURE_DIR.
+        files = fixture_files()
+        assert os.path.abspath(_infer_root(files)) == os.path.abspath(FIXTURE_DIR)
+
+    def test_single_file_in_package(self):
+        f = os.path.join(FIXTURE_DIR, "pkg_a", "alpha.py")
+        # pkg_a has __init__.py, so root should be its parent (FIXTURE_DIR)
+        assert os.path.abspath(_infer_root([f])) == os.path.abspath(FIXTURE_DIR)
+
+    def test_single_top_level_file(self, tmp_path):
+        # A lone .py file with no __init__.py → root is its directory
+        f = tmp_path / "standalone.py"
+        f.write_text("")
+        assert _infer_root([str(f)]) == str(tmp_path)
 
 
 class TestSplitModuleName:
@@ -110,6 +130,15 @@ def visitor():
 
 
 class TestImportVisitor:
+    def test_root_inference_matches_explicit(self):
+        """ImportVisitor with inferred root produces the same modules as with explicit root."""
+        logger = logging.getLogger("test_modvis")
+        logger.setLevel(logging.WARNING)
+        files = fixture_files()
+        v_explicit = ImportVisitor(files, logger, root=FIXTURE_DIR)
+        v_inferred = ImportVisitor(files, logger)  # root=None → inferred
+        assert set(v_inferred.modules.keys()) == set(v_explicit.modules.keys())
+
     def test_discovers_all_modules(self, visitor):
         expected = {
             "pkg_a.__init__",
