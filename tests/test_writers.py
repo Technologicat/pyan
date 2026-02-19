@@ -126,7 +126,7 @@ class TestTgfWriter:
         tgf = buf.getvalue()
         lines = tgf.strip().split("\n")
         sep_idx = next(i for i, line in enumerate(lines) if line.strip() == "#")
-        edge_lines = [l for l in lines[sep_idx + 1:] if l.strip()]
+        edge_lines = [line for line in lines[sep_idx + 1:] if line.strip()]
         assert len(edge_lines) > 0
         # Edge lines: "source_id target_id flavor"
         for line in edge_lines:
