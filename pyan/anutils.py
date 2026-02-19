@@ -4,8 +4,6 @@
 
 import ast
 import os.path
-from pathlib import Path
-
 from .node import Flavor
 
 

@@ -1,4 +1,4 @@
-from test_code import subpackage1 as subpackage
+from test_code import subpackage1 as subpackage  # noqa: F401  # test fixture
 from test_code.subpackage1 import A
 
 

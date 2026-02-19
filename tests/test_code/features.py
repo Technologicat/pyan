@@ -80,7 +80,7 @@ class MyCtx:
 
 
 def use_ctx():
-    with MyCtx() as ctx:
+    with MyCtx() as ctx:  # noqa: F841  # test fixture
         pass
 
 
@@ -137,7 +137,7 @@ class AsyncCM:
 
 
 async def use_async_cm():
-    async with AsyncCM() as cm:
+    async with AsyncCM() as cm:  # noqa: F841  # test fixture
         pass
 
 
@@ -185,9 +185,9 @@ def match_example(cmd):
             handle_circle(cr)
         case str() as s:
             handle_str(s)
-        case [first, *others]:
+        case [first, *others]:  # noqa: F841  # test fixture
             handle_list(first)
-        case {"action": action, **rest}:
+        case {"action": action, **rest}:  # noqa: F841  # test fixture
             handle_action(action)
         case _:
             handle_default()
