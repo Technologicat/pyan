@@ -192,6 +192,7 @@ def main(cli_args=None):
         "-d",
         "--defines",
         action="store_true",
+        default=True,
         dest="draw_defines",
         help="add edges for 'defines' relationships [default]",
     )
@@ -200,7 +201,6 @@ def main(cli_args=None):
         "-n",
         "--no-defines",
         action="store_false",
-        default=True,
         dest="draw_defines",
         help="do not add edges for 'defines' relationships",
     )
@@ -218,7 +218,6 @@ def main(cli_args=None):
         "-N",
         "--no-uses",
         action="store_false",
-        default=True,
         dest="draw_uses",
         help="do not add edges for 'uses' relationships",
     )
