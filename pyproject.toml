@@ -75,7 +75,6 @@ include = [
     "/AUTHORS.md",
     "/pyproject.toml",
     "/pytest.ini",
-    "/requirements.txt",
 ]
 
 [tool.ruff]
