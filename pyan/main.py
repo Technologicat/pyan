@@ -56,33 +56,49 @@ def create_callgraph(
     max_iter: int = 1000,
     logger=None,
 ) -> str:
-    """
-    create callgraph based on static code analysis
+    """Create a call graph based on static code analysis.
 
     Args:
         filenames: glob pattern or list of glob patterns
-            to identify filenames to parse (`**` for multiple directories)
-            example: **/*.py for all python files
-        root: path to known root directory at which package root sits. Defaults to None, i.e. it will be inferred.
-        function: if defined, function name to filter for, e.g. "my_module.my_function"
-            to only include calls that are related to `my_function`
-        namespace: if defined, namespace to filter for, e.g. "my_module", it is highly
-            recommended to define this filter
-        format: format to write callgraph to, of of "dot", "svg", "html". you need to have graphviz
-            installed for svg or html output
-        rankdir: direction of graph, e.g. "LR" for horizontal or "TB" for vertical
-        nested_groups: if to group by modules and submodules
-        draw_defines: if to draw defines edges (functions that are defines)
-        draw_uses: if to draw uses edges (functions that are used)
-        colored: if to color graph
-        grouped_alt: if to use alternative grouping
-        annotated: if to annotate graph with filenames
-        grouped: if to group by modules
-        max_iter: maximum number of iterations for filtering. Defaults to 1000.
-        logger: optional logging.Logger instance
+            to identify filenames to parse (``**`` for multiple directories).
+            Example: ``**/*.py`` for all Python files.
+        root: path to the package root directory. Defaults to ``None``
+            (inferred automatically).
+        function: fully qualified function name to filter for, e.g.
+            ``"my_module.my_function"``. Only calls related to this
+            function will be included.
+        namespace: namespace to filter for, e.g. ``"my_module"``.
+        format: output format — one of ``"dot"``, ``"svg"``, ``"html"``.
+            SVG and HTML require the Graphviz ``dot`` binary to be installed.
+        rankdir: graph layout direction (Graphviz ``rankdir`` attribute).
+            ``"LR"`` for left-to-right, ``"TB"`` for top-to-bottom,
+            ``"RL"`` and ``"BT"`` for the reverse directions.
+        nested_groups: create nested subgraph clusters for nested
+            namespaces (implies ``grouped``). [dot only]
+        draw_defines: draw "defines" edges. A defines edge from A to B
+            means A lexically contains the definition of B (e.g. a class
+            containing a method, or a module containing a function).
+            Rendered as dashed lines.
+        draw_uses: draw "uses" edges. A uses edge from A to B means
+            A references B — function calls, class instantiation,
+            attribute access, and imports all generate uses edges.
+            Rendered as solid lines.
+        colored: color nodes by namespace (hue) and depth (lightness).
+            [dot only]
+        grouped_alt: emit invisible defines edges to nudge Graphviz's
+            layout engine into placing structurally related nodes closer
+            together, without actually drawing the defines edges.
+            Useful with ``draw_defines=False`` to get defines-like
+            clustering from the layout while showing only uses edges.
+            [dot only]
+        annotated: annotate nodes with source filename and line number.
+        grouped: group nodes into subgraph clusters by namespace.
+            [dot only]
+        max_iter: maximum iterations for the graph filter. Defaults to 1000.
+        logger: optional ``logging.Logger`` instance.
 
     Returns:
-        str: callgraph
+        The call graph as a string in the requested format.
     """
     if isinstance(filenames, str):
         filenames = [filenames]
