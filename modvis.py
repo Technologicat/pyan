@@ -3,9 +3,9 @@
 """A simple import analyzer. Visualize dependencies between modules."""
 
 import ast
+from argparse import ArgumentParser
 from glob import glob
 import logging
-from optparse import OptionParser  # TODO: migrate to argparse
 import os
 
 import pyan.node
@@ -233,17 +233,17 @@ class ImportVisitor(ast.NodeVisitor):
                 assert d.get_name() in self.nodes
 
 
-def main():
-    usage = """usage: %prog FILENAME... [--dot|--tgf|--yed]"""
+def main(cli_args=None):
+    usage = """%(prog)s FILENAME... [--dot|--tgf|--yed]"""
     desc = "Analyse one or more Python source files and generate an approximate module dependency graph."
-    parser = OptionParser(usage=usage, description=desc)
-    parser.add_option("--dot", action="store_true", default=False, help="output in GraphViz dot format")
-    parser.add_option("--tgf", action="store_true", default=False, help="output in Trivial Graph Format")
-    parser.add_option("--yed", action="store_true", default=False, help="output in yEd GraphML Format")
-    parser.add_option("-f", "--file", dest="filename", help="write graph to FILE", metavar="FILE", default=None)
-    parser.add_option("-l", "--log", dest="logname", help="write log to LOG", metavar="LOG")
-    parser.add_option("-v", "--verbose", action="store_true", default=False, dest="verbose", help="verbose output")
-    parser.add_option(
+    parser = ArgumentParser(usage=usage, description=desc)
+    parser.add_argument("--dot", action="store_true", default=False, help="output in GraphViz dot format")
+    parser.add_argument("--tgf", action="store_true", default=False, help="output in Trivial Graph Format")
+    parser.add_argument("--yed", action="store_true", default=False, help="output in yEd GraphML Format")
+    parser.add_argument("-f", "--file", dest="filename", help="write graph to FILE", metavar="FILE", default=None)
+    parser.add_argument("-l", "--log", dest="logname", help="write log to LOG", metavar="LOG")
+    parser.add_argument("-v", "--verbose", action="store_true", default=False, dest="verbose", help="verbose output")
+    parser.add_argument(
         "-V",
         "--very-verbose",
         action="store_true",
@@ -251,7 +251,7 @@ def main():
         dest="very_verbose",
         help="even more verbose output (mainly for debug)",
     )
-    parser.add_option(
+    parser.add_argument(
         "-c",
         "--colored",
         action="store_true",
@@ -259,7 +259,7 @@ def main():
         dest="colored",
         help="color nodes according to namespace [dot only]",
     )
-    parser.add_option(
+    parser.add_argument(
         "-g",
         "--grouped",
         action="store_true",
@@ -267,7 +267,7 @@ def main():
         dest="grouped",
         help="group nodes (create subgraphs) according to namespace [dot only]",
     )
-    parser.add_option(
+    parser.add_argument(
         "-e",
         "--nested-groups",
         action="store_true",
@@ -275,7 +275,7 @@ def main():
         dest="nested_groups",
         help="create nested groups (subgraphs) for nested namespaces (implies -g) [dot only]",
     )
-    parser.add_option(
+    parser.add_argument(
         "-C",
         "--cycles",
         action="store_true",
@@ -283,7 +283,7 @@ def main():
         dest="cycles",
         help="detect import cycles and print report to stdout",
     )
-    parser.add_option(
+    parser.add_argument(
         "--dot-rankdir",
         default="TB",
         dest="rankdir",
@@ -294,39 +294,39 @@ def main():
             "[dot only]"
         ),
     )
-    parser.add_option(
+    parser.add_argument(
         "-a", "--annotated", action="store_true", default=False, dest="annotated", help="annotate with module location"
     )
 
-    options, args = parser.parse_args()
-    filenames = [fn2 for fn in args for fn2 in glob(fn, recursive=True)]
-    if len(args) == 0:
+    known_args, unknown_args = parser.parse_known_args(cli_args)
+    filenames = [fn2 for fn in unknown_args for fn2 in glob(fn, recursive=True)]
+    if len(unknown_args) == 0:
         parser.error("Need one or more filenames to process")
 
-    if options.nested_groups:
-        options.grouped = True
+    if known_args.nested_groups:
+        known_args.grouped = True
 
     graph_options = {
         "draw_defines": False,  # we have no defines edges
         "draw_uses": True,
-        "colored": options.colored,
+        "colored": known_args.colored,
         "grouped_alt": False,
-        "grouped": options.grouped,
-        "nested_groups": options.nested_groups,
-        "annotated": options.annotated,
+        "grouped": known_args.grouped,
+        "nested_groups": known_args.nested_groups,
+        "annotated": known_args.annotated,
     }
 
     # TODO: use an int argument for verbosity
     logger = logging.getLogger(__name__)
-    if options.very_verbose:
+    if known_args.very_verbose:
         logger.setLevel(logging.DEBUG)
-    elif options.verbose:
+    elif known_args.verbose:
         logger.setLevel(logging.INFO)
     else:
         logger.setLevel(logging.WARN)
     logger.addHandler(logging.StreamHandler())
-    if options.logname:
-        handler = logging.FileHandler(options.logname)
+    if known_args.logname:
+        handler = logging.FileHandler(known_args.logname)
         logger.addHandler(handler)
 
     # run the analysis
@@ -359,7 +359,7 @@ def main():
     # in any case *which* import cycle is causing it, just by looking at the
     # stack trace. So this analysis is just extra information that says what
     # other cycles exist, if any.
-    if options.cycles:
+    if known_args.cycles:
         cycles = v.detect_cycles()
         if not cycles:
             print("No import cycles detected.")
@@ -399,20 +399,20 @@ def main():
     #         print("    {}".format(d))
 
     # Postprocessing: format graph report
-    make_graph = options.dot or options.tgf or options.yed
+    make_graph = known_args.dot or known_args.tgf or known_args.yed
     if make_graph:
         v.prepare_graph()
         # print(v.nodes, v.uses_edges)
         graph = pyan.visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
-    if options.dot:
+    if known_args.dot:
         writer = pyan.writers.DotWriter(
-            graph, options=["rankdir=" + options.rankdir], output=options.filename, logger=logger
+            graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger
         )
-    if options.tgf:
-        writer = pyan.writers.TgfWriter(graph, output=options.filename, logger=logger)
-    if options.yed:
-        writer = pyan.writers.YedWriter(graph, output=options.filename, logger=logger)
+    if known_args.tgf:
+        writer = pyan.writers.TgfWriter(graph, output=known_args.filename, logger=logger)
+    if known_args.yed:
+        writer = pyan.writers.YedWriter(graph, output=known_args.filename, logger=logger)
     if make_graph:
         writer.run()
 
