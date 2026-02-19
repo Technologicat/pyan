@@ -152,7 +152,7 @@ def main(cli_args=None):
         from .modvis import main as modvis_main
         return modvis_main([a for a in cli_args if a != "--module-level"])
 
-    usage = """%(prog)s FILENAME... [--dot|--tgf|--yed|--svg|--html]"""
+    usage = """%(prog)s FILENAME... [--dot|--tgf|--yed|--svg|--html|--text]"""
     desc = (
         "Analyse one or more Python source files and generate an "
         "approximate call graph of the modules, classes and functions "
