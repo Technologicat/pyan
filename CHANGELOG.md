@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.0.1 (unreleased)
+
+### Bug fixes
+
+- Fix `--defines` being off by default due to an argparse quirk —
+  `store_true` implicitly sets `default=False`, which won the shared
+  dest over `--no-defines`' explicit `default=True`.  Defines edges
+  (dashed gray arrows) now appear by default as documented.
+
+### Other
+
+- Regenerate example graph image (pyan analyzing its own `modvis.py`).
+
+
 ## 2.0.0 (2026-02-19)
 
 **Python 3.10–3.14.** This release drops support for Python < 3.10.
