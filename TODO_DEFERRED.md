@@ -10,3 +10,4 @@
 - **`Del` context in `visit_Attribute`/`visit_Name`**: Currently silently ignored (falls through the `ast.Load` guard). Could track `__delattr__`/`__del__` protocol calls for completeness, similar to how `__enter__`/`__exit__` are tracked for `with`.
 - **Per-comprehension scope isolation**: All listcomps (or setcomps, etc.) in the same function share one scope key (e.g. `"module.func.listcomp"`). This is the same on both pre-3.12 (last symtable child wins) and 3.12+ (synthetic scope shared). Would need numbered keys to isolate each comprehension's bindings.
 - **Move `modvis.py` into `pyan/` package**: Currently lives at repo root. Should move into the package when doing N4 (CLI integration). The `sys.path.insert` hack in `tests/test_modvis.py` can be removed at the same time.
+- **Unify output format support**: `create_callgraph()` only supports dot/svg/html; `main()` also supports tgf/yed. Both should support all five formats.

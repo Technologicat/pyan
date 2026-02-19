@@ -11,12 +11,113 @@
 
 from argparse import ArgumentParser
 from glob import glob
+import io
 import logging
 import os
+from typing import List, Union
 
 from .analyzer import CallGraphVisitor
 from .visgraph import VisualGraph
 from .writers import DotWriter, HTMLWriter, SVGWriter, TgfWriter, YedWriter
+
+
+def _build_graph(filenames, root=None, function=None, namespace=None,
+                 max_iter=1000, logger=None, graph_options=None):
+    """Analyze source files, optionally filter, and build a VisualGraph.
+
+    Shared core of ``create_callgraph()`` and ``main()``.
+    """
+    v = CallGraphVisitor(filenames, root=root, logger=logger)
+    if function or namespace:
+        if function:
+            function_name = function.split(".")[-1]
+            function_namespace = ".".join(function.split(".")[:-1])
+            node = v.get_node(function_namespace, function_name)
+        else:
+            node = None
+        v.filter(node=node, namespace=namespace, max_iter=max_iter)
+    return VisualGraph.from_visitor(v, options=graph_options, logger=logger)
+
+
+def create_callgraph(
+    filenames: Union[List[str], str] = "**/*.py",
+    root: str = None,
+    function: Union[str, None] = None,
+    namespace: Union[str, None] = None,
+    format: str = "dot",
+    rankdir: str = "LR",
+    nested_groups: bool = True,
+    draw_defines: bool = True,
+    draw_uses: bool = True,
+    colored: bool = True,
+    grouped_alt: bool = False,
+    annotated: bool = False,
+    grouped: bool = True,
+    max_iter: int = 1000,
+    logger=None,
+) -> str:
+    """
+    create callgraph based on static code analysis
+
+    Args:
+        filenames: glob pattern or list of glob patterns
+            to identify filenames to parse (`**` for multiple directories)
+            example: **/*.py for all python files
+        root: path to known root directory at which package root sits. Defaults to None, i.e. it will be inferred.
+        function: if defined, function name to filter for, e.g. "my_module.my_function"
+            to only include calls that are related to `my_function`
+        namespace: if defined, namespace to filter for, e.g. "my_module", it is highly
+            recommended to define this filter
+        format: format to write callgraph to, of of "dot", "svg", "html". you need to have graphviz
+            installed for svg or html output
+        rankdir: direction of graph, e.g. "LR" for horizontal or "TB" for vertical
+        nested_groups: if to group by modules and submodules
+        draw_defines: if to draw defines edges (functions that are defines)
+        draw_uses: if to draw uses edges (functions that are used)
+        colored: if to color graph
+        grouped_alt: if to use alternative grouping
+        annotated: if to annotate graph with filenames
+        grouped: if to group by modules
+        max_iter: maximum number of iterations for filtering. Defaults to 1000.
+        logger: optional logging.Logger instance
+
+    Returns:
+        str: callgraph
+    """
+    if isinstance(filenames, str):
+        filenames = [filenames]
+    filenames = [fn2 for fn in filenames for fn2 in glob(fn, recursive=True)]
+
+    if nested_groups:
+        grouped = True
+    graph_options = {
+        "draw_defines": draw_defines,
+        "draw_uses": draw_uses,
+        "colored": colored,
+        "grouped_alt": grouped_alt,
+        "grouped": grouped,
+        "nested_groups": nested_groups,
+        "annotated": annotated,
+    }
+
+    graph = _build_graph(filenames, root=root, function=function,
+                         namespace=namespace, max_iter=max_iter,
+                         logger=logger, graph_options=graph_options)
+
+    stream = io.StringIO()
+    if format == "dot":
+        writer = DotWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+        writer.run()
+    elif format == "html":
+        writer = HTMLWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+        writer.run()
+    elif format == "svg":
+        writer = SVGWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+        writer.run()
+    else:
+        raise ValueError(f"format {format} is unknown")
+
+    return stream.getvalue()
 
 
 def main(cli_args=None):
@@ -206,21 +307,9 @@ def main(cli_args=None):
     if root:
         root = os.path.abspath(root)
 
-    v = CallGraphVisitor(filenames, logger=logger, root=root)
-
-    if known_args.function or known_args.namespace:
-
-        if known_args.function:
-            function_name = known_args.function.split(".")[-1]
-            namespace = ".".join(known_args.function.split(".")[:-1])
-            node = v.get_node(namespace, function_name)
-
-        else:
-            node = None
-
-        v.filter(node=node, namespace=known_args.namespace)
-
-    graph = VisualGraph.from_visitor(v, options=graph_options, logger=logger)
+    graph = _build_graph(filenames, root=root, function=known_args.function,
+                         namespace=known_args.namespace, logger=logger,
+                         graph_options=graph_options)
 
     writer = None
 
