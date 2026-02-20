@@ -1,13 +1,6 @@
 # Changelog
 
-## 2.0.1 (unreleased)
-
-### Bug fixes
-
-- Fix `--defines` being off by default due to an argparse quirk —
-  `store_true` implicitly sets `default=False`, which won the shared
-  dest over `--no-defines`' explicit `default=True`.  Defines edges
-  (dashed gray arrows) now appear by default as documented.
+## 2.1.0 (unreleased)
 
 ### New features
 
@@ -16,6 +9,13 @@
 - **`del` statement protocol tracking** — `del obj.attr` now generates a uses
   edge to `__delattr__`, and `del obj[key]` to `__delitem__`.  Complements the
   existing `__enter__`/`__exit__` tracking for `with`.
+
+### Bug fixes
+
+- Fix `--defines` being off by default due to an argparse quirk —
+  `store_true` implicitly sets `default=False`, which won the shared
+  dest over `--no-defines`' explicit `default=True`.  Defines edges
+  (dashed gray arrows) now appear by default as documented.
 
 ### Other
 
