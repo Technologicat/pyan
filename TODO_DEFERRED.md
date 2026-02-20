@@ -20,7 +20,7 @@
 
 ## Large
 
-- **D12: Tuple unpacking with `Starred`**: `analyze_binding` (analyzer.py:1106–1112) overapproximates when target/value counts don't match — each target gets every RHS value. Could do positional matching for the non-starred targets (e.g. `a, b, *c = x, y, z, foo, bar` → bind `a=x`, `b=y`, `c={z, foo, bar}`). The architecture supports it; `_bind_target` already recurses into `Starred`.
+- **D12: Tuple unpacking with `Starred`**: ✓ Done. `analyze_binding` now does positional matching when the LHS has exactly one starred target: non-starred targets bind to their positional counterparts, starred target to the remainder. Cartesian fallback for ambiguous cases (no star, multiple stars, too few values). Three tests added.
 - **D13: Per-comprehension scope isolation**: All listcomps (or setcomps, etc.) in the same function share one scope key (e.g. `"module.func.listcomp"`). This is the same on both pre-3.12 (last symtable child wins) and 3.12+ (synthetic scope shared). Would need numbered keys to isolate each comprehension's bindings.
 - **D14: "Node" terminology overload**: Three concepts share the name "node": (1) AST node (`ast.AST`), (2) Pyan's analysis graph node (`Node` class), (3) visualization/output node. Check whether all three are still conflated and consider introducing distinct terminology to reduce confusion.
 - **D15: modvis multi-project coloring**: When analyzing files from several projects in one run, hue could be decided by the top-level directory name (after `./` if any), and lightness by depth in each tree. This would match how the call-graph analyzer colors functions/classes. Currently all modules are colored by their immediate package directory.

@@ -268,3 +268,42 @@ async def iterate_async_stream():
 def comprehend_sequence():
     seq = Sequence()
     return [x for x in seq]
+
+
+# --- Starred unpacking (positional matching) ---
+
+class Alpha:
+    def alpha_method(self):
+        pass
+
+
+class Beta:
+    def beta_method(self):
+        pass
+
+
+class Gamma:
+    def gamma_method(self):
+        pass
+
+
+class Delta:
+    def delta_method(self):
+        pass
+
+
+def star_at_end():
+    a, b, *c = Alpha(), Beta(), Gamma(), Delta()  # noqa: F841  # test fixture
+    a.alpha_method()
+    b.beta_method()
+
+
+def star_in_middle():
+    a, *b, c = Alpha(), Beta(), Gamma(), Delta()  # noqa: F841  # test fixture
+    a.alpha_method()
+    c.delta_method()
+
+
+def star_at_start():
+    *a, b = Alpha(), Beta(), Gamma()  # noqa: F841  # test fixture
+    b.gamma_method()

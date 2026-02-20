@@ -241,6 +241,38 @@ def test_comprehension_iter_protocol(v):
     get_node(uses, f"{PREFIX}.Sequence.__next__")
 
 
+# --- Starred unpacking (positional matching) ---
+
+def test_star_at_end(v):
+    """a, b, *c = Alpha(), Beta(), Gamma(), Delta() — positional binding."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.star_at_end")
+    # a binds to Alpha, b binds to Beta — positional, not Cartesian
+    get_node(uses, f"{PREFIX}.Alpha.alpha_method")
+    get_node(uses, f"{PREFIX}.Beta.beta_method")
+    # alpha_method should NOT resolve on Beta (would happen with Cartesian)
+    names = [n.get_name() for n in uses]
+    assert f"{PREFIX}.Beta.alpha_method" not in names
+
+
+def test_star_in_middle(v):
+    """a, *b, c = Alpha(), Beta(), Gamma(), Delta() — positional binding."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.star_in_middle")
+    # a binds to Alpha, c binds to Delta — positional
+    get_node(uses, f"{PREFIX}.Alpha.alpha_method")
+    get_node(uses, f"{PREFIX}.Delta.delta_method")
+    names = [n.get_name() for n in uses]
+    assert f"{PREFIX}.Delta.alpha_method" not in names
+
+
+def test_star_at_start(v):
+    """*a, b = Alpha(), Beta(), Gamma() — positional binding."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.star_at_start")
+    # b binds to Gamma (last element) — positional
+    get_node(uses, f"{PREFIX}.Gamma.gamma_method")
+    names = [n.get_name() for n in uses]
+    assert f"{PREFIX}.Alpha.gamma_method" not in names
+
+
 # --- Type aliases (PEP 695, Python 3.12+) ---
 
 PREFIX_312 = "test_code_312.type_aliases"

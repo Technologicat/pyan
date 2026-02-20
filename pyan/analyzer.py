@@ -1210,8 +1210,9 @@ class CallGraphVisitor(ast.NodeVisitor):
         """Bind an AST target node to a resolved value (a graph Node or None).
 
         Dispatches on target type: Name and Attribute perform scalar binding,
-        Tuple/List/Starred recurse (overapproximating — all sub-targets get
-        the same value), and ast.arg handles function parameter defaults.
+        Tuple/List recurse (all sub-targets get the same value), Starred
+        unwraps to its inner target, and ast.arg handles function parameter
+        defaults.
         """
         if isinstance(target, ast.Name):
             self.set_value(target.id, value)
@@ -1247,12 +1248,46 @@ class CallGraphVisitor(ast.NodeVisitor):
             for tgt, val in zip(targets, captured):
                 self._bind_target(tgt, val)
         else:
-            # Mismatched lengths (e.g. starred unpacking).
-            # Overapproximate: each target gets every RHS value.
-            # _bind_target handles Tuple/List/Starred recursion.
-            for tgt in targets:
-                for val in captured:
+            # Check for positional starred unpacking on LHS (e.g. a, b, *c = x, y, z, w).
+            star_idx = None
+            for i, tgt in enumerate(targets):
+                if isinstance(tgt, ast.Starred):
+                    if star_idx is not None:
+                        star_idx = None  # multiple stars → give up
+                        break
+                    star_idx = i
+
+            if star_idx is not None and len(captured) >= len(targets) - 1:
+                # Positional matching: bind non-starred targets to their
+                # positional counterparts, starred target to the remainder.
+                n_before = star_idx
+                n_after = len(targets) - star_idx - 1
+                for tgt, val in zip(targets[:n_before], captured[:n_before]):
                     self._bind_target(tgt, val)
+                if n_after > 0:
+                    for tgt, val in zip(targets[-n_after:], captured[-n_after:]):
+                        self._bind_target(tgt, val)
+                star_end = len(captured) - n_after if n_after else len(captured)
+                remainder = captured[n_before:star_end]
+                if remainder:
+                    for val in remainder:
+                        self._bind_target(targets[star_idx], val)
+                else:
+                    self._bind_target(targets[star_idx], None)
+            else:
+                # No star, multiple stars, or too few values.
+                # Overapproximate: each target gets every RHS value.
+                # _bind_target handles Tuple/List/Starred recursion.
+                # Skip logging when captured is a single value (e.g. for-loop
+                # or comprehension binding multiple targets to one iterable) —
+                # no combinatorial blowup, and it's the common case.
+                if len(captured) > 1:
+                    lineno = getattr(targets[0], "lineno", "?") if targets else "?"
+                    self.logger.info("Cartesian fallback: %d targets, %d values, %s:%s"
+                                     % (len(targets), len(captured), self.filename, lineno))
+                for tgt in targets:
+                    for val in captured:
+                        self._bind_target(tgt, val)
 
     def resolve_builtins(self, ast_node):
         """Resolve those calls to built-in functions whose return values

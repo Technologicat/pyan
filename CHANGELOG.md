@@ -13,6 +13,11 @@
   comprehensions now generate uses edges to `__iter__`/`__next__` (or
   `__aiter__`/`__anext__` for async).  Comprehension generators respect
   the `is_async` flag.
+- **Positional matching for starred tuple unpacking** — `a, b, *c = x, y, z, w`
+  now binds `a→x`, `b→y`, `*c→{z, w}` instead of the previous Cartesian
+  product (every target bound to every value).  Works for a single star at any position
+  on the LHS.  Cartesian fallback remains for cases that can't be resolved
+  statically.
 
 ### Bug fixes
 

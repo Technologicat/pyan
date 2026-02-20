@@ -21,7 +21,6 @@ v2.0.0 released 2026-02-19.
 
 | Item | Description |
 |------|-------------|
-| D12 | Tuple unpacking with `Starred` |
 | D13 | Per-comprehension scope isolation |
 | D14 | "Node" terminology overload |
 | D15 | modvis multi-project coloring |
@@ -29,7 +28,7 @@ v2.0.0 released 2026-02-19.
 
 ## Completed
 
-All M, S, and N1–N8, D9, D11, D16. CI, badges, flake8.
+All M, S, and N1–N8, D9, D11, D12, D16. CI, badges, flake8.
 See `CHANGELOG.md` for the 2.0.0 manifest.
 
 ## Canonical detail
