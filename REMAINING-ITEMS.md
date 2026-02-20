@@ -15,7 +15,6 @@ v2.0.0 released 2026-02-19.
 
 | Item | Description |
 |------|-------------|
-| D7 | `Del` context tracking |
 | D8 | Iterator protocol tracking + `is_async` |
 | D10 | `visit_Name` local variable noise |
 
@@ -27,11 +26,12 @@ v2.0.0 released 2026-02-19.
 | D13 | Per-comprehension scope isolation |
 | D14 | "Node" terminology overload |
 | D15 | modvis multi-project coloring |
+| D17 | README example graph (synthetic showcase) |
 
-## Completed (shipped in 2.0.0)
+## Completed
 
-All M, S, and N1–N7 items. D1–D6, D9, D11, D16. CI, badges, flake8.
-See `CHANGELOG.md` for the full list.
+All M, S, and N1–N7 items. D1–D7, D9, D11, D16. CI, badges, flake8.
+See `CHANGELOG.md` for the 2.0.0 manifest.
 
 ## Canonical detail
 

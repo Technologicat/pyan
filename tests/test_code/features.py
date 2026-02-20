@@ -210,3 +210,26 @@ def annotated_func(x: MyType) -> ReturnType:
 
 class Holder:
     value: MyType
+
+
+# --- Del statement ---
+
+class Registry:
+    def __delattr__(self, name):
+        pass
+
+    def __delitem__(self, key):
+        pass
+
+
+def clear_entry(registry):
+    registry = Registry()
+    del registry.entry
+
+def remove_item(registry):
+    registry = Registry()
+    del registry["key"]
+
+def unbind_local():
+    tmp = 1
+    del tmp

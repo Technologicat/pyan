@@ -13,6 +13,9 @@
 
 - Plain-text output format (`--text` / `format="text"`) for both call-graph
   and module-level modes.  Sorted adjacency list with `[D]`/`[U]` edge tags.
+- **`del` statement protocol tracking** — `del obj.attr` now generates a uses
+  edge to `__delattr__`, and `del obj[key]` to `__delitem__`.  Complements the
+  existing `__enter__`/`__exit__` tracking for `with`.
 
 ### Other
 

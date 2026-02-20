@@ -639,7 +639,9 @@ class CallGraphVisitor(ast.NodeVisitor):
         tn = t.__name__
         return self.get_node(ns, tn, node, flavor=Flavor.ATTRIBUTE)
 
-    # attribute access (node.ctx is ast.Load/Store/Del; Store is handled by _bind_target)
+    # attribute access (node.ctx is ast.Load/Store/Del)
+    # Store context: handled by _bind_target
+    # Del context: handled by visit_Delete (protocol method edges)
     def visit_Attribute(self, node):
         objname = get_ast_node_name(node.value)
         self.logger.debug(
@@ -708,9 +710,12 @@ class CallGraphVisitor(ast.NodeVisitor):
             # pass on
             else:
                 return self.visit(node.value)
-        # Store/Del contexts: no action (Store handled by _bind_target)
+        # Store context: handled by _bind_target
+        # Del context: handled by visit_Delete (protocol method edges)
 
-    # name access (node.ctx is ast.Load/Store/Del; Store is handled by _bind_target)
+    # name access (node.ctx is ast.Load/Store/Del)
+    # Store context: handled by _bind_target
+    # Del context: handled by visit_Delete (protocol method edges)
     def visit_Name(self, node):
         self.logger.debug("Name %s in context %s, %s:%s" % (node.id, type(node.ctx), self.filename, node.lineno))
 
@@ -731,7 +736,8 @@ class CallGraphVisitor(ast.NodeVisitor):
                     self.logger.info("New edge added for Use from %s to Name %s" % (from_node, to_node))
 
             return to_node
-        # Store/Del contexts: no action (Store handled by _bind_target)
+        # Store context: handled by _bind_target
+        # Del context: handled by visit_Delete (protocol method edges)
 
     def visit_Assign(self, node):
         # - chaining assignments like "a = b = c" produces multiple targets
@@ -1017,6 +1023,41 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     def visit_AsyncWith(self, node):
         self._visit_with(node, "__aenter__", "__aexit__")
+
+    def visit_Delete(self, node):
+        """Track protocol method calls implied by `del` statements.
+
+        `del obj.attr` invokes `obj.__delattr__("attr")`.
+        `del obj[key]` invokes `obj.__delitem__(key)`.
+        `del name` just unbinds a local — no protocol call.
+
+        NOTE: `del name` also invalidates prior value bindings for `name`,
+        so a subsequent `name.attr` would be a NameError at runtime.  We do
+        not clear the binding here because the analyzer is flow-insensitive —
+        the `del` might sit in a branch that doesn't always execute, or come
+        after the use in source order but not in control flow.  Clearing would
+        be wrong as often as right.  Revisit if flow sensitivity is ever added.
+        """
+        self.logger.debug("Delete, %s:%s" % (self.filename, node.lineno))
+        from_node = self.get_node_of_current_namespace()
+        for target in node.targets:
+            if isinstance(target, ast.Attribute):
+                obj_node = self.visit(target.value)
+                if isinstance(obj_node, Node):
+                    to_node = self.get_node(obj_node.get_name(), "__delattr__", None, flavor=Flavor.METHOD)
+                    self.logger.debug("Use from %s to %s (del attr)" % (from_node, to_node))
+                    if self.add_uses_edge(from_node, to_node):
+                        self.logger.info("New edge added for Use from %s to %s (del attr)" % (from_node, to_node))
+            elif isinstance(target, ast.Subscript):
+                obj_node = self.visit(target.value)
+                if isinstance(obj_node, Node):
+                    to_node = self.get_node(obj_node.get_name(), "__delitem__", None, flavor=Flavor.METHOD)
+                    self.logger.debug("Use from %s to %s (del item)" % (from_node, to_node))
+                    if self.add_uses_edge(from_node, to_node):
+                        self.logger.info("New edge added for Use from %s to %s (del item)" % (from_node, to_node))
+                # Also visit the slice — it may contain names/calls.
+                self.visit(target.slice)
+            # ast.Name in ast.Del context: just unbinds, no protocol call.
 
     # --- Match statement (PEP 634, Python 3.10+) ---
 

@@ -197,6 +197,27 @@ def test_class_body_annotation_uses(v):
     get_node(uses, f"{PREFIX}.MyType")
 
 
+# --- Del statement ---
+
+def test_del_attr(v):
+    """del registry.entry creates uses edge to Registry.__delattr__."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.clear_entry")
+    get_node(uses, f"{PREFIX}.Registry.__delattr__")
+
+
+def test_del_item(v):
+    """del registry["key"] creates uses edge to Registry.__delitem__."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.remove_item")
+    get_node(uses, f"{PREFIX}.Registry.__delitem__")
+
+
+def test_del_name_no_protocol_edge(v):
+    """del tmp (bare name) should not create protocol method edges."""
+    # unbind_local has no uses edges at all — it shouldn't even appear as a key.
+    names = [node.get_name() for node in v.uses_edges.keys()]
+    assert f"{PREFIX}.unbind_local" not in names
+
+
 # --- Type aliases (PEP 695, Python 3.12+) ---
 
 PREFIX_312 = "test_code_312.type_aliases"
