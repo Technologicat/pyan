@@ -218,6 +218,29 @@ def test_del_name_no_protocol_edge(v):
     assert f"{PREFIX}.unbind_local" not in names
 
 
+# --- Iterator protocol ---
+
+def test_for_iter_protocol(v):
+    """for item in seq: creates uses edges to Sequence.__iter__ and __next__."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.iterate_sequence")
+    get_node(uses, f"{PREFIX}.Sequence.__iter__")
+    get_node(uses, f"{PREFIX}.Sequence.__next__")
+
+
+def test_async_for_iter_protocol(v):
+    """async for chunk in stream: creates uses edges to AsyncStream.__aiter__ and __anext__."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.iterate_async_stream")
+    get_node(uses, f"{PREFIX}.AsyncStream.__aiter__")
+    get_node(uses, f"{PREFIX}.AsyncStream.__anext__")
+
+
+def test_comprehension_iter_protocol(v):
+    """[x for x in seq] creates uses edges to Sequence.__iter__ and __next__."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.comprehend_sequence")
+    get_node(uses, f"{PREFIX}.Sequence.__iter__")
+    get_node(uses, f"{PREFIX}.Sequence.__next__")
+
+
 # --- Type aliases (PEP 695, Python 3.12+) ---
 
 PREFIX_312 = "test_code_312.type_aliases"

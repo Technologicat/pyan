@@ -15,7 +15,6 @@ v2.0.0 released 2026-02-19.
 
 | Item | Description |
 |------|-------------|
-| D8 | Iterator protocol tracking + `is_async` |
 | D10 | `visit_Name` local variable noise |
 
 ### Large
@@ -30,7 +29,7 @@ v2.0.0 released 2026-02-19.
 
 ## Completed
 
-All M, S, and N1–N7 items. D1–D7, D9, D11, D16. CI, badges, flake8.
+All M, S, and N1–N8, D9, D11, D16. CI, badges, flake8.
 See `CHANGELOG.md` for the 2.0.0 manifest.
 
 ## Canonical detail

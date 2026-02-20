@@ -9,6 +9,10 @@
 - **`del` statement protocol tracking** — `del obj.attr` now generates a uses
   edge to `__delattr__`, and `del obj[key]` to `__delitem__`.  Complements the
   existing `__enter__`/`__exit__` tracking for `with`.
+- **Iterator protocol tracking** — `for` loops, `async for` loops, and
+  comprehensions now generate uses edges to `__iter__`/`__next__` (or
+  `__aiter__`/`__anext__` for async).  Comprehension generators respect
+  the `is_async` flag.
 
 ### Bug fixes
 

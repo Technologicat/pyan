@@ -845,8 +845,32 @@ class CallGraphVisitor(ast.NodeVisitor):
     #  consequences in the expand_unknowns() step, if the same name is
     #  in use elsewhere.)
     #
+    def _add_iterator_protocol_edges(self, iter_node, is_async=False):
+        """Add uses edges for the iterator protocol on `iter_node`.
+
+        Sync iteration:  ``__iter__`` + ``__next__``
+        Async iteration: ``__aiter__`` + ``__anext__``
+        """
+        if isinstance(iter_node, Node):
+            from_node = self.get_node_of_current_namespace()
+            if is_async:
+                methods = ("__aiter__", "__anext__")
+            else:
+                methods = ("__iter__", "__next__")
+            for methodname in methods:
+                to_node = self.get_node(iter_node.get_name(), methodname, None, flavor=Flavor.METHOD)
+                self.logger.debug("Use from %s to %s (iteration)" % (from_node, to_node))
+                if self.add_uses_edge(from_node, to_node):
+                    self.logger.info("New edge added for Use from %s to %s (iteration)" % (from_node, to_node))
+
     def visit_For(self, node):
         self.logger.debug("For-loop, %s:%s" % (self.filename, node.lineno))
+
+        # Visit the iterable to resolve the object node, then add protocol edges.
+        # NOTE: node.iter is visited again inside analyze_binding(); the double
+        # visit is harmless (resolves to the same node, edges deduplicate).
+        iter_node = self.visit(node.iter)
+        self._add_iterator_protocol_edges(iter_node)
 
         targets = canonize_exprs(node.target)
         values = canonize_exprs(node.iter)
@@ -858,7 +882,21 @@ class CallGraphVisitor(ast.NodeVisitor):
             self.visit(stmt)
 
     def visit_AsyncFor(self, node):
-        self.visit_For(node)  # TODO: alias for now; tag async for in output in a future version?
+        self.logger.debug("AsyncFor-loop, %s:%s" % (self.filename, node.lineno))
+
+        # NOTE: node.iter is visited again inside analyze_binding(); the double
+        # visit is harmless (resolves to the same node, edges deduplicate).
+        iter_node = self.visit(node.iter)
+        self._add_iterator_protocol_edges(iter_node, is_async=True)
+
+        targets = canonize_exprs(node.target)
+        values = canonize_exprs(node.iter)
+        self.analyze_binding(targets, values)
+
+        for stmt in node.body:
+            self.visit(stmt)
+        for stmt in node.orelse:
+            self.visit(stmt)
 
     def visit_ListComp(self, node):
         self.logger.debug("ListComp, %s:%s" % (self.filename, node.lineno))
@@ -904,6 +942,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         iter_node = None
         for expr in outermost_iters:
             iter_node = self.visit(expr)
+        self._add_iterator_protocol_edges(iter_node, is_async=outermost.is_async)
 
         # Ensure comprehension scope exists. On Python 3.12+ (PEP 709),
         # symtable no longer reports listcomp/setcomp/dictcomp as child scopes.
@@ -924,11 +963,15 @@ class CallGraphVisitor(ast.NodeVisitor):
             for expr in outermost.ifs:
                 self.visit(expr)
 
-            # TODO: there's also an is_async field we might want to use in a future version of Pyan.
             for gen in moregens:
                 targets = canonize_exprs(gen.target)
                 values = canonize_exprs(gen.iter)
                 self.analyze_binding(targets, values)
+                # Add iterator protocol edges for inner generators.
+                # NOTE: gen.iter is visited again (already visited inside
+                # analyze_binding); harmless — same node, edges deduplicate.
+                inner_iter_node = self.visit(gen.iter)
+                self._add_iterator_protocol_edges(inner_iter_node, is_async=gen.is_async)
                 for expr in gen.ifs:
                     self.visit(expr)
 
@@ -996,7 +1039,8 @@ class CallGraphVisitor(ast.NodeVisitor):
             expr = withitem.context_expr
             vars = withitem.optional_vars
 
-            # XXX: we currently visit expr twice (again in analyze_binding()) if vars is not None
+            # NOTE: expr is visited again inside analyze_binding() when vars is not None;
+            # the double visit is harmless (resolves to the same node, edges deduplicate).
             cm_node = self.visit(expr)
             add_uses_enter_exit_of(cm_node)
 

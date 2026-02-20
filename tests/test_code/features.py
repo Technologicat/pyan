@@ -233,3 +233,38 @@ def remove_item(registry):
 def unbind_local():
     tmp = 1
     del tmp
+
+
+# --- Iterator protocol ---
+
+class Sequence:
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        raise StopIteration
+
+
+def iterate_sequence():
+    seq = Sequence()
+    for item in seq:  # noqa: F841  # test fixture
+        pass
+
+
+class AsyncStream:
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise StopAsyncIteration
+
+
+async def iterate_async_stream():
+    stream = AsyncStream()
+    async for chunk in stream:  # noqa: F841  # test fixture
+        pass
+
+
+def comprehend_sequence():
+    seq = Sequence()
+    return [x for x in seq]

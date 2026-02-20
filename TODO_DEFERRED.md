@@ -13,7 +13,7 @@
 
 - **D6: README: document `--module-level` mode**: ✓ Done (`831f31c`). Also added --svg/--html to modvis CLI.
 - **D7: `Del` context tracking**: ✓ Done. `visit_Delete` tracks `__delattr__` for `del obj.attr` and `__delitem__` for `del obj[key]`. Bare `del name` is a no-op (just unbinds). Three tests added.
-- **D8: Iterator protocol tracking + `is_async`**: We already track the context manager protocol (`__enter__`/`__exit__` for `with`). Tracking the iterator protocol (`__iter__`/`__next__`) would be a natural addition — and would make `analyze_comprehension`'s ignored `ast.comprehension.is_async` field relevant too (`__aiter__`/`__anext__` vs `__iter__`/`__next__`).
+- **D8: Iterator protocol tracking + `is_async`**: ✓ Done. `_add_iterator_protocol_edges()` adds `__iter__`/`__next__` (or `__aiter__`/`__anext__` when async) for `for`, `async for`, and comprehension generators. The `is_async` field on `ast.comprehension` is now used. Three tests added.
 - **D9: modvis `filename_to_module_name` cwd fragility**: ✓ Done (`c9cc075`+`a310477`). Added `root` parameter to `filename_to_module_name`, `ImportVisitor`, `create_modulegraph`, and CLI `--root`. Root is inferred by default (walk up past `__init__.py` dirs).
 - **D10: `visit_Name` local variable noise**: When a local has no known value, a wildcard `UNKNOWN`-flavored node is created (analyzer.py:721–725). The existing TODO suggests skipping node creation for locals in the innermost scope — would reduce graph noise and postprocessor cleanup work.
 - **D11: Plain-text output**: ✓ Done (`d2a5b6a`). `TextWriter` added to `writers.py`; `--text` CLI flag and `"text"` format for both call-graph and module-level modes. Old commented-out plaintext code removed from modvis.
