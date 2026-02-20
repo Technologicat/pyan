@@ -13,6 +13,10 @@
   comprehensions now generate uses edges to `__iter__`/`__next__` (or
   `__aiter__`/`__anext__` for async).  Comprehension generators respect
   the `is_async` flag.
+- **Local variable noise suppression** — `visit_Name` no longer creates
+  wildcard `UNKNOWN`-flavored nodes for local variables with no resolved value.
+  Eliminates spurious edges for loop counters, temporaries, and other locals
+  that don't contribute to the call graph.
 - **Positional matching for starred tuple unpacking** — `a, b, *c = x, y, z, w`
   now binds `a→x`, `b→y`, `*c→{z, w}` instead of the previous Cartesian
   product (every target bound to every value).  Works for a single star at any position

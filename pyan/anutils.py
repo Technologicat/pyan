@@ -218,6 +218,11 @@ class Scope:
         self.name = name
         self.type = table.get_type()  # useful for __repr__()
         self.defs = {iden: None for iden in table.get_identifiers()}  # name:assigned_value
+        # Pure locals: assigned in this scope, not free/global/imported.
+        # Used by visit_Name to skip UNKNOWN node creation for unresolved locals.
+        self.locals = {sym.get_name() for sym in table.get_symbols()
+                       if sym.is_assigned() and not sym.is_imported()
+                       and not sym.is_global() and not sym.is_free()}
 
     @classmethod
     def from_names(cls, name, identifiers):
@@ -231,6 +236,7 @@ class Scope:
         sc.name = name
         sc.type = "function"
         sc.defs = {iden: None for iden in identifiers}
+        sc.locals = set(identifiers)  # comprehension variables are all locals
         return sc
 
     def __repr__(self):

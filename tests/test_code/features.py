@@ -307,3 +307,11 @@ def star_in_middle():
 def star_at_start():
     *a, b = Alpha(), Beta(), Gamma()  # noqa: F841  # test fixture
     b.gamma_method()
+
+
+# --- Local variable noise suppression ---
+
+def local_noise_example(items):
+    """Unresolved local `x` should not produce a wildcard UNKNOWN node."""
+    x = len(items)  # noqa: F841  # test fixture
+    return items

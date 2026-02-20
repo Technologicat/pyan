@@ -11,12 +11,6 @@ v2.0.0 released 2026-02-19.
 
 ## D-items (deferred, open)
 
-### Medium
-
-| Item | Description |
-|------|-------------|
-| D10 | `visit_Name` local variable noise |
-
 ### Large
 
 | Item | Description |
@@ -28,7 +22,7 @@ v2.0.0 released 2026-02-19.
 
 ## Completed
 
-All M, S, and N1–N8, D9, D11, D12, D16. CI, badges, flake8.
+All M, S, and N1–N8, D9, D10, D11, D12, D16. CI, badges, flake8.
 See `CHANGELOG.md` for the 2.0.0 manifest.
 
 ## Canonical detail

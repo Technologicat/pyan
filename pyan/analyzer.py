@@ -724,9 +724,10 @@ class CallGraphVisitor(ast.NodeVisitor):
             to_node = self.get_value(tgt_name)  # resolves "self" if needed
             current_class = self.get_current_class()
             if current_class is None or to_node is not current_class:  # add uses edge only if not pointing to "self"
-                # TODO if the name is a local variable (i.e. in the innermost scope), and
-                # has no known value, then don't try to create a Node for it.
                 if not isinstance(to_node, Node):
+                    # Local with no resolved value — no useful type info, skip.
+                    if tgt_name in self.scope_stack[-1].locals:
+                        return None
                     # namespace=None means we don't know the namespace yet
                     to_node = self.get_node(None, tgt_name, node, flavor=Flavor.UNKNOWN)
 

@@ -273,6 +273,17 @@ def test_star_at_start(v):
     assert f"{PREFIX}.Alpha.gamma_method" not in names
 
 
+# --- Local variable noise suppression ---
+
+def test_local_no_unknown_node(v):
+    """Unresolved local `x` should not produce a wildcard *.x uses edge."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.local_noise_example")
+    # Should have a uses edge to len (the call), but NOT to *.x (the local).
+    get_node(uses, "*.len")
+    names = [n.get_name() for n in uses]
+    assert not any(n.endswith(".x") for n in names)
+
+
 # --- Type aliases (PEP 695, Python 3.12+) ---
 
 PREFIX_312 = "test_code_312.type_aliases"
