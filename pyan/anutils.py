@@ -29,7 +29,7 @@ def get_module_name(filename, root: str = None):
         module_path = os.path.dirname(filename)
     else:
         # otherwise it is the filename without extension
-        module_path = filename.replace(".py", "")
+        module_path = filename.rstrip(".py")
 
     # find the module root - walk up the tree and check if it contains .py files - if yes. it is the new root
     directories = [(module_path, True)]

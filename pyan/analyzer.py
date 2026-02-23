@@ -218,7 +218,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                             and from_node.flavor == Flavor.IMPORTEDITEM
                         ):
                             # use define edges as potential candidates
-                            for candidate_to_node in self.defines_edges[to_node]:  #
+                            for candidate_to_node in self.defines_edges.get(to_node, []): # [to_node]:  #
                                 if candidate_to_node.name == node.name:
                                     attribute_import_mapping[node] = candidate_to_node
                                     break

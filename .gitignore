@@ -160,3 +160,4 @@ htmlcov
 .idea/
 .history/
 .vscode/
+*.swp
