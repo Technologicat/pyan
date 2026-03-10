@@ -33,6 +33,8 @@
 ### Other
 
 - Regenerate example graph image (pyan analyzing its own `modvis.py`).
+- Added `--version` CLI flag, returns e.g. "pyan3 2.1.0". No abbreviation,
+  because `-V` is already used for other purposes.
 
 
 ## 2.0.0 (2026-02-19)
