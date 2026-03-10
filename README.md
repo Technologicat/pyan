@@ -273,7 +273,6 @@ _Items tagged with ☆ are new in Pyan3._
 - Simple item-by-item tuple assignments like `x,y,z = a,b,c` ☆
 - Chained assignments `a = b = c` ☆
 - Local scope for lambda, listcomp, setcomp, dictcomp, genexpr ☆
-  - Keep in mind that list comprehensions gained a local scope (being treated like a function) only in Python 3. Thus, Pyan3, when applied to legacy Python 2 code, will give subtly wrong results if the code uses list comprehensions.
 - Source filename and line number annotation ☆
   - The annotation is appended to the node label. If grouping is off, namespace is included in the annotation. If grouping is on, only source filename and line number information is included, because the group title already shows the namespace.
 
