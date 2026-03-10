@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.0 (in progress)
+
+*No user-visible changes yet.*
+
+
 ## 2.1.0 (2026-03-10)
 
 ### New features
