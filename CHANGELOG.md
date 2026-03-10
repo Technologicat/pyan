@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.1.0 (unreleased)
+## 2.1.0 (2026-03-10)
 
 ### New features
 
@@ -22,6 +22,7 @@
   product (every target bound to every value).  Works for a single star at any position
   on the LHS.  Cartesian fallback remains for cases that can't be resolved
   statically.
+- `--version` CLI flag.
 
 ### Bug fixes
 
@@ -30,11 +31,19 @@
   dest over `--no-defines`' explicit `default=True`.  Defines edges
   (dashed gray arrows) now appear by default as documented.
 
-### Other
+### Documentation
 
-- Regenerate example graph image (pyan analyzing its own `modvis.py`).
-- Added `--version` CLI flag, returns e.g. "pyan3 2.1.0". No abbreviation,
-  because `-V` is already used for other purposes.
+- Reorganized README with table of contents.
+- Python API example for call-graph mode.
+- Updated Features section with all v2.0+ additions.
+- Consolidated inline TODO items into `TODO_DEFERRED.md`.
+- New synthetic showcase graph (orbital mechanics theme) demonstrating
+  uses edges, self-recursion, mutual recursion, HSL coloring, and
+  namespace grouping.
+
+### Housekeeping
+
+- Bumped `actions/checkout` to v6, `actions/setup-python` to v6.
 
 
 ## 2.0.0 (2026-02-19)
