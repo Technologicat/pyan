@@ -311,7 +311,7 @@ onboarding guide that covers:
 
 # Features
 
-_Items tagged with ☆ are new in Pyan3._
+_Items tagged with ☆ are new in Pyan3 (the Python 3 fork). Items tagged with ★ are new in v2.0+._
 
 **Graph creation**:
 
@@ -339,31 +339,23 @@ _Items tagged with ☆ are new in Pyan3._
     - Name clashes between `for` loop counter variables and functions or classes defined elsewhere no longer confuse Pyan.
 - `self` is defined by capturing the name of the first argument of a method definition, like Python does. ☆
 - Simple item-by-item tuple assignments like `x,y,z = a,b,c` ☆
+- Positional starred tuple unpacking like `a, b, *c = x, y, z, w` ★
 - Chained assignments `a = b = c` ☆
 - Local scope for lambda, listcomp, setcomp, dictcomp, genexpr ☆
+- Walrus operator (`:=`) ★
+- `match` statements (PEP 634) ★
+- `async with` statements ★
+- Type annotations (parameter, return, variable, class-level) ★
+- Type aliases (PEP 695, Python 3.12+) ★
+- Iterator protocol tracking (`__iter__`/`__next__`, `__aiter__`/`__anext__` for async) ★
+- `del` statement protocol tracking (`__delattr__`, `__delitem__`) ★
+- Local variable noise suppression — unresolved locals no longer create spurious wildcard nodes ★
 - Source filename and line number annotation ☆
   - The annotation is appended to the node label. If grouping is off, namespace is included in the annotation. If grouping is on, only source filename and line number information is included, because the group title already shows the namespace.
 
 ## TODO
 
-For the full list of planned improvements and known limitations, see [TODO_DEFERRED.md](TODO_DEFERRED.md).
-
-- Determine confidence of detected edges (probability that the edge is correct)
-- Improve the wildcard resolution mechanism, see discussion [here](https://github.com/johnyf/pyan/issues/5)
-- Type inference for function arguments (would reduce wildcard noise)
-- Prefix methods by class name in the graph; create a legend for annotations. See the discussion [here](https://github.com/johnyf/pyan/issues/4)
-
-The analyzer **does not currently support**:
-
-- Tuples/lists as first-class values (currently ignores any assignment of a tuple/list to a single name)
-- Starred assignment `a,*b,c = d,e,f,g,h` (basic tuple unpacking works; starred targets overapproximate)
-- Slicing and indexing in assignment (`ast.Subscript`)
-- Additional unpacking generalizations ([PEP 448](https://www.python.org/dev/peps/pep-0448/), Python 3.5+)
-  - Any **uses** on the RHS _at the binding site_ in all of the above are already detected by the name and attribute analyzers, but the binding information from assignments of these forms will not be recorded (at least not correctly).
-- Enums; need to mark the use of any of their attributes as use of the Enum
-- Resolving results of function calls, except for a very limited special case for `super()`
-- Distinguishing between different Lambdas in the same namespace
-- Type inference for function arguments
+For planned improvements and known limitations, see [TODO_DEFERRED.md](TODO_DEFERRED.md).
 
 # How Pyan works
 
