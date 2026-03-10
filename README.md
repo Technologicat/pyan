@@ -18,9 +18,37 @@ This project has 2 official repositories:
 > The PyPI package [pyan3](https://pypi.org/project/pyan3/) is built from development
 
 
+<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
+**Table of Contents**
+
+- [Pyan3](#pyan3)
+- [Revived! [February 2026]](#revived-february-2026)
+- [Overview](#overview)
+    - [Note](#note)
+- [Usage](#usage)
+    - [CLI usage](#cli-usage)
+    - [Python API](#python-api)
+    - [Troubleshooting](#troubleshooting)
+    - [Sphinx integration](#sphinx-integration)
+    - [Too much detail?](#too-much-detail)
+- [Module-level analysis](#module-level-analysis)
+    - [CLI usage](#cli-usage-1)
+        - [Cycle detection](#cycle-detection)
+    - [Python API](#python-api-1)
+- [Install](#install)
+    - [Development setup](#development-setup)
+- [Features](#features)
+    - [TODO](#todo)
+- [How it works](#how-it-works)
+- [Authors](#authors)
+- [License](#license)
+
+<!-- markdown-toc end -->
+
+
 # Revived! [February 2026]
 
-Pyan3 is back in active development. The analyzer has been modernized and tested on **Python 3.10–3.14**, with fixes for all modern syntax (walrus operator, `match` statements, `async with`, type aliases, inlined comprehension scopes in 3.12+, and more).
+Pyan3 is back in development. The analyzer has been modernized and tested on **Python 3.10–3.14**, with fixes for all modern syntax (walrus operator, `match` statements, `async with`, type aliases, inlined comprehension scopes in 3.12+, and more). The plan is to keep Pyan3 up to date with new language releases.
 
 **What's new in the revival:**
 
@@ -32,7 +60,7 @@ Pyan3 is back in active development. The analyzer has been modernized and tested
 This revival was carried out by [Technologicat](https://github.com/Technologicat) with [Claude](https://claude.ai/) (Anthropic) as AI pair programmer. See [AUTHORS.md](AUTHORS.md) for the full contributor history.
 
 
-## About
+# Overview
 
 [![Example output](graph0.png "Example: GraphViz rendering of Pyan output (click for .svg)")](graph0.svg)
 
@@ -48,11 +76,173 @@ In **node coloring**, the [HSL](https://en.wikipedia.org/wiki/HSL_and_HSV) color
 
 The nodes can be **annotated** by _filename and source line number_ information.
 
+
 ## Note
 
 The static analysis approach Pyan takes is different from running the code and seeing which functions are called and how often. There are various tools that will generate a call graph that way, usually using a debugger or profiling trace hooks, such as [Python Call Graph](https://pycallgraph.readthedocs.org/).
 
-In Pyan3, the analyzer was ported from `compiler` ([good riddance](https://stackoverflow.com/a/909172)) to a combination of `ast` and `symtable`, and slightly extended.
+Instead, Pyan reads through the source code, and makes deductions from its structure.
+
+
+# Usage
+
+Both CLI and Python API modes are available.
+
+## CLI usage
+
+See `pyan3 --help`.
+
+Example:
+
+`pyan *.py --uses --no-defines --colored --grouped --annotated --dot >myuses.dot`
+
+Then render using your favorite GraphViz filter, mainly `dot` or `fdp`:
+
+`dot -Tsvg myuses.dot >myuses.svg`
+
+Or use directly
+
+`pyan *.py --uses --no-defines --colored --grouped --annotated --svg >myuses.svg`
+
+You can also export as an interactive HTML
+
+`pyan *.py --uses --no-defines --colored --grouped --annotated --html > myuses.html`
+
+Or as a plain-text dependency list
+
+`pyan *.py --uses --no-defines --text`
+
+
+## Python API
+
+```python
+import pyan
+
+# Generate a call graph as a DOT string
+dot_source = pyan.create_callgraph(
+    filenames="pkg/**/*.py",
+    format="dot",        # also: "svg", "html", "tgf", "yed", "text"
+    colored=True,
+    nested_groups=True,
+    draw_defines=True,
+    draw_uses=True,
+)
+```
+
+See `pyan.create_callgraph()` for the full list of parameters.
+
+
+## Troubleshooting
+
+If GraphViz says _trouble in init_rank_, try adding `-Gnewrank=true`, as in:
+
+`dot -Gnewrank=true -Tsvg myuses.dot >myuses.svg`
+
+Usually either old or new rank (but often not both) works; this is a long-standing GraphViz issue with complex graphs.
+
+
+## Sphinx integration
+
+You can integrate callgraphs into Sphinx.
+Install graphviz (e.g. via `sudo apt-get install graphviz`) and modify `source/conf.py` so that
+
+```
+# modify extensions
+extensions = [
+  ...
+  "sphinx.ext.graphviz"
+  "pyan.sphinx",
+]
+
+# add graphviz options
+graphviz_output_format = "svg"
+```
+
+Now, there is a callgraph directive which has all the options of the [graphviz directive](https://www.sphinx-doc.org/en/master/usage/extensions/graphviz.html)
+and in addition:
+
+- **:no-groups:** (boolean flag): do not group
+- **:no-defines:** (boolean flag): if to not draw edges that show which functions, methods and classes are defined by a class or module
+- **:no-uses:** (boolean flag): if to not draw edges that show how a function uses other functions
+- **:no-colors:** (boolean flag): if to not color in callgraph (default is coloring)
+- **:nested-groups:** (boolean flag): if to group by modules and submodules
+- **:annotated:** (boolean flag): annotate callgraph with file names
+- **:direction:** (string): "horizontal" or "vertical" callgraph
+- **:toctree:** (string): path to toctree (as used with autosummary) to link elements of callgraph to documentation (makes all nodes clickable)
+- **:zoomable:** (boolean flag): enables users to zoom and pan callgraph
+
+Example to create a callgraph for the function `pyan.create_callgraph` that is
+zoomable, is defined from left to right and links each node to the API documentation that
+was created at the toctree path `api`.
+
+```
+.. callgraph:: pyan.create_callgraph
+   :toctree: api
+   :zoomable:
+   :direction: horizontal
+```
+
+
+## Too much detail?
+
+If the graph is visually unreadable due to too much detail, consider visualizing only a subset of the files in your project. Any references to files outside the analyzed set will be considered as undefined, and will not be drawn.
+
+For a higher-level view, use `--module-level` mode (see below).
+
+
+# Module-level analysis
+
+The `--module-level` flag switches pyan3 from call-graph mode to **module-level import dependency analysis**. Instead of graphing individual functions and methods, it shows which modules import which other modules.
+
+
+## CLI usage
+
+```
+pyan3 --module-level pkg/**/*.py --dot -c -e >modules.dot
+pyan3 --module-level pkg/**/*.py --dot -c -e | dot -Tsvg >modules.svg
+```
+
+The module-level mode has its own set of options (separate from the call-graph mode). Use `pyan3 --module-level --help` for the full list. Key options:
+
+- `--dot`, `--svg`, `--html`, `--tgf`, `--yed`, `--text` — output format (default: dot)
+- `-c`, `--colored` — color by package
+- `-g`, `--grouped` — group by namespace
+- `-e`, `--nested-groups` — nested subgraph clusters (implies `-g`)
+- `-C`, `--cycles` — detect and report import cycles to stdout
+- `--dot-rankdir` — layout direction (`TB`, `LR`, `BT`, `RL`)
+- `--root` — project root directory (file paths are made relative to this before deriving module names; if omitted, cwd is assumed)
+
+
+### Cycle detection
+
+The `-C` flag performs exhaustive import cycle detection using depth-first search (DFS) from every module:
+
+```
+pyan3 --module-level pkg/**/*.py -C
+```
+
+This finds all unique import cycles in the analyzed module set, and reports statistics (count, min/average/median/max cycle length). Note that for large codebases, the number of cycles can be large — most are harmless consequences of cross-package imports.
+
+If a cycle is actually causing an `ImportError`, you usually already know which cycle from the traceback. The `-C` flag provides a broader view of what other cycles exist.
+
+
+## Python API
+
+```python
+import pyan
+
+# Generate a module dependency graph as a DOT string
+dot_source = pyan.create_modulegraph(
+    filenames="pkg/**/*.py",
+    root=".",            # project root; paths made relative to this
+    format="dot",        # also: "svg", "html", "tgf", "yed", "text"
+    colored=True,
+    nested_groups=True,
+)
+```
+
+See `pyan.create_modulegraph()` for the full list of parameters.
+
 
 # Install
 
@@ -61,6 +251,7 @@ In Pyan3, the analyzer was ported from `compiler` ([good riddance](https://stack
 Pyan3 requires Python 3.10 or newer.
 
 For SVG and HTML output, you need the `dot` command from [Graphviz](https://graphviz.org/) installed on your system (e.g. `sudo apt-get install graphviz` on Debian/Ubuntu, `brew install graphviz` on macOS). Dot output requires no extra system dependencies.
+
 
 ## Development setup
 
@@ -104,142 +295,6 @@ onboarding guide that covers:
   [#105](https://github.com/Technologicat/pyan/issues/105)) if you are looking
   for contribution ideas.
 
-# Usage
-
-See `pyan3 --help`.
-
-Example:
-
-`pyan *.py --uses --no-defines --colored --grouped --annotated --dot >myuses.dot`
-
-Then render using your favorite GraphViz filter, mainly `dot` or `fdp`:
-
-`dot -Tsvg myuses.dot >myuses.svg`
-
-Or use directly
-
-`pyan *.py --uses --no-defines --colored --grouped --annotated --svg >myuses.svg`
-
-You can also export as an interactive HTML
-
-`pyan *.py --uses --no-defines --colored --grouped --annotated --html > myuses.html`
-
-Or as a plain-text dependency list
-
-`pyan *.py --uses --no-defines --text`
-
-Alternatively, you can call `pyan` from a script
-
-```shell script
-import pyan
-from IPython.display import HTML
-HTML(pyan.create_callgraph(filenames="**/*.py", format="html"))
-```
-
-#### Sphinx integration
-
-You can integrate callgraphs into Sphinx.
-Install graphviz (e.g. via `sudo apt-get install graphviz`) and modify `source/conf.py` so that
-
-```
-# modify extensions
-extensions = [
-  ...
-  "sphinx.ext.graphviz"
-  "pyan.sphinx",
-]
-
-# add graphviz options
-graphviz_output_format = "svg"
-```
-
-Now, there is a callgraph directive which has all the options of the [graphviz directive](https://www.sphinx-doc.org/en/master/usage/extensions/graphviz.html)
-and in addition:
-
-- **:no-groups:** (boolean flag): do not group
-- **:no-defines:** (boolean flag): if to not draw edges that show which functions, methods and classes are defined by a class or module
-- **:no-uses:** (boolean flag): if to not draw edges that show how a function uses other functions
-- **:no-colors:** (boolean flag): if to not color in callgraph (default is coloring)
-- **:nested-groups:** (boolean flag): if to group by modules and submodules
-- **:annotated:** (boolean flag): annotate callgraph with file names
-- **:direction:** (string): "horizontal" or "vertical" callgraph
-- **:toctree:** (string): path to toctree (as used with autosummary) to link elements of callgraph to documentation (makes all nodes clickable)
-- **:zoomable:** (boolean flag): enables users to zoom and pan callgraph
-
-Example to create a callgraph for the function `pyan.create_callgraph` that is
-zoomable, is defined from left to right and links each node to the API documentation that
-was created at the toctree path `api`.
-
-```
-.. callgraph:: pyan.create_callgraph
-   :toctree: api
-   :zoomable:
-   :direction: horizontal
-```
-
-#### Troubleshooting
-
-If GraphViz says _trouble in init_rank_, try adding `-Gnewrank=true`, as in:
-
-`dot -Gnewrank=true -Tsvg myuses.dot >myuses.svg`
-
-Usually either old or new rank (but often not both) works; this is a long-standing GraphViz issue with complex graphs.
-
-## Too much detail?
-
-If the graph is visually unreadable due to too much detail, consider visualizing only a subset of the files in your project. Any references to files outside the analyzed set will be considered as undefined, and will not be drawn.
-
-For a higher-level view, use `--module-level` mode (see below).
-
-## Module-level analysis
-
-The `--module-level` flag switches pyan3 from call-graph mode to **module-level import dependency analysis**. Instead of graphing individual functions and methods, it shows which modules import which other modules.
-
-### CLI usage
-
-```
-pyan3 --module-level pkg/**/*.py --dot -c -e >modules.dot
-pyan3 --module-level pkg/**/*.py --dot -c -e | dot -Tsvg >modules.svg
-```
-
-The module-level mode has its own set of options (separate from the call-graph mode). Use `pyan3 --module-level --help` for the full list. Key options:
-
-- `--dot`, `--svg`, `--html`, `--tgf`, `--yed`, `--text` — output format (default: dot)
-- `-c`, `--colored` — color by package
-- `-g`, `--grouped` — group by namespace
-- `-e`, `--nested-groups` — nested subgraph clusters (implies `-g`)
-- `-C`, `--cycles` — detect and report import cycles to stdout
-- `--dot-rankdir` — layout direction (`TB`, `LR`, `BT`, `RL`)
-- `--root` — project root directory (file paths are made relative to this before deriving module names; if omitted, cwd is assumed)
-
-### Cycle detection
-
-The `-C` flag performs exhaustive import cycle detection using depth-first search (DFS) from every module:
-
-```
-pyan3 --module-level pkg/**/*.py -C
-```
-
-This finds all unique import cycles in the analyzed module set, and reports statistics (count, min/average/median/max cycle length). Note that for large codebases, the number of cycles can be large — most are harmless consequences of cross-package imports.
-
-If a cycle is actually causing an `ImportError`, you usually already know which cycle from the traceback. The `-C` flag provides a broader view of what other cycles exist.
-
-### Python API
-
-```python
-import pyan
-
-# Generate a module dependency graph as a DOT string
-dot_source = pyan.create_modulegraph(
-    filenames="pkg/**/*.py",
-    root=".",            # project root; paths made relative to this
-    format="dot",        # also: "svg", "html", "tgf", "yed", "text"
-    colored=True,
-    nested_groups=True,
-)
-```
-
-See `pyan.create_modulegraph()` for the full list of parameters.
 
 # Features
 
