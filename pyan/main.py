@@ -147,6 +147,12 @@ def main(cli_args=None):
     if cli_args is None:
         cli_args = sys.argv[1:]
 
+    # Handle --version before mode dispatch so it works with or without --module-level.
+    if "--version" in cli_args:
+        from . import __version__
+        print(f"pyan3 {__version__}")
+        return
+
     # Dispatch to module-level analysis mode before building the call-graph parser.
     if "--module-level" in cli_args:
         from .modvis import main as modvis_main
@@ -160,6 +166,9 @@ def main(cli_args=None):
     )
 
     parser = ArgumentParser(usage=usage, description=desc)
+
+    from . import __version__
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     parser.add_argument("--dot", action="store_true", default=False, help="output in GraphViz dot format")
 

@@ -394,6 +394,8 @@ def main(cli_args=None):
     usage = """%(prog)s FILENAME... [--dot|--tgf|--yed|--svg|--html|--text]"""
     desc = "Analyse one or more Python source files and generate an approximate module dependency graph."
     parser = ArgumentParser(usage=usage, description=desc)
+    from . import __version__
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--dot", action="store_true", default=False, help="output in GraphViz dot format")
     parser.add_argument("--svg", action="store_true", default=False, help="output in SVG format")
     parser.add_argument("--html", action="store_true", default=False, help="output in HTML format")
