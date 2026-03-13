@@ -1970,13 +1970,30 @@ class CallGraphVisitor(ast.NodeVisitor):
         only visible in that function.
 
         Returns True if an import relationship exists, or if `from_node` and
-        the target are in the same top-level module (intra-module references
-        are always allowed).
+        the target are in the same module (intra-module references are always
+        allowed).
+
+        Examples::
+
+            # from_node = pkg.mod.func, target_ns = pkg.mod.MyClass
+            #   → True (same module pkg.mod)
+            #
+            # from_node = pkg.mod_a.func, target_ns = pkg.mod_b
+            #   → True only if pkg.mod_a (or func) imports pkg.mod_b
+            #
+            # from_node = pkg.mod.caller (has `from other import foo`),
+            # from_node = pkg.mod.non_caller (no import)
+            #   → caller: True; non_caller: False
         """
         # Intra-module: always allowed.
-        from_top = from_node.get_toplevel_namespace()
-        target_top = target_ns.split(".")[0] if "." in target_ns else target_ns
-        if from_top == target_top:
+        # Find from_node's module by matching against module_to_filename.
+        from_ns = from_node.get_name()
+        from_module = from_ns
+        for mod in self.module_to_filename:
+            if from_ns == mod or from_ns.startswith(mod + "."):
+                from_module = mod
+                break
+        if target_ns == from_module or target_ns.startswith(from_module + "."):
             return True
 
         # Build the set of ancestor namespaces of target_ns.

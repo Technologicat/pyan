@@ -97,7 +97,8 @@ def test_issue88_with_import_has_edge():
 
 
 def test_issue88_function_level_import():
-    """Issue #88: a function-level import should create the edge for caller()."""
+    """Issue #88: a function-level import should create the edge for caller()
+    but NOT for non_caller()."""
     filenames = [os.path.join(ISSUE88_DIR, "func_import.py"), ISSUE88_DEFINES]
     v = CallGraphVisitor(filenames, logger=logging.getLogger())
 
@@ -105,7 +106,21 @@ def test_issue88_function_level_import():
     caller_uses = get_in_dict(v.uses_edges, f"{ISSUE88_PREFIX}.func_import.caller")
     get_node(caller_uses, f"{ISSUE88_PREFIX}.defines_myfunc.myfunc")
 
-    # NOTE: Ideally non_caller() would NOT get the edge, since it doesn't
-    # import myfunc. Currently resolve_imports maps the IMPORTEDITEM globally,
-    # which also resolves non_caller's wildcard. Tightening this to per-scope
-    # import resolution is a future improvement.
+    # non_caller() does NOT import myfunc — should NOT have the edge.
+    non_caller_targets = set()
+    for n in v.uses_edges:
+        if n.get_name() == f"{ISSUE88_PREFIX}.func_import.non_caller":
+            non_caller_targets = {n2.get_name() for n2 in v.uses_edges[n]}
+    assert f"{ISSUE88_PREFIX}.defines_myfunc.myfunc" not in non_caller_targets
+
+
+def test_issue88_module_level_import_visible_to_all():
+    """A module-level import should be visible to all functions in that module."""
+    filenames = [os.path.join(ISSUE88_DIR, "module_import.py"), ISSUE88_DEFINES]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+
+    a_uses = get_in_dict(v.uses_edges, f"{ISSUE88_PREFIX}.module_import.caller_a")
+    get_node(a_uses, f"{ISSUE88_PREFIX}.defines_myfunc.myfunc")
+
+    b_uses = get_in_dict(v.uses_edges, f"{ISSUE88_PREFIX}.module_import.caller_b")
+    get_node(b_uses, f"{ISSUE88_PREFIX}.defines_myfunc.myfunc")
