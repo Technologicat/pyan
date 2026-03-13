@@ -72,6 +72,11 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.class_base_nodes = {}  # pass 2: class Node: list of Node objects (local bases, no recursion)
         self.mro = {}  # pass 2: class Node: list of Node objects in Python's MRO order
 
+        # namespace → set of module names imported in that namespace.
+        # Populated by visit_Import / visit_ImportFrom.
+        # Used by expand_unknowns to constrain wildcard expansion.
+        self.namespace_imports = {}  # e.g. {"mymod.func": {"os", "foo.bar"}}
+
         # current context for analysis
         self.module_name = None
         self.filename = None
@@ -144,23 +149,21 @@ class CallGraphVisitor(ast.NodeVisitor):
     def postprocess(self):
         """Finalize the analysis."""
 
-        # Compared to the original Pyan, the ordering of expand_unknowns() and
-        # contract_nonexistents() has been switched.
+        # First resolve imports (remap IMPORTEDITEM nodes to their targets),
+        # then contract unresolved references to wildcards (*.name), then
+        # expand wildcards — but only to targets whose module is actually
+        # imported by the source (#88).
         #
-        # It seems the original idea was to first convert any unresolved, but
-        # specific, references to the form *.name, and then expand those to see
-        # if they match anything else. However, this approach has the potential
-        # to produce a lot of spurious uses edges (for unrelated functions with
-        # a name that happens to match).
-        #
-        # Now that the analyzer is (very slightly) smarter about resolving
-        # attributes and imports, we do it the other way around: we only expand
-        # those references that could not be resolved to any known name, and
-        # then remove any references pointing outside the analyzed file set.
+        # Historical note: the original Pyan used contract-then-expand, which
+        # produced spurious edges because expansion was unconstrained. A later
+        # change switched to expand-then-contract to limit the blast radius.
+        # Now that expand_unknowns checks import relationships, we can safely
+        # return to contract-then-expand, which is the correct order: we need
+        # wildcards to exist before expansion can act on them.
 
-        self.expand_unknowns()
         self.resolve_imports()
         self.contract_nonexistents()
+        self.expand_unknowns()
         self.cull_inherited()
         self.collapse_inner()
 
@@ -582,6 +585,23 @@ class CallGraphVisitor(ast.NodeVisitor):
         if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
             self.visit(node.args.kwarg.annotation)
 
+    def _record_import(self, target_module):
+        """Record that the current namespace imports from `target_module`.
+
+        Stores both the literal import name and, if it can be resolved
+        against the known module set, the fully qualified module name.
+        This handles cases where import statements use short names but
+        the analyzer's internal names are fully qualified.
+        """
+        ns = self.get_node_of_current_namespace().get_name()
+        imports = self.namespace_imports.setdefault(ns, set())
+        imports.add(target_module)
+        # Also record the fully qualified form if the short name is a suffix
+        # of a known module (e.g. "defines_myfunc" → "pkg.defines_myfunc").
+        for fq_name in self.module_to_filename:
+            if fq_name == target_module or fq_name.endswith("." + target_module):
+                imports.add(fq_name)
+
     def visit_Import(self, node):
         self.logger.debug("Import %s, %s:%s" % ([format_alias(x) for x in node.names], self.filename, node.lineno))
 
@@ -589,6 +609,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         # https://www.python.org/dev/peps/pep-0328/#id10
 
         for import_item in node.names:  # the names are modules
+            self._record_import(import_item.name)
             self.analyze_module_import(import_item, node)
 
     def visit_ImportFrom(self, node):
@@ -628,6 +649,8 @@ class CallGraphVisitor(ast.NodeVisitor):
             )
         else:
             tgt_name = node.module  # normal from module.submodule import foo
+
+        self._record_import(tgt_name)
 
         # link each import separately
         for alias in node.names:
@@ -1937,8 +1960,53 @@ class CallGraphVisitor(ast.NodeVisitor):
         for from_node, to_node in removed_uses_edges:
             self.remove_uses_edge(from_node, to_node)
 
+    def _has_import_to(self, from_node, target_ns):
+        """Check whether `from_node`'s namespace (or any ancestor) imports a module
+        that is `target_ns` or a parent of it.
+
+        Walks up the namespace chain from `from_node`, checking
+        ``self.namespace_imports`` at each level. This means a module-level
+        import is visible to all children, while a function-level import is
+        only visible in that function.
+
+        Returns True if an import relationship exists, or if `from_node` and
+        the target are in the same top-level module (intra-module references
+        are always allowed).
+        """
+        # Intra-module: always allowed.
+        from_top = from_node.get_toplevel_namespace()
+        target_top = target_ns.split(".")[0] if "." in target_ns else target_ns
+        if from_top == target_top:
+            return True
+
+        # Build the set of ancestor namespaces of target_ns.
+        # For "foo.bar.baz", this is {"foo", "foo.bar", "foo.bar.baz"}.
+        target_parts = target_ns.split(".")
+        target_ancestors = {".".join(target_parts[:i + 1]) for i in range(len(target_parts))}
+
+        # Walk up from from_node's namespace.
+        ns = from_node.get_name()
+        while True:
+            imports = self.namespace_imports.get(ns, set())
+            if imports & target_ancestors:
+                return True
+            if "." not in ns:
+                break
+            ns = ns.rsplit(".", 1)[0]
+
+        # Also check the module-level namespace (which may be the module name itself,
+        # with no dots if it's a top-level module).
+        imports = self.namespace_imports.get(ns, set())
+        if imports & target_ancestors:
+            return True
+
+        return False
+
     def expand_unknowns(self):
         """For each unknown node *.name, replace all its incoming edges with edges to X.name for all possible Xs.
+
+        Only expands to targets whose module is imported by (or is the same as)
+        the source node's module, to avoid spurious cross-module edges (#88).
 
         Also mark all unknown nodes as not defined (so that they won't be visualized)."""
 
@@ -1947,7 +2015,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             for n2 in self.defines_edges[n]:
                 if n2.namespace is None:
                     for n3 in self.nodes[n2.name]:
-                        if n3.namespace is not None:
+                        if n3.namespace is not None and n3.defined and self._has_import_to(n, n3.namespace):
                             new_defines_edges.append((n, n3))
 
         for from_node, to_node in new_defines_edges:
@@ -1959,7 +2027,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             for n2 in self.uses_edges[n]:
                 if n2.namespace is None:
                     for n3 in self.nodes[n2.name]:
-                        if n3.namespace is not None:
+                        if n3.namespace is not None and n3.defined and self._has_import_to(n, n3.namespace):
                             new_uses_edges.append((n, n3))
 
         for from_node, to_node in new_uses_edges:

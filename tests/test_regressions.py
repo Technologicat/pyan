@@ -1,6 +1,6 @@
-"""Regression tests for old crash demos (issues #2, #3, #5).
+"""Regression tests for specific issues.
 
-Each of these was originally just a "does it crash" reproduction script.
+Issues #2, #3, #5 were originally just "does it crash" reproduction scripts.
 Now they have proper assertions on the analyzer output.
 """
 
@@ -68,3 +68,44 @@ def test_issue5_external_deps_and_class_defs():
     meas_uses = get_in_dict(v.uses_edges, "tests.old_tests.issue5.meas_xrd")
     get_node(meas_uses, "*.numpy")
     get_node(meas_uses, "*.pandas.io.parsers")
+
+
+# --- Issue #88: wildcard expansion should respect imports ---
+
+ISSUE88_DIR = os.path.join(TESTS_DIR, "test_code/issue88")
+ISSUE88_DEFINES = os.path.join(ISSUE88_DIR, "defines_myfunc.py")
+ISSUE88_PREFIX = "test_code.issue88"
+
+
+def test_issue88_no_import_no_edge():
+    """Issue #88: calling myfunc() without importing it should NOT create
+    a cross-module edge to defines_myfunc.myfunc."""
+    filenames = [os.path.join(ISSUE88_DIR, "no_import.py"), ISSUE88_DEFINES]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+
+    all_targets = {n2.get_name() for n1 in v.uses_edges for n2 in v.uses_edges[n1]}
+    assert f"{ISSUE88_PREFIX}.defines_myfunc.myfunc" not in all_targets
+
+
+def test_issue88_with_import_has_edge():
+    """Issue #88: calling myfunc() after importing it SHOULD create the edge."""
+    filenames = [os.path.join(ISSUE88_DIR, "has_import.py"), ISSUE88_DEFINES]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+
+    uses = get_in_dict(v.uses_edges, f"{ISSUE88_PREFIX}.has_import")
+    get_node(uses, f"{ISSUE88_PREFIX}.defines_myfunc.myfunc")
+
+
+def test_issue88_function_level_import():
+    """Issue #88: a function-level import should create the edge for caller()."""
+    filenames = [os.path.join(ISSUE88_DIR, "func_import.py"), ISSUE88_DEFINES]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+
+    # caller() imports myfunc and calls it — should have the edge.
+    caller_uses = get_in_dict(v.uses_edges, f"{ISSUE88_PREFIX}.func_import.caller")
+    get_node(caller_uses, f"{ISSUE88_PREFIX}.defines_myfunc.myfunc")
+
+    # NOTE: Ideally non_caller() would NOT get the edge, since it doesn't
+    # import myfunc. Currently resolve_imports maps the IMPORTEDITEM globally,
+    # which also resolves non_caller's wildcard. Tightening this to per-scope
+    # import resolution is a future improvement.

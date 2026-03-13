@@ -18,6 +18,12 @@
   expressions are now visited in the enclosing scope (matching Python's
   evaluation semantics), fixing `ValueError: Unknown scope '...lambda'`
   and similar crashes.  (#61)
+- **Spurious cross-module edges from wildcard expansion** — `expand_unknowns()`
+  now checks import relationships before expanding `*.name` wildcards,
+  preventing false edges between modules that don't import each other.
+  Import tracking is per-namespace, so function-level imports are scoped
+  correctly in `expand_unknowns`.  Postprocessing order changed to
+  resolve→contract→expand.  (#88)
 
 
 ## 2.1.0 (2026-03-10)
