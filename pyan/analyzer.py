@@ -421,6 +421,14 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.associate_node(to_node, node, self.filename)
         self.set_value(node.name, to_node)
 
+        # Visit default values in the enclosing scope.
+        #
+        # Python evaluates defaults at function *definition* time in the
+        # enclosing scope, so any lambdas or calls they contain belong
+        # to the enclosing scope's symtable children — not the function's.
+        #
+        default_values = self._visit_function_defaults(node.args)
+
         # Enter the function scope
         #
         self.name_stack.append(node.name)
@@ -446,19 +454,20 @@ class CallGraphVisitor(ast.NodeVisitor):
             self.scopes[inner_ns].defs[self_name] = class_node
             self.logger.info('Method def: setting self name "%s" to %s' % (self_name, class_node))
 
-        # record bindings of args to the given default values, if present
-        self.analyze_arguments(node.args)
+        # Bind args to the default values that were already visited above.
+        self._bind_function_defaults(node.args, default_values)
 
         # Visit type annotations to create uses edges for referenced types.
-        if node.returns is not None:
-            self.visit(node.returns)
-        for arg in node.args.args + node.args.posonlyargs + node.args.kwonlyargs:
-            if arg.annotation is not None:
-                self.visit(arg.annotation)
-        if node.args.vararg is not None and node.args.vararg.annotation is not None:
-            self.visit(node.args.vararg.annotation)
-        if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
-            self.visit(node.args.kwarg.annotation)
+        #
+        # NOTE: Strictly, Python evaluates annotations in the *enclosing*
+        # scope (like defaults), so visiting them here — inside the function
+        # scope — is technically wrong. We do it anyway because attributing
+        # annotation uses edges to the function (rather than the module) is
+        # far more useful in the call graph. This works because annotations
+        # rarely contain expressions that trigger scope lookups (lambdas,
+        # comprehensions). If an edge case surfaces, defaults show the
+        # pattern: visit in enclosing scope, bind inside.
+        self._visit_function_annotations(node)
 
         # Analyze the function body
         #
@@ -530,6 +539,48 @@ class CallGraphVisitor(ast.NodeVisitor):
                     targets = canonize_exprs(tgt)
                     values = canonize_exprs(val)
                     self.analyze_binding(targets, values)
+
+    def _visit_function_defaults(self, ast_args):
+        """Visit default value expressions and return the resolved Nodes.
+
+        Called in the enclosing scope, before entering the function scope,
+        because Python evaluates defaults at definition time.
+
+        Returns a (pos_defaults, kw_defaults) pair of lists, parallel to
+        ``ast_args.defaults`` and ``ast_args.kw_defaults``.
+        """
+        pos = [self.visit(val) for val in ast_args.defaults] if ast_args.defaults else []
+        kw = [self.visit(val) if val is not None else None
+              for val in ast_args.kw_defaults] if ast_args.kw_defaults else []
+        return pos, kw
+
+    def _bind_function_defaults(self, ast_args, default_values):
+        """Bind function args to their pre-visited default values.
+
+        Called inside the function scope. ``default_values`` is the pair
+        returned by ``_visit_function_defaults``.
+        """
+        pos, kw = default_values
+        if pos:
+            n = len(pos)
+            for tgt, val in zip(ast_args.args[-n:], pos):
+                self._bind_target(tgt, val)
+        if kw:
+            for tgt, val in zip(ast_args.kwonlyargs, kw):
+                if val is not None:
+                    self._bind_target(tgt, val)
+
+    def _visit_function_annotations(self, node):
+        """Visit type annotations on a FunctionDef in the current (enclosing) scope."""
+        if node.returns is not None:
+            self.visit(node.returns)
+        for arg in node.args.args + node.args.posonlyargs + node.args.kwonlyargs:
+            if arg.annotation is not None:
+                self.visit(arg.annotation)
+        if node.args.vararg is not None and node.args.vararg.annotation is not None:
+            self.visit(node.args.vararg.annotation)
+        if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
+            self.visit(node.args.kwarg.annotation)
 
     def visit_Import(self, node):
         self.logger.debug("Import %s, %s:%s" % ([format_alias(x) for x in node.names], self.filename, node.lineno))

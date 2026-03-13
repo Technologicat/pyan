@@ -309,6 +309,18 @@ def star_at_start():
     b.gamma_method()
 
 
+# --- Lambda as default argument ---
+
+def identity(x):
+    return x
+
+def func_with_lambda_default(x=lambda a, b: a):
+    return x(1, 2)
+
+def func_with_call_default(x=identity(42)):
+    return x
+
+
 # --- Local variable noise suppression ---
 
 def local_noise_example(items):

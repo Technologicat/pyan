@@ -273,6 +273,21 @@ def test_star_at_start(v):
     assert f"{PREFIX}.Alpha.gamma_method" not in names
 
 
+# --- Lambda as default argument (#61) ---
+
+def test_lambda_default_no_crash(v):
+    """A lambda used as a default argument value must not crash the analyzer."""
+    # The function should be defined.
+    defines = get_in_dict(v.defines_edges, PREFIX)
+    get_node(defines, f"{PREFIX}.func_with_lambda_default")
+
+
+def test_call_in_default_no_crash(v):
+    """A function call used as a default argument value must not crash the analyzer."""
+    defines = get_in_dict(v.defines_edges, PREFIX)
+    get_node(defines, f"{PREFIX}.func_with_call_default")
+
+
 # --- Local variable noise suppression ---
 
 def test_local_no_unknown_node(v):
