@@ -2,7 +2,18 @@
 
 ## 2.2.0 (in progress)
 
-*No user-visible changes yet.*
+### Bug fixes
+
+- **Deterministic edge ordering** — all output writers now sort edges by
+  `(source, target)`, making output reproducible across runs.  Previously
+  the order depended on dict iteration order and could change between calls.
+  (#77, PR #78 — thanks @aurelg)
+- **DOT identifier quoting** — node IDs and subgraph names in DOT output are
+  now double-quoted, so directory names containing dashes (e.g. `my-project`)
+  no longer produce invalid DOT files.  (#71)
+- **BrokenPipeError on piped output** — `pyan3` now resets SIGPIPE to the
+  default handler, so piping to commands like `head` exits cleanly instead
+  of printing a traceback.  (#75)
 
 
 ## 2.1.0 (2026-03-10)
