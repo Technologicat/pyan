@@ -14,6 +14,10 @@
 - **BrokenPipeError on piped output** — `pyan3` now resets SIGPIPE to the
   default handler, so piping to commands like `head` exits cleanly instead
   of printing a traceback.  (#75)
+- **Crash on lambda or comprehension as default argument** — default value
+  expressions are now visited in the enclosing scope (matching Python's
+  evaluation semantics), fixing `ValueError: Unknown scope '...lambda'`
+  and similar crashes.  (#61)
 
 
 ## 2.1.0 (2026-03-10)
