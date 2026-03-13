@@ -14,6 +14,7 @@ from glob import glob
 import io
 import logging
 import os
+import signal
 import sys
 from typing import List, Union
 
@@ -144,6 +145,10 @@ def create_callgraph(
 
 
 def main(cli_args=None):
+    # Exit cleanly on broken pipe (e.g. `pyan3 --dot file.py | head`).
+    if hasattr(signal, "SIGPIPE"):
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
     if cli_args is None:
         cli_args = sys.argv[1:]
 

@@ -81,7 +81,7 @@ class TestDotWriter:
         writer = DotWriter(graph, output=buf, logger=logging.getLogger())
         writer.run()
         dot = buf.getvalue()
-        assert "subgraph cluster_" in dot
+        assert 'subgraph "cluster_' in dot
 
     def test_rankdir_option(self, graph):
         buf = io.StringIO()

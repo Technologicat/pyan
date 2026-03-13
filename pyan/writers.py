@@ -58,7 +58,7 @@ class Writer(object):
 
     def write_edges(self):
         self.start_edges()
-        for edge in self.graph.edges:
+        for edge in sorted(self.graph.edges, key=lambda e: (e.source.id, e.target.id)):
             self.write_edge(edge)
         self.finish_edges()
 
@@ -156,7 +156,7 @@ class DotWriter(Writer):
     def start_subgraph(self, graph):
         self.log("Start subgraph %s" % graph.label)
         # Name must begin with "cluster" to be recognized as a cluster by GraphViz.
-        self.write("subgraph cluster_%s {\n" % graph.id)
+        self.write("subgraph %s {\n" % self._dot_id("cluster_" + graph.id))
         self.indent()
 
         # translucent gray (no hue to avoid visual confusion with any
@@ -169,11 +169,16 @@ class DotWriter(Writer):
         self.dedent()
         self.write("}")
 
+    @staticmethod
+    def _dot_id(identifier):
+        """Quote a DOT identifier so that special characters (dashes, etc.) are safe."""
+        return '"%s"' % identifier.replace("\\", "\\\\").replace('"', '\\"')
+
     def write_node(self, node):
         self.log("Write node %s" % node.label)
         self.write(
             '%s [label="%s", style="filled", fillcolor="%s",'
-            ' fontcolor="%s", group="%s"];' % (node.id, node.label, node.fill_color, node.text_color, node.group)
+            ' fontcolor="%s", group="%s"];' % (self._dot_id(node.id), node.label, node.fill_color, node.text_color, node.group)
         )
 
     def write_edge(self, edge):
@@ -181,9 +186,9 @@ class DotWriter(Writer):
         target = edge.target
         color = edge.color
         if edge.flavor == "defines":
-            self.write('    %s -> %s [style="dashed",  color="%s"];' % (source.id, target.id, color))
+            self.write('    %s -> %s [style="dashed",  color="%s"];' % (self._dot_id(source.id), self._dot_id(target.id), color))
         else:  # edge.flavor == 'uses':
-            self.write('    %s -> %s [style="solid",  color="%s"];' % (source.id, target.id, color))
+            self.write('    %s -> %s [style="solid",  color="%s"];' % (self._dot_id(source.id), self._dot_id(target.id), color))
 
     def finish_graph(self):
         self.write("}")  # terminate "digraph G {"
