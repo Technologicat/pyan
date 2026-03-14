@@ -5,7 +5,6 @@
 import ast
 import logging
 import symtable
-from typing import Union
 
 from .anutils import (
     ExecuteInInnerScope,
