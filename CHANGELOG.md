@@ -53,9 +53,10 @@
 - **`--concentrate`** — merge bidirectional edges into single
   double-headed arrows (GraphViz ``concentrate`` attribute).  Available
   in both call-graph and module-level modes, CLI and API.  (#21)
-- **`--paths-from` / `--paths-to`** — list all call paths between two
-  functions.  Output is one path per line, shortest first.  Use
-  ``--max-paths`` to limit results (default 100).  (#12)
+- **`--paths-from` / `--paths-to`** — list call paths between two
+  functions.  Output is one path per line, sorted shortest first
+  (among those found; DFS discovery order, capped by ``--max-paths``,
+  default 100).  (#12)
 
 ### Housekeeping
 
