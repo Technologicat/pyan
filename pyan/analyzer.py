@@ -294,6 +294,8 @@ class CallGraphVisitor(ast.NodeVisitor):
                 if n.namespace is not None and n.defined and n.get_level() > max_depth:
                     deep_nodes.append(n)
 
+        # Map each deep node to its ancestor at max_depth by truncating
+        # the dotted name.  E.g. at depth 2, "pkg.mod.Class.method" → "pkg.mod.Class".
         ancestor_of = {}
         for n in deep_nodes:
             parts = n.get_name().split(".")
