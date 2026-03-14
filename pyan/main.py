@@ -24,7 +24,8 @@ from .writers import DotWriter, HTMLWriter, SVGWriter, TextWriter, TgfWriter, Ye
 
 
 def _build_graph(filenames, root=None, function=None, namespace=None,
-                 max_iter=1000, direction="both", logger=None, graph_options=None):
+                 max_iter=1000, direction="both", depth=None,
+                 logger=None, graph_options=None):
     """Analyze source files, optionally filter, and build a VisualGraph.
 
     Shared core of ``create_callgraph()`` and ``main()``.
@@ -38,6 +39,8 @@ def _build_graph(filenames, root=None, function=None, namespace=None,
         else:
             node = None
         v.filter(node=node, namespace=namespace, max_iter=max_iter, direction=direction)
+    if depth is not None:
+        v.filter_by_depth(depth)
     return VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
 
@@ -60,6 +63,7 @@ def create_callgraph(
     max_iter: int = 1000,
     direction: str = "both",
     concentrate: bool = False,
+    depth: int | None = None,
     logger=None,
 ) -> str:
     """Create a call graph based on static code analysis.
@@ -113,6 +117,9 @@ def create_callgraph(
             or ``"up"`` (callers only).
         concentrate: merge bidirectional edges into single double-headed
             arrows (GraphViz ``concentrate`` attribute). [dot/svg/html only]
+        depth: collapse the graph to at most this many nesting levels.
+            0 = modules only, 1 = + classes/top-level functions,
+            2 = + methods. ``None`` (default) = full detail.
         logger: optional ``logging.Logger`` instance.
 
     Returns:
@@ -136,7 +143,7 @@ def create_callgraph(
 
     graph = _build_graph(filenames, root=root, function=function,
                          namespace=namespace, max_iter=max_iter,
-                         direction=direction,
+                         direction=direction, depth=depth,
                          logger=logger, graph_options=graph_options)
 
     stream = io.StringIO()
@@ -382,6 +389,17 @@ def main(cli_args=None):
     )
 
     parser.add_argument(
+        "--depth",
+        default=None,
+        dest="depth",
+        help=(
+            "collapse the graph to at most DEPTH nesting levels. "
+            "0 = modules only, 1 = modules + classes/top-level functions, "
+            "2 = + methods, 'max' = full detail (default)"
+        ),
+    )
+
+    parser.add_argument(
         "--root",
         default=None,
         dest="root",
@@ -458,9 +476,17 @@ def main(cli_args=None):
     elif known_args.paths_from or known_args.paths_to:
         parser.error("--paths-from and --paths-to must both be specified")
 
+    # Parse --depth: integer or "max" (= None internally).
+    depth = None
+    if known_args.depth is not None and known_args.depth != "max":
+        try:
+            depth = int(known_args.depth)
+        except ValueError:
+            parser.error(f"--depth must be an integer or 'max', got {known_args.depth!r}")
+
     graph = _build_graph(filenames, root=root, function=known_args.function,
                          namespace=known_args.namespace,
-                         direction=known_args.direction,
+                         direction=known_args.direction, depth=depth,
                          logger=logger, graph_options=graph_options)
 
     writer = None

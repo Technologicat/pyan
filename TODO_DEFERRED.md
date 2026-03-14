@@ -24,6 +24,8 @@ Items with GitHub ticket numbers are tracked externally. The rest are internal n
 - **D28: Per-namespace `resolve_imports`**: Global IMPORTEDITEM remapping can leak function-level imports to siblings. Partially mitigated by `_has_import_to()` in `expand_unknowns`.
 - **D29: Document the visitor-to-visgraph protocol**: `VisualGraph.from_visitor` expects an implicit protocol (`nodes`, `uses_edges`, `defines_edges`). Should be documented or formalized.
 
+- **D30: README update for 2.2.0**: Update CLI examples and Python API examples in README to showcase new features: `--depth`, `--direction`, `--concentrate`, `--paths-from`/`--paths-to`, `--dot-ranksep`, `--graphviz-layout`, `--init`, directory input. Also update the feature list.
+
 ## Done
 
 - **D1**: Rename `sanitize_exprs` → `canonize_exprs` (`38fffd0`)

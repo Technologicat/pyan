@@ -442,3 +442,76 @@ def test_format_paths(v_multi):
     assert " -> " in text
     assert "test_2" in text
     assert "test_func1" in text
+
+
+# --- Depth filtering (#80) ---
+
+def test_depth_class_level_collapses_methods():
+    """depth=2 should collapse methods into their class."""
+    filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v.filter_by_depth(2)
+
+    # Methods should be gone
+    names = {n.get_name() for nodes in v.nodes.values() for n in nodes if n.defined}
+    assert "test_code.features.Base.foo" not in names
+    assert "test_code.features.Base.bar" not in names
+    # Classes should remain
+    assert "test_code.features.Base" in names
+    assert "test_code.features.Derived" in names
+
+
+def test_depth_class_level_collapses_edges():
+    """depth=2 should collapse method→method edges to class→class edges."""
+    filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v.filter_by_depth(2)
+
+    # Derived.baz → Base.bar should become Derived → Base
+    derived_node = None
+    base_node = None
+    for nodes in v.nodes.values():
+        for n in nodes:
+            if n.get_name() == "test_code.features.Derived":
+                derived_node = n
+            if n.get_name() == "test_code.features.Base":
+                base_node = n
+    assert derived_node is not None
+    assert base_node is not None
+    assert derived_node in v.uses_edges
+    target_names = {n.get_name() for n in v.uses_edges[derived_node]}
+    assert "test_code.features.Base" in target_names
+
+
+def test_depth_module_level():
+    """depth=1 should show only modules, collapsing everything deeper."""
+    filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v.filter_by_depth(1)
+
+    # Only module-level nodes should remain
+    for nodes in v.nodes.values():
+        for n in nodes:
+            if n.defined:
+                assert n.get_level() <= 1, f"Node {n.get_name()} at level {n.get_level()} should be filtered"
+
+
+def test_depth_module_level_cross_module(v_multi):
+    """depth=1 with multi-module input should collapse function edges to module edges."""
+    v_multi.filter_by_depth(1)
+
+    # submodule2.test_2 → submodule1.test_func1 should become submodule2 → submodule1
+    names = {n.get_name() for nodes in v_multi.nodes.values() for n in nodes if n.defined}
+    assert "test_code.submodule2" in names
+    assert "test_code.submodule1" in names
+    assert "test_code.submodule2.test_2" not in names
+
+
+def test_depth_no_self_edges():
+    """Collapsing should not create self-edges (e.g. Base.bar → Base.foo → Base)."""
+    filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v.filter_by_depth(2)
+
+    for n, edges in v.uses_edges.items():
+        assert n not in edges, f"Self-edge on {n.get_name()}"

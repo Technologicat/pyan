@@ -57,6 +57,10 @@
   functions.  Output is one path per line, sorted shortest first
   (among those found; DFS discovery order, capped by ``--max-paths``,
   default 100).  (#12)
+- **`--depth`** — collapse the call graph to a maximum nesting level.
+  ``0`` = modules only, ``1`` = + classes/top-level functions,
+  ``2`` = + methods, ``max`` = full detail (default).  Edges to deeper
+  nodes are redirected to their ancestor; self-edges suppressed.  (#80)
 
 ### Housekeeping
 

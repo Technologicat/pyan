@@ -271,6 +271,64 @@ class CallGraphVisitor(ast.NodeVisitor):
         }
         return self
 
+    def filter_by_depth(self, max_depth):
+        """Collapse the graph to at most `max_depth` nesting levels.
+
+        Nodes deeper than `max_depth` are removed. Edges involving
+        removed nodes are redirected to their ancestor at `max_depth`,
+        with self-edges suppressed.
+
+        Args:
+            max_depth: maximum node level (0 = modules only,
+                1 = modules + top-level classes/functions, etc.).
+
+        Returns:
+            self
+        """
+        # Build a mapping: deep node → ancestor at max_depth.
+        # Collect deep nodes first to avoid mutating self.nodes during iteration.
+        deep_nodes = []
+        for node_list in self.nodes.values():
+            for n in node_list:
+                if n.namespace is not None and n.defined and n.get_level() > max_depth:
+                    deep_nodes.append(n)
+
+        ancestor_of = {}
+        for n in deep_nodes:
+            parts = n.get_name().split(".")
+            ancestor_short = parts[max_depth]
+            ancestor_ns = ".".join(parts[:max_depth]) if max_depth > 0 else ""
+            ancestor_node = self.get_node(ancestor_ns, ancestor_short, None)
+            ancestor_of[n] = ancestor_node
+
+        # Remap edges: redirect deep endpoints to their ancestor.
+        def remap_edges(edge_dict):
+            new = {}
+            for src, targets in edge_dict.items():
+                src2 = ancestor_of.get(src, src)
+                if src2.namespace is None or not src2.defined:
+                    continue
+                if src2 not in new:
+                    new[src2] = set()
+                for tgt in targets:
+                    tgt2 = ancestor_of.get(tgt, tgt)
+                    if tgt2.namespace is None or not tgt2.defined:
+                        continue
+                    if tgt2 != src2:  # suppress self-edges
+                        new[src2].add(tgt2)
+            return new
+
+        self.uses_edges = remap_edges(self.uses_edges)
+        self.defines_edges = remap_edges(self.defines_edges)
+
+        # Remove deep nodes.
+        self.nodes = {
+            name: [n for n in node_list if n not in ancestor_of]
+            for name, node_list in self.nodes.items()
+        }
+
+        return self
+
     def get_related_nodes(
         self, node: None | Node = None, namespace: str | None = None,
         max_iter: int = 1000, direction: str = "both",
