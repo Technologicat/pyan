@@ -48,6 +48,8 @@ def create_callgraph(
     namespace: Union[str, None] = None,
     format: str = "dot",
     rankdir: str = "LR",
+    ranksep: str = "0.5",
+    layout: str = "dot",
     nested_groups: bool = True,
     draw_defines: bool = True,
     draw_uses: bool = True,
@@ -76,6 +78,11 @@ def create_callgraph(
         rankdir: graph layout direction (Graphviz ``rankdir`` attribute).
             ``"LR"`` for left-to-right, ``"TB"`` for top-to-bottom,
             ``"RL"`` and ``"BT"`` for the reverse directions.
+            [dot/svg/html only]
+        ranksep: desired rank separation in inches (Graphviz ``ranksep``).
+            [dot only]
+        layout: Graphviz layout algorithm — ``"dot"`` (hierarchical),
+            ``"fdp"`` (force-directed), ``"neato"``, ``"sfdp"``, etc.
             [dot/svg/html only]
         nested_groups: create nested subgraph clusters for nested
             namespaces (implies ``grouped``). [dot only]
@@ -125,12 +132,13 @@ def create_callgraph(
                          logger=logger, graph_options=graph_options)
 
     stream = io.StringIO()
+    dot_options = ["rankdir=" + rankdir, "ranksep=" + ranksep, "layout=" + layout]
     if format == "dot":
-        writer = DotWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+        writer = DotWriter(graph, options=dot_options, output=stream, logger=logger)
     elif format == "html":
-        writer = HTMLWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+        writer = HTMLWriter(graph, options=dot_options, output=stream, logger=logger)
     elif format == "svg":
-        writer = SVGWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+        writer = SVGWriter(graph, options=dot_options, output=stream, logger=logger)
     elif format == "tgf":
         writer = TgfWriter(graph, output=stream, logger=logger)
     elif format == "yed":
@@ -289,6 +297,29 @@ def main(cli_args=None):
     )
 
     parser.add_argument(
+        "--dot-ranksep",
+        default="0.5",
+        dest="ranksep",
+        help=(
+            "specifies the dot graph 'ranksep' property for "
+            "controlling desired rank separation, in inches. "
+            "[dot only]"
+        ),
+    )
+
+    parser.add_argument(
+        "--graphviz-layout",
+        default="dot",
+        dest="layout",
+        help=(
+            "specifies the graphviz layout algorithm. "
+            "Commonly used: 'dot' (default, hierarchical), "
+            "'fdp' (force-directed), 'neato', 'sfdp', 'twopi', 'circo'. "
+            "[dot/svg/html only]"
+        ),
+    )
+
+    parser.add_argument(
         "-a",
         "--annotated",
         action="store_true",
@@ -366,15 +397,20 @@ def main(cli_args=None):
                          graph_options=graph_options)
 
     writer = None
+    dot_options = [
+        "rankdir=" + known_args.rankdir,
+        "ranksep=" + known_args.ranksep,
+        "layout=" + known_args.layout,
+    ]
 
     if known_args.dot:
-        writer = DotWriter(graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger)
+        writer = DotWriter(graph, options=dot_options, output=known_args.filename, logger=logger)
 
     if known_args.html:
-        writer = HTMLWriter(graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger)
+        writer = HTMLWriter(graph, options=dot_options, output=known_args.filename, logger=logger)
 
     if known_args.svg:
-        writer = SVGWriter(graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger)
+        writer = SVGWriter(graph, options=dot_options, output=known_args.filename, logger=logger)
 
     if known_args.tgf:
         writer = TgfWriter(graph, output=known_args.filename, logger=logger)

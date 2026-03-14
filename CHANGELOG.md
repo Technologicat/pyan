@@ -24,6 +24,21 @@
   Import tracking is per-namespace, so function-level imports are scoped
   correctly — a function-level import does not leak to sibling functions.
   Postprocessing order changed to resolve→contract→expand.  (#88)
+- **`get_module_name` mangled paths with `.py` in directory names** — e.g.
+  `wheel-0.37.1-py2.py3-none-any/...`.  Now uses `removesuffix(".py")`
+  instead of `replace(".py", "")`.  (PR #97 — thanks @CannedFish)
+- **`resolve_imports` KeyError** — `self.defines_edges[to_node]` could raise
+  `KeyError` for imported items with no defines edges.  Now uses `.get()`
+  with a default.  (PR #95, PR #97 — thanks @anetczuk, @CannedFish)
+
+### New features
+
+- **`--dot-ranksep`** — control rank separation in GraphViz output
+  (inches).  (PR #74 — thanks @maciejczyzewski)
+- **`--graphviz-layout`** — select layout algorithm (`dot`, `fdp`, `neato`,
+  `sfdp`, `twopi`, `circo`).  Available in both call-graph and
+  module-level modes, and from the Python APIs.  (PR #74 — thanks
+  @maciejczyzewski)
 
 
 ## 2.1.0 (2026-03-10)

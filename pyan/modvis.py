@@ -317,6 +317,8 @@ def create_modulegraph(
     root=None,
     format="dot",
     rankdir="LR",
+    ranksep="0.5",
+    layout="dot",
     nested_groups=True,
     colored=True,
     annotated=False,
@@ -338,6 +340,11 @@ def create_modulegraph(
         rankdir: graph layout direction (Graphviz ``rankdir`` attribute).
             ``"LR"`` for left-to-right, ``"TB"`` for top-to-bottom,
             ``"RL"`` and ``"BT"`` for the reverse directions.
+            [dot/svg/html only]
+        ranksep: desired rank separation in inches (Graphviz ``ranksep``).
+            [dot only]
+        layout: Graphviz layout algorithm — ``"dot"`` (hierarchical),
+            ``"fdp"`` (force-directed), ``"neato"``, ``"sfdp"``, etc.
             [dot/svg/html only]
         nested_groups: create nested subgraph clusters for nested
             namespaces (implies ``grouped``). [dot only]
@@ -371,12 +378,13 @@ def create_modulegraph(
     graph = visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
     stream = io.StringIO()
+    dot_options = ["rankdir=" + rankdir, "ranksep=" + ranksep, "layout=" + layout]
     if format == "dot":
-        writer = writers.DotWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+        writer = writers.DotWriter(graph, options=dot_options, output=stream, logger=logger)
     elif format == "svg":
-        writer = writers.SVGWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+        writer = writers.SVGWriter(graph, options=dot_options, output=stream, logger=logger)
     elif format == "html":
-        writer = writers.HTMLWriter(graph, options=["rankdir=" + rankdir], output=stream, logger=logger)
+        writer = writers.HTMLWriter(graph, options=dot_options, output=stream, logger=logger)
     elif format == "tgf":
         writer = writers.TgfWriter(graph, output=stream, logger=logger)
     elif format == "yed":
@@ -454,6 +462,27 @@ def main(cli_args=None):
             "controlling the direction of the graph. "
             "Allowed values: ['TB', 'LR', 'BT', 'RL']. "
             "[dot only]"
+        ),
+    )
+    parser.add_argument(
+        "--dot-ranksep",
+        default="0.5",
+        dest="ranksep",
+        help=(
+            "specifies the dot graph 'ranksep' property for "
+            "controlling desired rank separation, in inches. "
+            "[dot only]"
+        ),
+    )
+    parser.add_argument(
+        "--graphviz-layout",
+        default="dot",
+        dest="layout",
+        help=(
+            "specifies the graphviz layout algorithm. "
+            "Commonly used: 'dot' (default, hierarchical), "
+            "'fdp' (force-directed), 'neato', 'sfdp', 'twopi', 'circo'. "
+            "[dot/svg/html only]"
         ),
     )
     parser.add_argument(
@@ -545,18 +574,18 @@ def main(cli_args=None):
         v.prepare_graph()
         graph = visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
+    dot_options = [
+        "rankdir=" + known_args.rankdir,
+        "ranksep=" + known_args.ranksep,
+        "layout=" + known_args.layout,
+    ]
+
     if known_args.dot:
-        writer = writers.DotWriter(
-            graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger
-        )
+        writer = writers.DotWriter(graph, options=dot_options, output=known_args.filename, logger=logger)
     if known_args.svg:
-        writer = writers.SVGWriter(
-            graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger
-        )
+        writer = writers.SVGWriter(graph, options=dot_options, output=known_args.filename, logger=logger)
     if known_args.html:
-        writer = writers.HTMLWriter(
-            graph, options=["rankdir=" + known_args.rankdir], output=known_args.filename, logger=logger
-        )
+        writer = writers.HTMLWriter(graph, options=dot_options, output=known_args.filename, logger=logger)
     if known_args.tgf:
         writer = writers.TgfWriter(graph, output=known_args.filename, logger=logger)
     if known_args.yed:
