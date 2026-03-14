@@ -89,6 +89,13 @@ class TestDotWriter:
         dot = buf.getvalue()
         assert "rankdir=LR" in dot
 
+    def test_concentrate_option(self, graph):
+        buf = io.StringIO()
+        writer = DotWriter(graph, options=["concentrate=true"], output=buf, logger=logging.getLogger())
+        writer.run()
+        dot = buf.getvalue()
+        assert "concentrate=true" in dot
+
 
 # ---------------------------------------------------------------------------
 # TGF

@@ -50,6 +50,9 @@
 - **Directory input** — passing a directory path as a positional argument
   now auto-globs ``**/*.py``.  Works in both call-graph and module-level
   modes, CLI and API.  (#66)
+- **`--concentrate`** — merge bidirectional edges into single
+  double-headed arrows (GraphViz ``concentrate`` attribute).  Available
+  in both call-graph and module-level modes, CLI and API.  (#21)
 
 ### Housekeeping
 

@@ -360,3 +360,33 @@ class TestDirectoryInput:
         result = create_modulegraph(FIXTURE_DIR, root=FIXTURE_DIR, format="dot")
         assert "digraph G" in result
         assert "alpha" in result
+
+
+# ---------------------------------------------------------------------------
+# Bidirectional edges (#21)
+# ---------------------------------------------------------------------------
+
+class TestConcentrate:
+    def test_cli_concentrate(self, capsys):
+        """--concentrate adds concentrate=true to DOT output."""
+        main(fixture_files() + ["--dot", "--concentrate", "--root", FIXTURE_DIR])
+        captured = capsys.readouterr()
+        assert "concentrate=true" in captured.out
+
+    def test_api_concentrate(self):
+        """create_modulegraph(concentrate=True) adds concentrate=true."""
+        result = create_modulegraph(fixture_files(), root=FIXTURE_DIR, format="dot", concentrate=True)
+        assert "concentrate=true" in result
+
+    def test_callgraph_cli_concentrate(self, capsys):
+        """pyan3 --concentrate adds concentrate=true to DOT output."""
+        from pyan.main import main as pyan_main
+        pyan_main([FIXTURE_DIR, "--dot", "--concentrate"])
+        captured = capsys.readouterr()
+        assert "concentrate=true" in captured.out
+
+    def test_callgraph_api_concentrate(self):
+        """create_callgraph(concentrate=True) adds concentrate=true."""
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE_DIR, format="dot", concentrate=True)
+        assert "concentrate=true" in result

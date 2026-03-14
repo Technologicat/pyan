@@ -59,6 +59,7 @@ def create_callgraph(
     grouped: bool = True,
     max_iter: int = 1000,
     direction: str = "both",
+    concentrate: bool = False,
     logger=None,
 ) -> str:
     """Create a call graph based on static code analysis.
@@ -110,6 +111,8 @@ def create_callgraph(
         direction: traversal direction when filtering by ``function`` or
             ``namespace`` — ``"both"`` (default), ``"down"`` (callees only),
             or ``"up"`` (callers only).
+        concentrate: merge bidirectional edges into single double-headed
+            arrows (GraphViz ``concentrate`` attribute). [dot/svg/html only]
         logger: optional ``logging.Logger`` instance.
 
     Returns:
@@ -138,6 +141,8 @@ def create_callgraph(
 
     stream = io.StringIO()
     dot_options = ["rankdir=" + rankdir, "ranksep=" + ranksep, "layout=" + layout]
+    if concentrate:
+        dot_options.append("concentrate=true")
     if format == "dot":
         writer = DotWriter(graph, options=dot_options, output=stream, logger=logger)
     elif format == "html":
@@ -336,6 +341,14 @@ def main(cli_args=None):
     )
 
     parser.add_argument(
+        "--concentrate",
+        action="store_true",
+        default=False,
+        dest="concentrate",
+        help="merge bidirectional edges into a single double-headed arrow [dot/svg/html only]",
+    )
+
+    parser.add_argument(
         "-a",
         "--annotated",
         action="store_true",
@@ -416,6 +429,8 @@ def main(cli_args=None):
         "ranksep=" + known_args.ranksep,
         "layout=" + known_args.layout,
     ]
+    if known_args.concentrate:
+        dot_options.append("concentrate=true")
 
     if known_args.dot:
         writer = DotWriter(graph, options=dot_options, output=known_args.filename, logger=logger)

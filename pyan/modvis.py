@@ -326,6 +326,7 @@ def create_modulegraph(
     annotated=False,
     grouped=True,
     with_init=False,
+    concentrate=False,
     logger=None,
 ):
     """Create a module-level dependency graph based on static import analysis.
@@ -357,6 +358,8 @@ def create_modulegraph(
             [dot only]
         with_init: include ``__init__`` modules in the output.
             Excluded by default to reduce clutter.
+        concentrate: merge bidirectional edges into single double-headed
+            arrows (GraphViz ``concentrate`` attribute). [dot/svg/html only]
         logger: optional ``logging.Logger`` instance.
 
     Returns:
@@ -384,6 +387,8 @@ def create_modulegraph(
 
     stream = io.StringIO()
     dot_options = ["rankdir=" + rankdir, "ranksep=" + ranksep, "layout=" + layout]
+    if concentrate:
+        dot_options.append("concentrate=true")
     if format == "dot":
         writer = writers.DotWriter(graph, options=dot_options, output=stream, logger=logger)
     elif format == "svg":
@@ -498,6 +503,10 @@ def main(cli_args=None):
         help="include __init__ modules in the output (excluded by default to reduce clutter)",
     )
     parser.add_argument(
+        "--concentrate", action="store_true", default=False, dest="concentrate",
+        help="merge bidirectional edges into a single double-headed arrow [dot/svg/html only]",
+    )
+    parser.add_argument(
         "--root",
         default=None,
         dest="root",
@@ -588,6 +597,8 @@ def main(cli_args=None):
         "ranksep=" + known_args.ranksep,
         "layout=" + known_args.layout,
     ]
+    if known_args.concentrate:
+        dot_options.append("concentrate=true")
 
     if known_args.dot:
         writer = writers.DotWriter(graph, options=dot_options, output=known_args.filename, logger=logger)
