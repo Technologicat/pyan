@@ -356,7 +356,11 @@ class CallGraphVisitor(ast.NodeVisitor):
         return new_nodes
 
     def find_paths(self, from_node, to_node, max_paths=10):
-        """Find all simple paths from `from_node` to `to_node` via uses edges.
+        """Find simple paths from `from_node` to `to_node` via uses edges.
+
+        Uses DFS; results are sorted shortest-first after collection.
+        Note that DFS discovers paths in arbitrary order, so with a low
+        ``max_paths`` the shortest path may not be among those found.
 
         Args:
             from_node: starting Node.
@@ -365,7 +369,7 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         Returns:
             List of paths, where each path is a list of Nodes.
-            Sorted shortest-first.
+            Sorted shortest-first (among those found).
         """
         results = []
 
