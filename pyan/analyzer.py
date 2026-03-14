@@ -216,8 +216,8 @@ class CallGraphVisitor(ast.NodeVisitor):
                     # try to resolve namespace and find imported item mapping
                     for from_node, to_node in import_mapping.items():
                         if (
-                            f"{from_node.namespace}.{from_node.name}" == node.namespace
-                            and from_node.flavor == Flavor.IMPORTEDITEM
+                            f"{from_node.namespace}.{from_node.name}" == node.namespace and
+                            from_node.flavor == Flavor.IMPORTEDITEM
                         ):
                             # use define edges as potential candidates
                             for candidate_to_node in self.defines_edges.get(to_node, []):
@@ -2056,10 +2056,10 @@ class CallGraphVisitor(ast.NodeVisitor):
                 inherited = False
                 for n3 in self.uses_edges[n]:
                     if (
-                        n3.name == n2.name
-                        and n2.namespace is not None
-                        and n3.namespace is not None
-                        and n3.namespace != n2.namespace
+                        n3.name == n2.name and
+                        n2.namespace is not None and
+                        n3.namespace is not None and
+                        n3.namespace != n2.namespace
                     ):
                         pn2 = self.get_parent_node(n2)
                         pn3 = self.get_parent_node(n3)
