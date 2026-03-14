@@ -10,6 +10,7 @@ import logging
 import os
 
 from . import node, visgraph, writers
+from .anutils import expand_sources
 
 
 def _infer_root(filenames):
@@ -263,8 +264,13 @@ class ImportVisitor(ast.NodeVisitor):
             out.append((cycle[:k], cycle[k:]))
         return out
 
-    def prepare_graph(self):  # same format as in analyzer
-        """Postprocessing. Prepare data for visgraph for graph file generation."""
+    def prepare_graph(self, with_init=False):  # same format as in analyzer
+        """Postprocessing. Prepare data for visgraph for graph file generation.
+
+        Args:
+            with_init: if True, include ``__init__`` modules.
+                Excluded by default to reduce clutter.
+        """
         self.nodes = {}  # Node name: list of Node objects (in possibly different namespaces)
         self.uses_edges = {}
         # we have no defines_edges, which doesn't matter as long as we don't enable that option in visgraph.
@@ -273,6 +279,8 @@ class ImportVisitor(ast.NodeVisitor):
         # TODO: If we want to include in the graph also targets that are not in the analyzed set,
         # TODO: then we could create nodes also for the modules listed in the *values* of self.modules.
         for m in self.modules:
+            if not with_init and (m.endswith(".__init__") or m == "__init__"):
+                continue
             ns, mod = split_module_name(m)
             package = os.path.dirname(self.fullpaths[m])
             # print("{}: ns={}, mod={}, fn={}".format(m, ns, mod, fn))
@@ -317,6 +325,7 @@ def create_modulegraph(
     colored=True,
     annotated=False,
     grouped=True,
+    with_init=False,
     logger=None,
 ):
     """Create a module-level dependency graph based on static import analysis.
@@ -346,6 +355,8 @@ def create_modulegraph(
         annotated: annotate nodes with module location.
         grouped: group nodes into subgraph clusters by namespace.
             [dot only]
+        with_init: include ``__init__`` modules in the output.
+            Excluded by default to reduce clutter.
         logger: optional ``logging.Logger`` instance.
 
     Returns:
@@ -353,7 +364,7 @@ def create_modulegraph(
     """
     if isinstance(filenames, str):
         filenames = [filenames]
-    filenames = [fn2 for fn in filenames for fn2 in glob(fn, recursive=True)]
+    filenames = expand_sources(filenames)
 
     if nested_groups:
         grouped = True
@@ -368,7 +379,7 @@ def create_modulegraph(
     }
 
     v = ImportVisitor(filenames, logger or logging.getLogger(__name__), root=root)
-    v.prepare_graph()
+    v.prepare_graph(with_init=with_init)
     graph = visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
     stream = io.StringIO()
@@ -483,6 +494,10 @@ def main(cli_args=None):
         "-a", "--annotated", action="store_true", default=False, dest="annotated", help="annotate with module location"
     )
     parser.add_argument(
+        "--init", action="store_true", default=False, dest="with_init",
+        help="include __init__ modules in the output (excluded by default to reduce clutter)",
+    )
+    parser.add_argument(
         "--root",
         default=None,
         dest="root",
@@ -490,7 +505,7 @@ def main(cli_args=None):
     )
 
     known_args, unknown_args = parser.parse_known_args(cli_args)
-    filenames = [fn2 for fn in unknown_args for fn2 in glob(fn, recursive=True)]
+    filenames = expand_sources(unknown_args)
     if len(unknown_args) == 0:
         parser.error("Need one or more filenames to process")
 
@@ -565,7 +580,7 @@ def main(cli_args=None):
     make_graph = (known_args.dot or known_args.svg or known_args.html
                   or known_args.tgf or known_args.yed or known_args.text)
     if make_graph:
-        v.prepare_graph()
+        v.prepare_graph(with_init=known_args.with_init)
         graph = visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
     dot_options = [

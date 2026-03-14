@@ -3,9 +3,25 @@
 """Utilities for analyzer."""
 
 import ast
+from glob import glob
+import os
 import os.path
 
 from .node import Flavor
+
+
+def expand_sources(patterns):
+    """Expand source file patterns, treating directories as ``dir/**/*.py``.
+
+    Accepts a list of file paths, glob patterns, or directory paths.
+    Directories are expanded to ``dir/**/*.py`` recursively.
+    """
+    result = []
+    for pat in patterns:
+        if os.path.isdir(pat):
+            pat = os.path.join(pat, "**", "*.py")
+        result.extend(glob(pat, recursive=True))
+    return result
 
 
 def head(lst):

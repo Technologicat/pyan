@@ -18,6 +18,7 @@ import signal
 import sys
 
 from .analyzer import CallGraphVisitor
+from .anutils import expand_sources
 from .visgraph import VisualGraph
 from .writers import DotWriter, HTMLWriter, SVGWriter, TextWriter, TgfWriter, YedWriter
 
@@ -116,7 +117,7 @@ def create_callgraph(
     """
     if isinstance(filenames, str):
         filenames = [filenames]
-    filenames = [fn2 for fn in filenames for fn2 in glob(fn, recursive=True)]
+    filenames = expand_sources(filenames)
 
     if nested_groups:
         grouped = True
@@ -360,7 +361,7 @@ def main(cli_args=None):
 
     known_args, unknown_args = parser.parse_known_args(cli_args)
 
-    filenames = [os.path.abspath(fn2) for fn in unknown_args for fn2 in glob(fn, recursive=True)]
+    filenames = [os.path.abspath(fn2) for fn2 in expand_sources(unknown_args)]
 
     # determine root
     root = os.path.abspath(known_args.root) if known_args.root is not None else None

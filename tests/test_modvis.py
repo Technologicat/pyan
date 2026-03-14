@@ -299,3 +299,64 @@ class TestCreateModulegraph:
         """create_modulegraph is re-exported from the pyan package."""
         from pyan import create_modulegraph as cg
         assert callable(cg)
+
+
+# ---------------------------------------------------------------------------
+# Omit __init__ (#20)
+# ---------------------------------------------------------------------------
+
+class TestOmitInit:
+    def test_cli_default_excludes_init(self, capsys):
+        """By default, __init__ modules are excluded from output."""
+        main(fixture_files() + ["--dot", "--root", FIXTURE_DIR])
+        captured = capsys.readouterr()
+        assert "__init__" not in captured.out
+        assert "alpha" in captured.out
+
+    def test_cli_init_flag_includes_init(self, capsys):
+        """--init explicitly includes __init__ modules."""
+        main(fixture_files() + ["--dot", "--init", "--root", FIXTURE_DIR])
+        captured = capsys.readouterr()
+        assert "__init__" in captured.out
+
+    def test_api_default_excludes_init(self):
+        """create_modulegraph() excludes __init__ modules by default."""
+        result = create_modulegraph(fixture_files(), root=FIXTURE_DIR, format="text")
+        assert "__init__" not in result
+
+    def test_api_with_init(self):
+        """create_modulegraph(with_init=True) includes __init__ modules."""
+        result = create_modulegraph(fixture_files(), root=FIXTURE_DIR, format="text", with_init=True)
+        assert "__init__" in result
+
+
+# ---------------------------------------------------------------------------
+# Directory input (#66)
+# ---------------------------------------------------------------------------
+
+class TestDirectoryInput:
+    def test_modvis_cli_directory_arg(self, capsys):
+        """Passing a directory to modvis CLI should auto-glob *.py files."""
+        main([FIXTURE_DIR, "--dot", "--root", FIXTURE_DIR])
+        captured = capsys.readouterr()
+        assert "digraph G" in captured.out
+        assert "alpha" in captured.out
+
+    def test_callgraph_cli_directory_arg(self, capsys):
+        """Passing a directory to pyan3 CLI should auto-glob *.py files."""
+        from pyan.main import main as pyan_main
+        pyan_main([FIXTURE_DIR, "--dot"])
+        captured = capsys.readouterr()
+        assert "digraph G" in captured.out
+
+    def test_create_callgraph_directory_arg(self):
+        """create_callgraph() should accept a directory path."""
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE_DIR, format="dot")
+        assert "digraph G" in result
+
+    def test_create_modulegraph_directory_arg(self):
+        """create_modulegraph() should accept a directory path."""
+        result = create_modulegraph(FIXTURE_DIR, root=FIXTURE_DIR, format="dot")
+        assert "digraph G" in result
+        assert "alpha" in result
