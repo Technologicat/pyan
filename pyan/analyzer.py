@@ -3,6 +3,7 @@
 """The AST visitor."""
 
 import ast
+from collections import defaultdict
 import logging
 import symtable
 
@@ -306,20 +307,18 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         # Remap edges: redirect deep endpoints to their ancestor.
         def remap_edges(edge_dict):
-            new = {}
+            new = defaultdict(set)
             for src, targets in edge_dict.items():
                 src2 = ancestor_of.get(src, src)
                 if src2.namespace is None or not src2.defined:
                     continue
-                if src2 not in new:
-                    new[src2] = set()
                 for tgt in targets:
                     tgt2 = ancestor_of.get(tgt, tgt)
                     if tgt2.namespace is None or not tgt2.defined:
                         continue
                     if tgt2 != src2:  # suppress self-edges
                         new[src2].add(tgt2)
-            return new
+            return dict(new)
 
         self.uses_edges = remap_edges(self.uses_edges)
         self.defines_edges = remap_edges(self.defines_edges)
