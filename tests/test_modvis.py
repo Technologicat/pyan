@@ -15,7 +15,6 @@ from pyan.modvis import (
     split_module_name,
 )
 
-
 # ---------------------------------------------------------------------------
 # Pure functions
 # ---------------------------------------------------------------------------
@@ -205,7 +204,7 @@ class TestImportVisitor:
         visitor.prepare_graph()
         assert "pkg_a.alpha" in visitor.nodes
         assert "pkg_b.beta" in visitor.nodes
-        for name, node_list in visitor.nodes.items():
+        for _name, node_list in visitor.nodes.items():
             assert len(node_list) == 1
             assert node_list[0].defined is True
 

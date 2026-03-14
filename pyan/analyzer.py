@@ -11,11 +11,11 @@ from .anutils import (
     ExecuteInInnerScope,
     Scope,
     UnresolvedSuperCallError,
+    canonize_exprs,
     format_alias,
     get_ast_node_name,
     get_module_name,
     resolve_method_resolution_order,
-    canonize_exprs,
     tail,
 )
 from .node import Flavor, Node
@@ -105,7 +105,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                 "Filename '%s' has not been preprocessed (was not given to __init__, which got %s)"
                 % (filename, self.filenames)
             )
-        with open(filename, "rt", encoding="utf-8") as f:
+        with open(filename, encoding="utf-8") as f:
             content = f.read()
         self.filename = filename
         self.module_name = get_module_name(filename, root=self.root)
@@ -188,7 +188,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             from_node = imports_to_resolve.pop()
             if from_node in import_mapping:
                 continue
-            to_uses = self.uses_edges.get(from_node, set([from_node]))
+            to_uses = self.uses_edges.get(from_node, {from_node})
             assert len(to_uses) == 1
             to_node = to_uses.pop()  # resolve alias
             # resolve namespace and get module
@@ -240,7 +240,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             if len(to_nodes) > 0
         }
 
-    def filter(self, node: Union[None, Node] = None, namespace: Union[str, None] = None, max_iter: int = 1000):
+    def filter(self, node: None | Node = None, namespace: str | None = None, max_iter: int = 1000):
         """
         filter callgraph nodes that related to `node` or are in `namespace`
 
@@ -270,7 +270,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         return self
 
     def get_related_nodes(
-        self, node: Union[None, Node] = None, namespace: Union[str, None] = None, max_iter: int = 1000
+        self, node: None | Node = None, namespace: str | None = None, max_iter: int = 1000
     ) -> set:
         """
         get nodes that related to `node` or are in `namespace`
@@ -531,13 +531,13 @@ class CallGraphVisitor(ast.NodeVisitor):
         # https://greentreesnakes.readthedocs.io/en/latest/nodes.html?highlight=functiondef#arguments
         if ast_args.defaults:
             n = len(ast_args.defaults)
-            for tgt, val in zip(ast_args.args[-n:], ast_args.defaults):
+            for tgt, val in zip(ast_args.args[-n:], ast_args.defaults, strict=False):
                 targets = canonize_exprs(tgt)
                 values = canonize_exprs(val)
                 self.analyze_binding(targets, values)
         if ast_args.kw_defaults:
             n = len(ast_args.kw_defaults)
-            for tgt, val in zip(ast_args.kwonlyargs, ast_args.kw_defaults):
+            for tgt, val in zip(ast_args.kwonlyargs, ast_args.kw_defaults, strict=False):
                 if val is not None:
                     targets = canonize_exprs(tgt)
                     values = canonize_exprs(val)
@@ -566,10 +566,10 @@ class CallGraphVisitor(ast.NodeVisitor):
         pos, kw = default_values
         if pos:
             n = len(pos)
-            for tgt, val in zip(ast_args.args[-n:], pos):
+            for tgt, val in zip(ast_args.args[-n:], pos, strict=False):
                 self._bind_target(tgt, val)
         if kw:
-            for tgt, val in zip(ast_args.kwonlyargs, kw):
+            for tgt, val in zip(ast_args.kwonlyargs, kw, strict=False):
                 if val is not None:
                     self._bind_target(tgt, val)
 
@@ -660,10 +660,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             else:
                 to_node = self.get_node(tgt_name, alias.name, node, flavor=Flavor.IMPORTEDITEM)
             # if there is alias, add extra edge between alias and node
-            if alias.asname is not None:
-                alias_name = alias.asname
-            else:
-                alias_name = alias.name
+            alias_name = alias.asname if alias.asname is not None else alias.name
             self.set_value(alias_name, to_node)  # set node to be discoverable in module
             self.logger.info("From setting name %s to %s" % (alias_name, to_node))
 
@@ -688,10 +685,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         # the thing **being used** (under the asname, if any)
         mod_node = self.get_node("", src_name, ast_node, flavor=Flavor.MODULE)
         # if there is alias, add extra edge between alias and node
-        if import_item.asname is not None:
-            alias_name = import_item.asname
-        else:
-            alias_name = mod_node.name
+        alias_name = import_item.asname if import_item.asname is not None else mod_node.name
         self.add_uses_edge(from_node, mod_node)
         self.logger.info("New edge added for Use import %s in %s" % (mod_node, from_node))
         self.set_value(alias_name, mod_node)  # set node to be discoverable in module
@@ -888,7 +882,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         # both scopes after the alias (e.g. "Matrix" and "Matrix.Matrix"),
         # hence the repeated name in ExecuteInInnerScope calls.
         if node.type_params:
-            with ExecuteInInnerScope(self, node.name.id):  # type parameter scope
+            with ExecuteInInnerScope(self, node.name.id):  # type parameter scope  # noqa: SIM117
                 with ExecuteInInnerScope(self, node.name.id):  # type alias scope
                     self.visit(node.value)
         else:
@@ -928,10 +922,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         """
         if isinstance(iter_node, Node):
             from_node = self.get_node_of_current_namespace()
-            if is_async:
-                methods = ("__aiter__", "__anext__")
-            else:
-                methods = ("__iter__", "__next__")
+            methods = ("__aiter__", "__anext__") if is_async else ("__iter__", "__next__")
             for methodname in methods:
                 to_node = self.get_node(iter_node.get_name(), methodname, None, flavor=Flavor.METHOD)
                 self.logger.debug("Use from %s to %s (iteration)" % (from_node, to_node))
@@ -1320,7 +1311,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         """Generic handler for binding forms. Inputs must be canonize_exprs()d."""
         captured = [self.visit(value) for value in values]
         if len(targets) == len(captured):
-            for tgt, val in zip(targets, captured):
+            for tgt, val in zip(targets, captured, strict=False):
                 self._bind_target(tgt, val)
         else:
             # Check for positional starred unpacking on LHS (e.g. a, b, *c = x, y, z, w).
@@ -1337,10 +1328,10 @@ class CallGraphVisitor(ast.NodeVisitor):
                 # positional counterparts, starred target to the remainder.
                 n_before = star_idx
                 n_after = len(targets) - star_idx - 1
-                for tgt, val in zip(targets[:n_before], captured[:n_before]):
+                for tgt, val in zip(targets[:n_before], captured[:n_before], strict=False):
                     self._bind_target(tgt, val)
                 if n_after > 0:
-                    for tgt, val in zip(targets[-n_after:], captured[-n_after:]):
+                    for tgt, val in zip(targets[-n_after:], captured[-n_after:], strict=False):
                         self._bind_target(tgt, val)
                 star_end = len(captured) - n_after if n_after else len(captured)
                 remainder = captured[n_before:star_end]
@@ -1416,20 +1407,19 @@ class CallGraphVisitor(ast.NodeVisitor):
                     self.logger.info(msg)
                     raise UnresolvedSuperCallError(msg)
 
-            if funcname in ("str", "repr"):
-                if len(ast_node.args) == 1:  # these take only one argument
-                    obj_astnode = ast_node.args[0]
-                    if isinstance(obj_astnode, (ast.Name, ast.Attribute)):
-                        self.logger.debug("Resolving %s() of %s" % (funcname, get_ast_node_name(obj_astnode)))
-                        attrname = "__%s__" % (funcname)
-                        # build a temporary ast.Attribute AST node so that we can use get_attribute()
-                        tmp_astnode = ast.Attribute(value=obj_astnode, attr=attrname, ctx=obj_astnode.ctx)
-                        obj_node, attr_node = self.get_attribute(tmp_astnode)
-                        self.logger.debug(
-                            "Resolve %s() of %s: returning attr node %s"
-                            % (funcname, get_ast_node_name(obj_astnode), attr_node)
-                        )
-                        return attr_node
+            if funcname in ("str", "repr") and len(ast_node.args) == 1:  # these take only one argument
+                obj_astnode = ast_node.args[0]
+                if isinstance(obj_astnode, (ast.Name, ast.Attribute)):
+                    self.logger.debug("Resolving %s() of %s" % (funcname, get_ast_node_name(obj_astnode)))
+                    attrname = "__%s__" % (funcname)
+                    # build a temporary ast.Attribute AST node so that we can use get_attribute()
+                    tmp_astnode = ast.Attribute(value=obj_astnode, attr=attrname, ctx=obj_astnode.ctx)
+                    obj_node, attr_node = self.get_attribute(tmp_astnode)
+                    self.logger.debug(
+                        "Resolve %s() of %s: returning attr node %s"
+                        % (funcname, get_ast_node_name(obj_astnode), attr_node)
+                    )
+                    return attr_node
 
             # add implementations for other built-in funcnames here if needed
 
@@ -1760,12 +1750,9 @@ class CallGraphVisitor(ast.NodeVisitor):
         # TODO: this is tentative. Add in filename only when sure?
         # (E.g. in visit_ClassDef(), visit_FunctionDef())
         #
-        if namespace in self.module_to_filename:
-            # If the namespace is one of the modules being analyzed,
-            # the the Node belongs to the correponding file.
-            filename = self.module_to_filename[namespace]
-        else:  # Assume the Node belongs to the current file.
-            filename = self.filename
+        # If the namespace is one of the modules being analyzed,
+        # the Node belongs to the corresponding file; otherwise assume current file.
+        filename = self.module_to_filename.get(namespace, self.filename)
 
         n = Node(namespace, name, ast_node, filename, flavor)
 
@@ -2014,10 +2001,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         # Also check the module-level namespace (which may be the module name itself,
         # with no dots if it's a top-level module).
         imports = self.namespace_imports.get(ns, set())
-        if imports & target_ancestors:
-            return True
-
-        return False
+        return bool(imports & target_ancestors)
 
     def expand_unknowns(self):
         """For each unknown node *.name, replace all its incoming edges with edges to X.name for all possible Xs.

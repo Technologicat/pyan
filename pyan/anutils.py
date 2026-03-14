@@ -4,6 +4,7 @@
 
 import ast
 import os.path
+
 from .node import Flavor
 
 
@@ -39,7 +40,7 @@ def get_module_name(filename, root: str = None):
             # Check if potential_root is valid and exists before listing
             if not potential_root or not os.path.exists(potential_root) or not os.path.isdir(potential_root):
                 break
-            is_root = any([f == "__init__.py" for f in os.listdir(potential_root)])
+            is_root = any(f == "__init__.py" for f in os.listdir(potential_root))
             directories.insert(0, (potential_root, is_root))
 
         # keep directories where itself of parent is root
@@ -217,7 +218,7 @@ class Scope:
             name = ""  # Pyan defines the top level as anonymous
         self.name = name
         self.type = table.get_type()  # useful for __repr__()
-        self.defs = {iden: None for iden in table.get_identifiers()}  # name:assigned_value
+        self.defs = dict.fromkeys(table.get_identifiers())  # name:assigned_value
         # Pure locals: assigned in this scope, not free/global/imported.
         # Used by visit_Name to skip UNKNOWN node creation for unresolved locals.
         self.locals = {sym.get_name() for sym in table.get_symbols()
@@ -235,7 +236,7 @@ class Scope:
         sc = cls.__new__(cls)
         sc.name = name
         sc.type = "function"
-        sc.defs = {iden: None for iden in identifiers}
+        sc.defs = dict.fromkeys(identifiers)
         sc.locals = set(identifiers)  # comprehension variables are all locals
         return sc
 

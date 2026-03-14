@@ -34,3 +34,5 @@
 - **D24: Additional unpacking generalizations (PEP 448)**: E.g. `{**a, **b}`, `[*a, *b]`. Uses on the RHS are detected, but binding information is not recorded.
 - **D25: Enum attribute tracking**: Need to mark uses of Enum member attributes as uses of the Enum class itself.
 - **D26: Resolving function call results**: The analyzer does not track the return type of function calls, except for a limited special case for `super()`.
+- **D27: Directional graph filtering (`filter_up`/`filter_down`)**: The `filter()` method currently finds all related nodes bidirectionally. PR #95 (@anetczuk) proposed `filter_down` and `filter_up` parameters to control directionality — useful for "show me everything this function calls" vs "show me everything that calls this function". Would need corresponding CLI flags.
+- **D28: Per-namespace `resolve_imports`**: `resolve_imports` currently remaps IMPORTEDITEM nodes globally. A function-level import leaks to sibling functions via this path. Scoping the remap to the importing namespace would be more correct. See `expand_unknowns` for how per-namespace import scoping is already done there.

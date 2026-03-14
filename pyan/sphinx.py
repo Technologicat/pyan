@@ -127,10 +127,7 @@ class CallgraphDirective(SphinxDirective):
         if "align" in self.options:
             node["align"] = self.options["align"]
 
-        if "class" in self.options:
-            classes = self.options["class"]
-        else:
-            classes = []
+        classes = self.options.get("class", [])
         if "zoomable" in self.options:
             if len(classes) == 0:
                 classes = ["zoomable-callgraph"]

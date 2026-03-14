@@ -214,7 +214,7 @@ def test_del_item(v):
 def test_del_name_no_protocol_edge(v):
     """del tmp (bare name) should not create protocol method edges."""
     # unbind_local has no uses edges at all — it shouldn't even appear as a key.
-    names = [node.get_name() for node in v.uses_edges.keys()]
+    names = [node.get_name() for node in v.uses_edges]
     assert f"{PREFIX}.unbind_local" not in names
 
 

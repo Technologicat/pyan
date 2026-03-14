@@ -12,7 +12,7 @@ import sys
 from jinja2 import Template
 
 
-class Writer(object):
+class Writer:
     def __init__(self, graph, output=None, logger=None, tabstop=4):
         self.graph = graph
         self.output = output
@@ -38,7 +38,7 @@ class Writer(object):
             if isinstance(self.output, io.StringIO):  # write to stream
                 self.outstream = self.output
             else:
-                self.outstream = open(self.output, "w")  # write to file
+                self.outstream = open(self.output, "w")  # noqa: SIM115 — closed in finally below
         except TypeError:
             self.outstream = sys.stdout
         self.start_graph()
@@ -118,7 +118,7 @@ class TextWriter(Writer):
             if isinstance(self.output, io.StringIO):
                 self.outstream = self.output
             else:
-                self.outstream = open(self.output, "w")
+                self.outstream = open(self.output, "w")  # noqa: SIM115 — closed below
         except TypeError:
             self.outstream = sys.stdout
 
@@ -230,7 +230,7 @@ class HTMLWriter(SVGWriter):
             self.output = output
 
         # insert svg into html
-        with open(os.path.join(os.path.dirname(__file__), "callgraph.html"), "r") as f:
+        with open(os.path.join(os.path.dirname(__file__), "callgraph.html")) as f:
             template = Template(f.read())
 
         html = template.render(svg=svg)

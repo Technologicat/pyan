@@ -72,7 +72,7 @@ class Colorizer:
             return "#%02x%02x%02x" % (R, G, B)
 
 
-class VisualNode(object):
+class VisualNode:
     """
     A node in the output graph: colors, internal ID, human-readable label, ...
     """
@@ -93,7 +93,7 @@ class VisualNode(object):
             return "VisualNode(" + repr(self.id) + ")"
 
 
-class VisualEdge(object):
+class VisualEdge:
     """
     An edge in the output graph.
 
@@ -110,7 +110,7 @@ class VisualEdge(object):
         return "Edge(" + self.source.label + " " + self.flavor + " " + self.target.label + ")"
 
 
-class VisualGraph(object):
+class VisualGraph:
     def __init__(self, id, label, nodes=None, edges=None, subgraphs=None, grouped=False):
         self.id = id
         self.label = label

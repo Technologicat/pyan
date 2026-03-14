@@ -136,31 +136,6 @@ ignore = [
     "UP009", # UTF-8 encoding declaration is unnecessary (keeping for compat)
     "UP031", # %-formatting (style choice; consistent with other projects)
     "UP032", # .format() (same rationale as UP031)
-    # --- Deferred: clean up in a dedicated lint session ---
-    "UP004", # unnecessary object inheritance
-    "UP006", # use builtin type instead of typing
-    "UP007", # use X | Y for type unions
-    "UP015", # unnecessary mode argument to open()
-    "UP035", # deprecated typing imports
-    "I001",  # import sorting (auto-fixable, but touches many files)
-    "SIM102", # collapsible if
-    "SIM103", # return bool directly
-    "SIM108", # use ternary operator
-    "SIM115", # use context manager for open()
-    "SIM117", # combine with statements
-    "SIM118", # use `in` instead of `.keys()`
-    "B007",  # unused loop variable
-    "B008",  # mutable default argument
-    "B905",  # zip without strict=
-    "C405",  # unnecessary list literal
-    "C413",  # unnecessary reversed around sorted
-    "C416",  # unnecessary comprehension
-    "C419",  # unnecessary comprehension in any/all
-    "C420",  # unnecessary dict comprehension
-    "ARG001", # unused function argument
-    "ARG002", # unused method argument
-    "ARG005", # unused lambda argument
-    "F841",  # unused variable (some are test fixtures)
 ]
 
 [tool.ruff.lint.isort]
@@ -170,8 +145,9 @@ combine-as-imports = true
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # unused imports in __init__.py are common
-"tests/test_code/**" = ["F821", "I001"]  # test fixtures: undefined names and unsorted imports are intentional
+"tests/test_code/**" = ["F821", "I001", "ARG", "B007", "B008", "C416"]  # test fixtures: intentionally weird code
 "tests/old_tests/**" = ["F821", "I001", "UP009", "UP015", "C416"]  # legacy crash-repro fixtures
+"tests/orbital/**" = ["F841"]  # showcase test fixtures
 
 [tool.ruff.format]
 quote-style = "double"

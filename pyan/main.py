@@ -16,7 +16,6 @@ import logging
 import os
 import signal
 import sys
-from typing import List, Union
 
 from .analyzer import CallGraphVisitor
 from .visgraph import VisualGraph
@@ -42,10 +41,10 @@ def _build_graph(filenames, root=None, function=None, namespace=None,
 
 
 def create_callgraph(
-    filenames: Union[List[str], str] = "**/*.py",
+    filenames: list[str] | str = "**/*.py",
     root: str = None,
-    function: Union[str, None] = None,
-    namespace: Union[str, None] = None,
+    function: str | None = None,
+    namespace: str | None = None,
     format: str = "dot",
     rankdir: str = "LR",
     ranksep: str = "0.5",
@@ -348,10 +347,7 @@ def main(cli_args=None):
     filenames = [os.path.abspath(fn2) for fn in unknown_args for fn2 in glob(fn, recursive=True)]
 
     # determine root
-    if known_args.root is not None:
-        root = os.path.abspath(known_args.root)
-    else:
-        root = None
+    root = os.path.abspath(known_args.root) if known_args.root is not None else None
 
     if len(unknown_args) == 0:
         parser.error("Need one or more filenames to process")

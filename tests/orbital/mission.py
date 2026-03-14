@@ -2,8 +2,8 @@
 
 import math
 
-from .orbits import Orbit
 from .bodies import CelestialBody
+from .orbits import Orbit
 
 
 class TransferOrbit:

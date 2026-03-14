@@ -2,13 +2,12 @@
 # -*- coding: utf-8; -*-
 """A simple import analyzer. Visualize dependencies between modules."""
 
-import ast
 from argparse import ArgumentParser
+import ast
 from glob import glob
+import io
 import logging
 import os
-
-import io
 
 from . import node, visgraph, writers
 
@@ -26,10 +25,7 @@ def _infer_root(filenames):
     abspaths = [os.path.abspath(f) for f in filenames]
     if not abspaths:
         return os.getcwd()
-    if len(abspaths) == 1:
-        common = os.path.dirname(abspaths[0])
-    else:
-        common = os.path.commonpath(abspaths)
+    common = os.path.dirname(abspaths[0]) if len(abspaths) == 1 else os.path.commonpath(abspaths)
     # If commonpath landed on a file (single file, or all files share a name prefix),
     # step up to the containing directory.
     if not os.path.isdir(common):
@@ -134,7 +130,7 @@ class ImportVisitor(ast.NodeVisitor):
 
     def analyze(self, filenames):
         for fullpath in filenames:
-            with open(fullpath, "rt", encoding="utf-8") as f:
+            with open(fullpath, encoding="utf-8") as f:
                 content = f.read()
             m = filename_to_module_name(fullpath, root=self.root)
             self.current_module = m
@@ -541,7 +537,7 @@ def main(cli_args=None):
             print("No import cycles detected.")
         else:
             unique_cycles = set()
-            for prefix, cycle in cycles:
+            for _prefix, cycle in cycles:
                 unique_cycles.add(tuple(cycle))
             print("Detected the following import cycles (n_results={}).".format(len(unique_cycles)))
 
@@ -552,7 +548,7 @@ def main(cli_args=None):
                     return sum(lst) / len(lst)
 
                 def median(lst):
-                    tmp = list(sorted(lst))
+                    tmp = sorted(lst)
                     n = len(lst)
                     if n % 2 == 1:
                         return tmp[n // 2]  # e.g. tmp[5] if n = 11

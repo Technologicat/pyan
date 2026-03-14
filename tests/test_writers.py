@@ -1,18 +1,17 @@
 """Tests for output format writers (DOT, TGF, yEd GraphML, SVG, HTML, text)."""
 
+from glob import glob
 import io
 import logging
+import os
 import shutil
 import xml.etree.ElementTree as ET
-from glob import glob
-import os
 
 import pytest
 
 from pyan.analyzer import CallGraphVisitor
 from pyan.visgraph import VisualGraph
 from pyan.writers import DotWriter, HTMLWriter, SVGWriter, TextWriter, TgfWriter, YedWriter
-
 
 has_dot = shutil.which("dot") is not None
 
