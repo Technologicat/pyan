@@ -286,7 +286,8 @@ class CallGraphVisitor(ast.NodeVisitor):
             self
         """
         # Build a mapping: deep node → ancestor at max_depth.
-        # Collect deep nodes first to avoid mutating self.nodes during iteration.
+        # A "deep node" is one whose nesting level exceeds max_depth.
+        # Collect them first to avoid mutating self.nodes during iteration.
         deep_nodes = []
         for node_list in self.nodes.values():
             for n in node_list:
