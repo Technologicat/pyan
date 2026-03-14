@@ -141,6 +141,8 @@ combine-as-imports = true
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # unused imports in __init__.py are common
+"tests/test_code/**" = ["F821", "I001"]  # test fixtures: undefined names and unsorted imports are intentional
+"tests/old_tests/**" = ["F821", "I001", "UP009", "UP015", "C416"]  # legacy crash-repro fixtures
 
 [tool.ruff.format]
 quote-style = "double"
