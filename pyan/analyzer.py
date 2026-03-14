@@ -355,6 +355,48 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         return new_nodes
 
+    def find_paths(self, from_node, to_node, max_paths=10):
+        """Find all simple paths from `from_node` to `to_node` via uses edges.
+
+        Args:
+            from_node: starting Node.
+            to_node: target Node.
+            max_paths: stop after finding this many paths.
+
+        Returns:
+            List of paths, where each path is a list of Nodes.
+            Sorted shortest-first.
+        """
+        results = []
+
+        def dfs(current, target, visited):
+            if len(results) >= max_paths:
+                return
+            if current == target:
+                results.append(list(visited))
+                return
+            for neighbor in self.uses_edges.get(current, []):
+                if neighbor not in visited:
+                    visited.append(neighbor)
+                    dfs(neighbor, target, visited)
+                    visited.pop()
+
+        dfs(from_node, to_node, [from_node])
+        results.sort(key=len)
+        return results
+
+    @staticmethod
+    def format_paths(paths):
+        """Format a list of paths (from `find_paths`) as human-readable text.
+
+        Returns one path per line, ``->`` delimited, shortest first.
+        """
+        lines = []
+        for path in paths:
+            names = [n.name for n in path]
+            lines.append(" -> ".join(names))
+        return "\n".join(lines)
+
     def visit_Module(self, node):
         self.logger.debug(f"Module {self.module_name}, {self.filename}")
 

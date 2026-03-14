@@ -358,6 +358,30 @@ def main(cli_args=None):
     )
 
     parser.add_argument(
+        "--paths-from",
+        default=None,
+        dest="paths_from",
+        metavar="FUNCTION",
+        help="list call paths from FUNCTION to --paths-to target",
+    )
+
+    parser.add_argument(
+        "--paths-to",
+        default=None,
+        dest="paths_to",
+        metavar="FUNCTION",
+        help="list call paths from --paths-from source to FUNCTION",
+    )
+
+    parser.add_argument(
+        "--max-paths",
+        default=100,
+        type=int,
+        dest="max_paths",
+        help="maximum number of paths to list (default: 100)",
+    )
+
+    parser.add_argument(
         "--root",
         default=None,
         dest="root",
@@ -417,6 +441,22 @@ def main(cli_args=None):
 
     if root:
         root = os.path.abspath(root)
+
+    # --paths-from / --paths-to: list call paths and exit.
+    if known_args.paths_from and known_args.paths_to:
+        v = CallGraphVisitor(filenames, root=root, logger=logger)
+        src_ns, src_name = known_args.paths_from.rsplit(".", 1)
+        tgt_ns, tgt_name = known_args.paths_to.rsplit(".", 1)
+        from_node = v.get_node(src_ns, src_name)
+        to_node = v.get_node(tgt_ns, tgt_name)
+        paths = v.find_paths(from_node, to_node, max_paths=known_args.max_paths)
+        if paths:
+            print(v.format_paths(paths))
+        else:
+            print(f"No paths found from {known_args.paths_from} to {known_args.paths_to}.")
+        return
+    elif known_args.paths_from or known_args.paths_to:
+        parser.error("--paths-from and --paths-to must both be specified")
 
     graph = _build_graph(filenames, root=root, function=known_args.function,
                          namespace=known_args.namespace,

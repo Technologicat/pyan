@@ -390,3 +390,55 @@ def test_direction_both_finds_both(v_multi):
     related = v_multi.get_related_nodes(node, direction="both")
     names = {n.get_name() for n in related}
     assert CALLEE in names
+
+
+# --- Call path listing (#12) ---
+
+def test_find_paths_direct(v_multi):
+    """find_paths should find a direct edge as a single-hop path."""
+    from_node = v_multi.get_node("test_code.submodule2", "test_2")
+    to_node = v_multi.get_node("test_code.submodule1", "test_func1")
+    paths = v_multi.find_paths(from_node, to_node)
+    path_strs = [" -> ".join(n.get_name() for n in p) for p in paths]
+    assert any("test_2" in s and "test_func1" in s for s in path_strs)
+
+
+def test_find_paths_multi_hop():
+    """find_paths should find a two-hop path: Derived.baz -> Base.bar -> Base.foo."""
+    filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    from_node = v.get_node("test_code.features.Derived", "baz")
+    to_node = v.get_node("test_code.features.Base", "foo")
+    paths = v.find_paths(from_node, to_node)
+    assert len(paths) >= 1
+    # The two-hop path should go through bar
+    path_names = [[n.get_name() for n in p] for p in paths]
+    assert any("test_code.features.Base.bar" in p for p in path_names)
+
+
+def test_find_paths_no_path(v_multi):
+    """find_paths should return empty list when no path exists."""
+    # test_func1 does not call test_2
+    from_node = v_multi.get_node("test_code.submodule1", "test_func1")
+    to_node = v_multi.get_node("test_code.submodule2", "test_2")
+    paths = v_multi.find_paths(from_node, to_node)
+    assert paths == []
+
+
+def test_find_paths_max_paths(v_multi):
+    """find_paths respects max_paths limit."""
+    from_node = v_multi.get_node("test_code.submodule2", "test_2")
+    to_node = v_multi.get_node("test_code.submodule1", "test_func1")
+    paths = v_multi.find_paths(from_node, to_node, max_paths=1)
+    assert len(paths) <= 1
+
+
+def test_format_paths(v_multi):
+    """format_paths produces the expected text format."""
+    from_node = v_multi.get_node("test_code.submodule2", "test_2")
+    to_node = v_multi.get_node("test_code.submodule1", "test_func1")
+    paths = v_multi.find_paths(from_node, to_node)
+    text = v_multi.format_paths(paths)
+    assert " -> " in text
+    assert "test_2" in text
+    assert "test_func1" in text
