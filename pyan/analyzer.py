@@ -239,21 +239,25 @@ class CallGraphVisitor(ast.NodeVisitor):
             if len(to_nodes) > 0
         }
 
-    def filter(self, node: None | Node = None, namespace: str | None = None, max_iter: int = 1000):
-        """
-        filter callgraph nodes that related to `node` or are in `namespace`
+    def filter(self, node: None | Node = None, namespace: str | None = None,
+               max_iter: int = 1000, direction: str = "both"):
+        """Filter the graph to nodes related to `node` or in `namespace`.
 
         Args:
-            node: pyan node for which related nodes should be found, if none, filter only for namespace
-            namespace: namespace to search in (name of top level module),
-                if None, determines namespace from `node`
-            max_iter: maximum number of iterations and nodes to iterate
+            node: pyan node for which related nodes should be found.
+                If None, filter only by namespace.
+            namespace: namespace to search in (name of top level module).
+                If None, determined from `node`.
+            max_iter: maximum number of iterations and nodes to iterate.
+            direction: traversal direction — ``"both"`` (default),
+                ``"down"`` (callees: what does this node call?),
+                or ``"up"`` (callers: what calls this node?).
 
         Returns:
             self
         """
-        # filter the nodes to avoid cluttering the callgraph with irrelevant information
-        filtered_nodes = self.get_related_nodes(node, namespace=namespace, max_iter=max_iter)
+        filtered_nodes = self.get_related_nodes(node, namespace=namespace,
+                                                max_iter=max_iter, direction=direction)
 
         self.nodes = {name: [node for node in nodes if node in filtered_nodes] for name, nodes in self.nodes.items()}
         self.uses_edges = {
@@ -269,21 +273,25 @@ class CallGraphVisitor(ast.NodeVisitor):
         return self
 
     def get_related_nodes(
-        self, node: None | Node = None, namespace: str | None = None, max_iter: int = 1000
+        self, node: None | Node = None, namespace: str | None = None,
+        max_iter: int = 1000, direction: str = "both",
     ) -> set:
-        """
-        get nodes that related to `node` or are in `namespace`
+        """Get nodes related to `node` or in `namespace`.
 
         Args:
-            node: pyan node for which related nodes should be found, if none, filter only for namespace
-            namespace: namespace to search in (name of top level module),
-                if None, determines namespace from `node`
-            max_iter: maximum number of iterations and nodes to iterate
+            node: starting node. If None, filter only by namespace.
+            namespace: namespace to search in. If None, determined from `node`.
+            max_iter: maximum BFS iterations.
+            direction: ``"both"`` (follow edges in both directions),
+                ``"down"`` (forward edges only — callees/children),
+                ``"up"`` (reverse edges only — callers/parents).
 
         Returns:
-            set: set of nodes related to `node` including `node` itself
+            Set of related nodes including `node` itself.
         """
-        # check if searching through all nodes is necessary
+        if direction not in ("both", "down", "up"):
+            raise ValueError(f"direction must be 'both', 'down', or 'up'; got {direction!r}")
+
         if node is None:
             queue = []
             if namespace is None:
@@ -295,16 +303,30 @@ class CallGraphVisitor(ast.NodeVisitor):
                     for n in items
                     if n.namespace is not None and namespace in n.namespace
                 }
-
         else:
             new_nodes = set()
             if namespace is None:
                 namespace = node.namespace.strip(".").split(".", 1)[0]
             queue = [node]
 
-        # use queue system to search through nodes
-        # essentially add a node to the queue and then search all connected nodes which are in turn added to the queue
-        # until the queue itself is empty or the maximum limit of max_iter searches have been hit
+        # Build reverse-edge indices for upward traversal.
+        follow_up = direction in ("both", "up")
+        if follow_up:
+            rev_uses = {}  # target → set of sources
+            for src, targets in self.uses_edges.items():
+                for tgt in targets:
+                    rev_uses.setdefault(tgt, set()).add(src)
+            rev_defines = {}
+            for src, targets in self.defines_edges.items():
+                for tgt in targets:
+                    rev_defines.setdefault(tgt, set()).add(src)
+
+        follow_down = direction in ("both", "down")
+
+        def in_namespace(n):
+            return n.namespace is not None and namespace in n.namespace
+
+        # BFS: follow edges in the requested direction(s).
         i = max_iter
         while len(queue) > 0:
             item = queue.pop()
@@ -313,20 +335,24 @@ class CallGraphVisitor(ast.NodeVisitor):
                 i -= 1
                 if i < 0:
                     break
-                queue.extend(
-                    [
-                        n
-                        for n in self.uses_edges.get(item, [])
-                        if n in self.uses_edges and n not in new_nodes and namespace in n.namespace
-                    ]
-                )
-                queue.extend(
-                    [
-                        n
-                        for n in self.defines_edges.get(item, [])
-                        if n in self.defines_edges and n not in new_nodes and namespace in n.namespace
-                    ]
-                )
+                if follow_down:
+                    queue.extend(
+                        n for n in self.uses_edges.get(item, [])
+                        if n not in new_nodes and in_namespace(n)
+                    )
+                    queue.extend(
+                        n for n in self.defines_edges.get(item, [])
+                        if n not in new_nodes and in_namespace(n)
+                    )
+                if follow_up:
+                    queue.extend(
+                        n for n in rev_uses.get(item, [])
+                        if n not in new_nodes and in_namespace(n)
+                    )
+                    queue.extend(
+                        n for n in rev_defines.get(item, [])
+                        if n not in new_nodes and in_namespace(n)
+                    )
 
         return new_nodes
 

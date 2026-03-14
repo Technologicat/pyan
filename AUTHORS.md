@@ -26,6 +26,8 @@ Deterministic edge ordering fix by [Aurélien Grosdidier](https://github.com/aur
 
 `get_module_name` bug report (`.py` in directory names) and `resolve_imports` KeyError fix by [CannedFish](https://github.com/CannedFish).
 
+Directional graph filtering idea (`--direction up/down`) by [anetczuk](https://github.com/anetczuk).
+
 Further contributions by Ioannis Filippidis, Jan Malek, José Eduardo Montenegro Cavalcanti de Oliveira, Mantas Zimnickas, Sam Basak, Brady Deetz, and GitHub user dmfreemon.
 
 2026 revival, modernization for Python 3.10–3.14, module-level dependency analysis, and comprehensive test suite by Juha Jeronen, with [Claude](https://claude.ai/) (Anthropic) as AI pair programmer.

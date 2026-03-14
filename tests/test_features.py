@@ -336,3 +336,57 @@ def test_type_alias_in_function(v312):
     """Type alias inside a function creates a defines edge under the function."""
     defines = get_in_dict(v312.defines_edges, f"{PREFIX_312}.make_alias")
     get_node(defines, f"{PREFIX_312}.make_alias.LocalAlias")
+
+
+# --- Directional filtering (#95) ---
+
+@pytest.fixture
+def v_multi():
+    """Analyzer over the full test_code package (cross-module calls)."""
+    from glob import glob
+    filenames = glob(os.path.join(TESTS_DIR, "test_code/**/*.py"), recursive=True)
+    return CallGraphVisitor(filenames, logger=logging.getLogger())
+
+
+CALLER = "test_code.submodule2.test_2"        # calls test_func1
+CALLEE = "test_code.submodule1.test_func1"     # called by test_2
+
+
+def test_direction_down_finds_callees(v_multi):
+    """direction='down' from test_2 should include test_func1 (a callee)."""
+    node = v_multi.get_node("test_code.submodule2", "test_2")
+    related = v_multi.get_related_nodes(node, direction="down")
+    names = {n.get_name() for n in related}
+    assert CALLEE in names
+
+
+def test_direction_down_excludes_callers(v_multi):
+    """direction='down' from test_func1 should NOT include test_2 (a caller)."""
+    node = v_multi.get_node("test_code.submodule1", "test_func1")
+    related = v_multi.get_related_nodes(node, direction="down")
+    names = {n.get_name() for n in related}
+    assert CALLER not in names
+
+
+def test_direction_up_finds_callers(v_multi):
+    """direction='up' from test_func1 should include test_2 (a caller)."""
+    node = v_multi.get_node("test_code.submodule1", "test_func1")
+    related = v_multi.get_related_nodes(node, direction="up")
+    names = {n.get_name() for n in related}
+    assert CALLER in names
+
+
+def test_direction_up_excludes_callees(v_multi):
+    """direction='up' from test_2 should NOT include test_func1 (a callee)."""
+    node = v_multi.get_node("test_code.submodule2", "test_2")
+    related = v_multi.get_related_nodes(node, direction="up")
+    names = {n.get_name() for n in related}
+    assert CALLEE not in names
+
+
+def test_direction_both_finds_both(v_multi):
+    """direction='both' from test_2 should include both callers and callees."""
+    node = v_multi.get_node("test_code.submodule2", "test_2")
+    related = v_multi.get_related_nodes(node, direction="both")
+    names = {n.get_name() for n in related}
+    assert CALLEE in names

@@ -39,6 +39,11 @@
   `sfdp`, `twopi`, `circo`).  Available in both call-graph and
   module-level modes, and from the Python APIs.  (PR #74 — thanks
   @maciejczyzewski)
+- **`--direction`** — control graph filter traversal: ``down`` (callees
+  only), ``up`` (callers only), or ``both`` (default).  Requires
+  ``--function`` or ``--namespace``.  Also available as a ``direction``
+  parameter in the ``create_callgraph()`` API.  (PR #95 — thanks
+  @anetczuk for the original idea)
 
 
 ## 2.1.0 (2026-03-10)

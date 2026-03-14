@@ -23,7 +23,7 @@ from .writers import DotWriter, HTMLWriter, SVGWriter, TextWriter, TgfWriter, Ye
 
 
 def _build_graph(filenames, root=None, function=None, namespace=None,
-                 max_iter=1000, logger=None, graph_options=None):
+                 max_iter=1000, direction="both", logger=None, graph_options=None):
     """Analyze source files, optionally filter, and build a VisualGraph.
 
     Shared core of ``create_callgraph()`` and ``main()``.
@@ -36,7 +36,7 @@ def _build_graph(filenames, root=None, function=None, namespace=None,
             node = v.get_node(function_namespace, function_name)
         else:
             node = None
-        v.filter(node=node, namespace=namespace, max_iter=max_iter)
+        v.filter(node=node, namespace=namespace, max_iter=max_iter, direction=direction)
     return VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 
 
@@ -57,6 +57,7 @@ def create_callgraph(
     annotated: bool = False,
     grouped: bool = True,
     max_iter: int = 1000,
+    direction: str = "both",
     logger=None,
 ) -> str:
     """Create a call graph based on static code analysis.
@@ -105,6 +106,9 @@ def create_callgraph(
         grouped: group nodes into subgraph clusters by namespace.
             [dot only]
         max_iter: maximum iterations for the graph filter. Defaults to 1000.
+        direction: traversal direction when filtering by ``function`` or
+            ``namespace`` — ``"both"`` (default), ``"down"`` (callees only),
+            or ``"up"`` (callers only).
         logger: optional ``logging.Logger`` instance.
 
     Returns:
@@ -128,6 +132,7 @@ def create_callgraph(
 
     graph = _build_graph(filenames, root=root, function=function,
                          namespace=namespace, max_iter=max_iter,
+                         direction=direction,
                          logger=logger, graph_options=graph_options)
 
     stream = io.StringIO()
@@ -199,6 +204,17 @@ def main(cli_args=None):
     parser.add_argument("--namespace", dest="namespace", help="filter for NAMESPACE", metavar="NAMESPACE", default=None)
 
     parser.add_argument("--function", dest="function", help="filter for FUNCTION", metavar="FUNCTION", default=None)
+
+    parser.add_argument(
+        "--direction",
+        default="both",
+        dest="direction",
+        choices=["both", "down", "up"],
+        help=(
+            "filter traversal direction (requires --function or --namespace). "
+            "'down' = callees only, 'up' = callers only, 'both' = default"
+        ),
+    )
 
     parser.add_argument("-l", "--log", dest="logname", help="write log to LOG", metavar="LOG")
 
@@ -389,8 +405,9 @@ def main(cli_args=None):
         root = os.path.abspath(root)
 
     graph = _build_graph(filenames, root=root, function=known_args.function,
-                         namespace=known_args.namespace, logger=logger,
-                         graph_options=graph_options)
+                         namespace=known_args.namespace,
+                         direction=known_args.direction,
+                         logger=logger, graph_options=graph_options)
 
     writer = None
     dot_options = [
