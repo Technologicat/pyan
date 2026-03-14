@@ -44,6 +44,12 @@
   ``--function`` or ``--namespace``.  Also available as a ``direction``
   parameter in the ``create_callgraph()`` API.  (PR #95 — thanks
   @anetczuk for the original idea)
+- **`__init__` modules omitted by default in modvis** — reduces clutter
+  in module dependency graphs.  Use ``--init`` (CLI) or
+  ``with_init=True`` (API) to include them.  (#20)
+- **Directory input** — passing a directory path as a positional argument
+  now auto-globs ``**/*.py``.  Works in both call-graph and module-level
+  modes, CLI and API.  (#66)
 
 ### Housekeeping
 
