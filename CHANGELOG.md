@@ -45,6 +45,12 @@
   parameter in the ``create_callgraph()`` API.  (PR #95 — thanks
   @anetczuk for the original idea)
 
+### Housekeeping
+
+- CI linter migrated from flake8 to ruff.
+- Converted %-formatting and `.format()` to f-strings throughout.
+- Resolved all ruff lint warnings.
+
 
 ## 2.1.0 (2026-03-10)
 
