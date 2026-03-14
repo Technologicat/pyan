@@ -134,8 +134,6 @@ ignore = [
     "C406",  # unnecessary list literal
     "F401",  # unused imports (too noisy for legacy code)
     "UP009", # UTF-8 encoding declaration is unnecessary (keeping for compat)
-    "UP031", # %-formatting (style choice; consistent with other projects)
-    "UP032", # .format() (same rationale as UP031)
 ]
 
 [tool.ruff.lint.isort]

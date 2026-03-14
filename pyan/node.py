@@ -11,7 +11,7 @@ def make_safe_label(label):
     unsafe_words = ("digraph", "graph", "cluster", "subgraph", "node")
     out = label
     for word in unsafe_words:
-        out = out.replace(word, "%sX" % word)
+        out = out.replace(word, f"{word}X")
     return out.replace(".", "__").replace("*", "")
 
 
@@ -112,7 +112,7 @@ class Node:
             return "*." + self.name
         else:
             if self.get_level() >= 1 and self.ast_node is not None:
-                return "%s\\n(%s:%d)" % (self.name, self.filename, self.ast_node.lineno)
+                return f"{self.name}\\n({self.filename}:{self.ast_node.lineno})"
             else:
                 return self.name
 
@@ -124,15 +124,9 @@ class Node:
         else:
             if self.get_level() >= 1:
                 if self.ast_node is not None:
-                    return "%s\\n\\n(%s:%d,\\n%s in %s)" % (
-                        self.name,
-                        self.filename,
-                        self.ast_node.lineno,
-                        repr(self.flavor),
-                        self.namespace,
-                    )
+                    return f"{self.name}\\n\\n({self.filename}:{self.ast_node.lineno},\\n{self.flavor!r} in {self.namespace})"
                 else:
-                    return "%s\\n\\n(%s in %s)" % (self.name, repr(self.flavor), self.namespace)
+                    return f"{self.name}\\n\\n({repr(self.flavor)} in {self.namespace})"
             else:
                 return self.name
 
@@ -186,4 +180,4 @@ class Node:
         return make_safe_label(self.namespace)
 
     def __repr__(self):
-        return "<Node %s:%s>" % (repr(self.flavor), self.get_name())
+        return f"<Node {repr(self.flavor)}:{self.get_name()}>"

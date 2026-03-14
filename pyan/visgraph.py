@@ -37,7 +37,7 @@ class Colorizer:
 
     def _node_to_idx(self, node):
         ns = node.filename
-        self.logger.info("Coloring %s from file '%s'" % (node.get_short_name(), ns))
+        self.logger.info(f"Coloring {node.get_short_name()} from file '{ns}'")
         if ns not in self._idx_of:
             self._idx_of[ns] = self._next_idx()
         return self._idx_of[ns]
@@ -66,10 +66,10 @@ class Colorizer:
     def htmlize_rgb(R, G, B, A=None):
         if A is not None:
             R, G, B, A = [int(255.0 * x) for x in (R, G, B, A)]
-            return "#%02x%02x%02x%02x" % (R, G, B, A)
+            return f"#{R:02x}{G:02x}{B:02x}{A:02x}"
         else:
             R, G, B = [int(255.0 * x) for x in (R, G, B)]
-            return "#%02x%02x%02x" % (R, G, B)
+            return f"#{R:02x}{G:02x}{B:02x}"
 
 
 class VisualNode:
@@ -176,7 +176,7 @@ class VisualGraph:
         namespace_stack = []
         prev_namespace = ""  # The namespace '' is first in visited_nodes.
         for node in visited_nodes:
-            logger.info("Looking at %s" % node.name)
+            logger.info(f"Looking at {node.name}")
 
             # Create the node itself and add it to nodes_dict
             idx, fill_RGBA, text_RGB = colorizer.make_colors(node)
@@ -193,9 +193,9 @@ class VisualGraph:
             # next namespace?
             if grouped and node.namespace != prev_namespace:
                 if not prev_namespace:
-                    logger.info("New namespace %s" % (node.namespace))
+                    logger.info(f"New namespace {node.namespace}")
                 else:
-                    logger.info("New namespace %s, old was %s" % (node.namespace, prev_namespace))
+                    logger.info(f"New namespace {node.namespace}, old was {prev_namespace}")
                 prev_namespace = node.namespace
 
                 label = node.get_namespace_label()

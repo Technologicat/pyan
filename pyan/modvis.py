@@ -51,10 +51,10 @@ def filename_to_module_name(fullpath, root=None):  # Not anutils.get_module_name
             the project root).
     """
     if not fullpath.endswith(".py"):
-        raise ValueError("Expected a .py filename, got '{}'".format(fullpath))
+        raise ValueError(f"Expected a .py filename, got '{fullpath}'")
     if root is not None:
         fullpath = os.path.relpath(os.path.abspath(fullpath), os.path.abspath(root))
-    rel = ".{}".format(os.path.sep)  # ./
+    rel = f".{os.path.sep}"  # ./
     if fullpath.startswith(rel):
         fullpath = fullpath[len(rel) :]
     fullpath = fullpath[:-3]  # remove .py
@@ -104,12 +104,12 @@ def resolve(*, current, target, level):
         https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time
     """
     if level < 0:
-        raise ValueError("Relative import level must be >= 0, got {}".format(level))
+        raise ValueError(f"Relative import level must be >= 0, got {level}")
     if level == 0:  # absolute import
         return target
     # level > 0
     if level > current.count(".") + 1:  # foo.bar.baz -> max level 3, pointing to top level
-        raise ValueError("Relative import level {} too large for module name {}".format(level, current))
+        raise ValueError(f"Relative import level {level} too large for module name {current}")
     base = current
     for _ in range(level):
         k = base.rfind(".")
@@ -161,11 +161,11 @@ class ImportVisitor(ast.NodeVisitor):
             possible_init = base + ".__init__"
             if possible_init != m:  # will happen when current_module is somepackage.__init__ itself
                 self.modules[m].add(possible_init)
-                self.logger.debug("    added possible implicit use of '{}'".format(possible_init))
+                self.logger.debug(f"    added possible implicit use of '{possible_init}'")
 
     def visit_Import(self, node):
         self.logger.debug(
-            "{}:{}: Import {}".format(self.current_module, node.lineno, [alias.name for alias in node.names])
+            f"{self.current_module}:{node.lineno}: Import {[alias.name for alias in node.names]}"
         )
         for alias in node.names:
             self.add_dependency(alias.name)  # alias.asname not relevant for our purposes
@@ -174,13 +174,11 @@ class ImportVisitor(ast.NodeVisitor):
         # from foo import bar — bar could be a symbol or a submodule.
         if node.module:
             self.logger.debug(
-                "{}:{}: ImportFrom '{}', relative import level {}".format(
-                    self.current_module, node.lineno, node.module, node.level
-                )
+                f"{self.current_module}:{node.lineno}: ImportFrom '{node.module}', relative import level {node.level}"
             )
             absname = resolve(current=self.current_module, target=node.module, level=node.level)
             if node.level > 0:
-                self.logger.debug("    resolved relative import to '{}'".format(absname))
+                self.logger.debug(f"    resolved relative import to '{absname}'")
             self.add_dependency(absname)
 
             # Each imported name might be a submodule (e.g. `from pkg import mod`
@@ -191,7 +189,7 @@ class ImportVisitor(ast.NodeVisitor):
             # don't match a real module are silently ignored. This is the same
             # pattern add_dependency() already uses for __init__ speculation.
             for alias in node.names:
-                self.add_dependency("{}.{}".format(absname, alias.name))
+                self.add_dependency(f"{absname}.{alias.name}")
 
         # from . import foo  -->  module = None; now the **names** refer to modules
         else:
@@ -203,7 +201,7 @@ class ImportVisitor(ast.NodeVisitor):
                 )
                 absname = resolve(current=self.current_module, target=alias.name, level=node.level)
                 if node.level > 0:
-                    self.logger.debug("    resolved relative import to '{}'".format(absname))
+                    self.logger.debug(f"    resolved relative import to '{absname}'")
                 self.add_dependency(absname)
 
     # --------------------------------------------------------------------------------
@@ -539,7 +537,7 @@ def main(cli_args=None):
             unique_cycles = set()
             for _prefix, cycle in cycles:
                 unique_cycles.add(tuple(cycle))
-            print("Detected the following import cycles (n_results={}).".format(len(unique_cycles)))
+            print(f"Detected the following import cycles (n_results={len(unique_cycles)}).")
 
             def stats():
                 lengths = [len(x) - 1 for x in unique_cycles]  # number of modules in the cycle
@@ -561,7 +559,7 @@ def main(cli_args=None):
                 "Number of modules in a cycle: min = {}, average = {:0.2g}, median = {:0.2g}, max = {}".format(*stats())
             )
             for c in sorted(unique_cycles):
-                print("    {}".format(c))
+                print(f"    {c}")
 
     # Postprocessing: format graph report
     make_graph = (known_args.dot or known_args.svg or known_args.html

@@ -59,19 +59,19 @@ def get_module_name(filename, root: str = None):
 def format_alias(x):
     """Return human-readable description of an ast.alias (used in Import and ImportFrom nodes)."""
     if not isinstance(x, ast.alias):
-        raise TypeError("Can only format an ast.alias; got %s" % type(x))
+        raise TypeError(f"Can only format an ast.alias; got {type(x)}")
 
     if x.asname is not None:
-        return "%s as %s" % (x.name, x.asname)
+        return f"{x.name} as {x.asname}"
     else:
-        return "%s" % (x.name)
+        return f"{x.name}"
 
 
 def get_ast_node_name(x):
     """Return human-readable name of ast.Attribute or ast.Name. Pass through anything else."""
     if isinstance(x, ast.Attribute):
         # x.value might also be an ast.Attribute (think "x.y.z")
-        return "%s.%s" % (get_ast_node_name(x.value), x.attr)
+        return f"{get_ast_node_name(x.value)}.{x.attr}"
     elif isinstance(x, ast.Name):
         return x.id
     else:
@@ -116,7 +116,7 @@ def resolve_method_resolution_order(class_base_nodes, logger):
                 break
         else:  # no break only if there are cyclic dependencies.
             raise LinearizationImpossible(
-                "MRO linearization impossible; cyclic dependency detected. heads: %s, tails: %s" % (heads, tails)
+                f"MRO linearization impossible; cyclic dependency detected. heads: {heads}, tails: {tails}"
             )
         return hd
 
@@ -129,14 +129,14 @@ def resolve_method_resolution_order(class_base_nodes, logger):
     def C3_merge(lists):
         out = []
         while True:
-            logger.debug("MRO: C3 merge: out: %s, lists: %s" % (out, lists))
+            logger.debug(f"MRO: C3 merge: out: {out}, lists: {lists}")
             heads = [head(lst) for lst in lists if head(lst) is not None]
             if not len(heads):
                 break
             tails = [tail(lst) for lst in lists]
-            logger.debug("MRO: C3 merge: heads: %s, tails: %s" % (heads, tails))
+            logger.debug(f"MRO: C3 merge: heads: {heads}, tails: {tails}")
             hd = C3_find_good_head(heads, tails)
-            logger.debug("MRO: C3 merge: chose head %s" % (hd))
+            logger.debug(f"MRO: C3 merge: chose head {hd}")
             out.append(hd)
             lists = remove_all_in(hd, lists)
         return out
@@ -146,7 +146,7 @@ def resolve_method_resolution_order(class_base_nodes, logger):
         memo = {}  # caching/memoization
 
         def C3_linearize(node):
-            logger.debug("MRO: C3 linearizing %s" % (node))
+            logger.debug(f"MRO: C3 linearizing {node}")
             seen.add(node)
             if node not in memo:
                 #  unknown class                     or no ancestors
@@ -159,15 +159,15 @@ def resolve_method_resolution_order(class_base_nodes, logger):
                         if baseclass_node not in seen:
                             lists.append(C3_linearize(baseclass_node))
                     # ...and the parents themselves (in the order they appear in the ClassDef)
-                    logger.debug("MRO: parents of %s: %s" % (node, class_base_nodes[node]))
+                    logger.debug(f"MRO: parents of {node}: {class_base_nodes[node]}")
                     lists.append(class_base_nodes[node])
-                    logger.debug("MRO: C3 merging %s" % (lists))
+                    logger.debug(f"MRO: C3 merging {lists}")
                     memo[node] = [node] + C3_merge(lists)
-            logger.debug("MRO: C3 linearized %s, result %s" % (node, memo[node]))
+            logger.debug(f"MRO: C3 linearized {node}, result {memo[node]}")
             return memo[node]
 
         for node in class_base_nodes:
-            logger.debug("MRO: analyzing class %s" % (node))
+            logger.debug(f"MRO: analyzing class {node}")
             seen = set()  # break cycles (separately for each class we start from)
             mro[node] = C3_linearize(node)
     except LinearizationImpossible as e:
@@ -194,7 +194,7 @@ def resolve_method_resolution_order(class_base_nodes, logger):
 
         mro = {}
         for node in class_base_nodes:
-            logger.debug("MRO: generic fallback: analyzing class %s" % (node))
+            logger.debug(f"MRO: generic fallback: analyzing class {node}")
             seen = set()  # break cycles (separately for each class we start from)
             mro[node] = lookup_bases_recursive(node)
 
@@ -241,7 +241,7 @@ class Scope:
         return sc
 
     def __repr__(self):
-        return "<Scope: %s %s>" % (self.type, self.name)
+        return f"<Scope: {self.type} {self.name}>"
 
 
 # A context manager, sort of a friend of CallGraphVisitor (depends on implementation details)
@@ -284,7 +284,7 @@ class ExecuteInInnerScope:
         inner_ns = analyzer.get_node_of_current_namespace().get_name()
         if inner_ns not in analyzer.scopes:
             analyzer.name_stack.pop()
-            raise ValueError("Unknown scope '%s'" % (inner_ns))
+            raise ValueError(f"Unknown scope '{inner_ns}'")
         analyzer.scope_stack.append(analyzer.scopes[inner_ns])
         analyzer.context_stack.append(scopename)
 
@@ -312,5 +312,5 @@ class ExecuteInInnerScope:
         ns = from_node.get_name()
         to_node = analyzer.get_node(ns, scopename, None, flavor=Flavor.NAMESPACE)
         if analyzer.add_defines_edge(from_node, to_node):
-            analyzer.logger.info("Def from %s to %s %s" % (from_node, scopename, to_node))
+            analyzer.logger.info(f"Def from {from_node} to {scopename} {to_node}")
         self.inner_scope_node = to_node  # Available to callers via `with ... as scope_ctx:`.

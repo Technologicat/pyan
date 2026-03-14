@@ -33,7 +33,7 @@ class Writer:
         self.outstream.write(self.tabstop * self.indent_level + line + "\n")
 
     def run(self):
-        self.log("%s running" % type(self))
+        self.log(f"{type(self)} running")
         try:
             if isinstance(self.output, io.StringIO):  # write to stream
                 self.outstream = self.output
@@ -94,7 +94,7 @@ class TgfWriter(Writer):
         self.id_map = {}
 
     def write_node(self, node):
-        self.write("%d %s" % (self.i, node.label))
+        self.write(f"{self.i} {node.label}")
         self.id_map[node] = self.i
         self.i += 1
 
@@ -103,7 +103,7 @@ class TgfWriter(Writer):
 
     def write_edge(self, edge):
         flavor = "U" if edge.flavor == "uses" else "D"
-        self.write("%s %s %s" % (self.id_map[edge.source], self.id_map[edge.target], flavor))
+        self.write(f"{self.id_map[edge.source]} {self.id_map[edge.target]} {flavor}")
 
 
 class TextWriter(Writer):
@@ -113,7 +113,7 @@ class TextWriter(Writer):
     tagged ``[D]`` for defines or ``[U]`` for uses.
     """
     def run(self):
-        self.log("%s running" % type(self))
+        self.log(f"{type(self)} running")
         try:
             if isinstance(self.output, io.StringIO):
                 self.outstream = self.output
@@ -133,7 +133,7 @@ class TextWriter(Writer):
         for src in sorted(adj):
             self.outstream.write(src + "\n")
             for tag, tgt in sorted(adj[src]):
-                self.outstream.write("    [%s] %s\n" % (tag, tgt))
+                self.outstream.write(f"    [{tag}] {tgt}\n")
 
         if self.output and not isinstance(self.output, io.StringIO):
             self.outstream.close()
@@ -154,17 +154,17 @@ class DotWriter(Writer):
         self.indent()
 
     def start_subgraph(self, graph):
-        self.log("Start subgraph %s" % graph.label)
+        self.log(f"Start subgraph {graph.label}")
         # Name must begin with "cluster" to be recognized as a cluster by GraphViz.
-        self.write("subgraph %s {\n" % self._dot_id("cluster_" + graph.id))
+        self.write("subgraph {} {{\n".format(self._dot_id("cluster_" + graph.id)))
         self.indent()
 
         # translucent gray (no hue to avoid visual confusion with any
         # group of colored nodes)
-        self.write('graph [style="filled,rounded", fillcolor="#80808018", label="%s"];' % graph.label)
+        self.write(f'graph [style="filled,rounded", fillcolor="#80808018", label="{graph.label}"];')
 
     def finish_subgraph(self, graph):
-        self.log("Finish subgraph %s" % graph.label)
+        self.log(f"Finish subgraph {graph.label}")
         # terminate previous subgraph
         self.dedent()
         self.write("}")
@@ -172,13 +172,13 @@ class DotWriter(Writer):
     @staticmethod
     def _dot_id(identifier):
         """Quote a DOT identifier so that special characters (dashes, etc.) are safe."""
-        return '"%s"' % identifier.replace("\\", "\\\\").replace('"', '\\"')
+        return '"{}"'.format(identifier.replace("\\", "\\\\").replace('"', '\\"'))
 
     def write_node(self, node):
-        self.log("Write node %s" % node.label)
+        self.log(f"Write node {node.label}")
         self.write(
-            '%s [label="%s", style="filled", fillcolor="%s",'
-            ' fontcolor="%s", group="%s"];' % (self._dot_id(node.id), node.label, node.fill_color, node.text_color, node.group)
+            f'{self._dot_id(node.id)} [label="{node.label}", style="filled", fillcolor="{node.fill_color}",'
+            f' fontcolor="{node.text_color}", group="{node.group}"];'
         )
 
     def write_edge(self, edge):
@@ -186,9 +186,9 @@ class DotWriter(Writer):
         target = edge.target
         color = edge.color
         if edge.flavor == "defines":
-            self.write('    %s -> %s [style="dashed",  color="%s"];' % (self._dot_id(source.id), self._dot_id(target.id), color))
+            self.write(f'    {self._dot_id(source.id)} -> {self._dot_id(target.id)} [style="dashed",  color="{color}"];')
         else:  # edge.flavor == 'uses':
-            self.write('    %s -> %s [style="solid",  color="%s"];' % (self._dot_id(source.id), self._dot_id(target.id), color))
+            self.write(f'    {self._dot_id(source.id)} -> {self._dot_id(target.id)} [style="solid",  color="{color}"];')
 
     def finish_graph(self):
         self.write("}")  # terminate "digraph G {"
@@ -197,7 +197,7 @@ class DotWriter(Writer):
 class SVGWriter(DotWriter):
     def run(self):
         # write dot file
-        self.log("%s running" % type(self))
+        self.log(f"{type(self)} running")
         self.outstream = io.StringIO()
         self.start_graph()
         self.write_subgraph(self.graph)
@@ -274,9 +274,9 @@ class YedWriter(Writer):
         self.indent()
 
     def start_subgraph(self, graph):
-        self.log("Start subgraph %s" % graph.label)
+        self.log(f"Start subgraph {graph.label}")
 
-        self.write('<node id="%s:" yfiles.foldertype="group">' % graph.id)
+        self.write(f'<node id="{graph.id}:" yfiles.foldertype="group">')
         self.indent()
         self.write('<data key="d0">')
         self.indent()
@@ -288,7 +288,7 @@ class YedWriter(Writer):
         self.indent()
         self.write('<y:Fill color="#CCCCCC" transparent="false"/>')
         self.write(
-            '<y:NodeLabel modelName="internal" modelPosition="t" alignment="right">%s</y:NodeLabel>' % graph.label
+            f'<y:NodeLabel modelName="internal" modelPosition="t" alignment="right">{graph.label}</y:NodeLabel>'
         )
         self.write('<y:Shape type="roundrectangle"/>')
         self.dedent()
@@ -299,29 +299,29 @@ class YedWriter(Writer):
         self.write("</y:ProxyAutoBoundsNode>")
         self.dedent()
         self.write("</data>")
-        self.write('<graph edgedefault="directed" id="%s::">' % graph.id)
+        self.write(f'<graph edgedefault="directed" id="{graph.id}::">')
         self.indent()
 
     def finish_subgraph(self, graph):
-        self.log("Finish subgraph %s" % graph.label)
+        self.log(f"Finish subgraph {graph.label}")
         self.dedent()
         self.write("</graph>")
         self.dedent()
         self.write("</node>")
 
     def write_node(self, node):
-        self.log("Write node %s" % node.label)
+        self.log(f"Write node {node.label}")
         width = 20 + 10 * len(node.label)
-        self.write('<node id="%s">' % node.id)
+        self.write(f'<node id="{node.id}">')
         self.indent()
         self.write('<data key="d0">')
         self.indent()
         self.write("<y:ShapeNode>")
         self.indent()
-        self.write('<y:Geometry height="%s" width="%s"/>' % ("30", width))
-        self.write('<y:Fill color="%s" transparent="false"/>' % node.fill_color)
+        self.write('<y:Geometry height="{}" width="{}"/>'.format("30", width))
+        self.write(f'<y:Fill color="{node.fill_color}" transparent="false"/>')
         self.write('<y:BorderStyle color="#000000" type="line" width="1.0"/>')
-        self.write("<y:NodeLabel>%s</y:NodeLabel>" % node.label)
+        self.write(f"<y:NodeLabel>{node.label}</y:NodeLabel>")
         self.write('<y:Shape type="ellipse"/>')
         self.dedent()
         self.write("</y:ShapeNode>")
@@ -334,16 +334,16 @@ class YedWriter(Writer):
         self.edge_id += 1
         source = edge.source
         target = edge.target
-        self.write('<edge id="%s" source="%s" target="%s">' % (self.edge_id, source.id, target.id))
+        self.write(f'<edge id="{self.edge_id}" source="{source.id}" target="{target.id}">')
         self.indent()
         self.write('<data key="d1">')
         self.indent()
         self.write("<y:PolyLineEdge>")
         self.indent()
         if edge.flavor == "defines":
-            self.write('<y:LineStyle color="%s" type="dashed" width="1.0"/>' % edge.color)
+            self.write(f'<y:LineStyle color="{edge.color}" type="dashed" width="1.0"/>')
         else:
-            self.write('<y:LineStyle color="%s" type="line" width="1.0"/>' % edge.color)
+            self.write(f'<y:LineStyle color="{edge.color}" type="line" width="1.0"/>')
         self.write('<y:Arrows source="none" target="standard"/>')
         self.write('<y:BendStyle smoothed="true"/>')
         self.dedent()

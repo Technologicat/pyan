@@ -352,7 +352,7 @@ def main(cli_args=None):
     if len(unknown_args) == 0:
         parser.error("Need one or more filenames to process")
     elif len(filenames) == 0:
-        parser.error("No files found matching given glob: %s" % " ".join(unknown_args))
+        parser.error("No files found matching given glob: {}".format(" ".join(unknown_args)))
 
     if known_args.nested_groups:
         known_args.grouped = True

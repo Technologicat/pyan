@@ -1,0 +1,28 @@
+mika@MikanUbuntu:~/Git/pyan$ ./pyan.py pyan_err.py -V >out.dot
+========== pass 1, file 'pyan_err.py' ==========
+Scopes now: {'pyan_err': <Scope: module >}
+Module
+Traceback (most recent call last):
+  File "./pyan.py", line 11, in <module>
+    sys.exit(main())
+  File "/home/mika/Git/pyan/pyan/main.py", line 109, in main
+    v = CallGraphVisitor(filenames, logger)
+  File "/home/mika/Git/pyan/pyan/analyzer.py", line 77, in __init__
+    self.process()
+  File "/home/mika/Git/pyan/pyan/analyzer.py", line 84, in process
+    self.process_one(filename)
+  File "/home/mika/Git/pyan/pyan/analyzer.py", line 98, in process_one
+    self.visit(ast.parse(content, filename))
+  File "/usr/lib/python3.6/ast.py", line 253, in visit
+    return visitor(node)
+  File "/home/mika/Git/pyan/pyan/analyzer.py", line 175, in visit_Module
+    self.generic_visit(node)  # visit the **children** of node
+  File "/usr/lib/python3.6/ast.py", line 261, in generic_visit
+    self.visit(item)
+  File "/usr/lib/python3.6/ast.py", line 253, in visit
+    return visitor(node)
+  File "/home/mika/Git/pyan/pyan/analyzer.py", line 539, in visit_AnnAssign
+    self.visit_Assign(self, node)  # TODO: alias for now; add the annotations to output in a future version?
+TypeError: visit_Assign() takes 2 positional arguments but 3 were given
+mika@MikanUbuntu:~/Git/pyan$ 
+
