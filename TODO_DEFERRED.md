@@ -24,7 +24,7 @@ Items with GitHub ticket numbers are tracked externally. The rest are internal n
 - **D28: Per-namespace `resolve_imports`**: Global IMPORTEDITEM remapping can leak function-level imports to siblings. Partially mitigated by `_has_import_to()` in `expand_unknowns`.
 - **D29: Document the visitor-to-visgraph protocol**: `VisualGraph.from_visitor` expects an implicit protocol (`nodes`, `uses_edges`, `defines_edges`). Should be documented or formalized.
 
-- **D30: README update for 2.2.0**: Update CLI examples and Python API examples in README to showcase new features: `--depth`, `--direction`, `--concentrate`, `--paths-from`/`--paths-to`, `--dot-ranksep`, `--graphviz-layout`, `--init`, directory input. Also update the feature list.
+- **D30: README update for 2.2.0**: ✓ Done. Updated CLI examples, Python API examples, feature list, dev setup, and install sections for all 2.2.0 features. Removed dead links to nonexistent CONTRIBUTING.md and ROADMAP.md.
 - **D31: Test suite organization**: Tests are spread across few modules (`test_features.py`, `test_regressions.py`, `test_modvis.py`, `test_writers.py`, `test_analyzer.py`, `test_sphinx.py`, `test_coverage.py`). Consider reorganizing by concern — e.g. separate CLI tests from unit tests, group by module under test.
 - **D32: Analyzer module split**: `analyzer.py` is ~1750 lines. Consider splitting into submodules (e.g. visitors, postprocessing, scope handling) without changing the public API.
 

@@ -31,7 +31,8 @@ Pyan3 is back in development. The analyzer has been modernized and tested on **P
 
 - Full support for Python 3.10–3.14 syntax
 - Module-level import dependency analysis (`--module-level` flag and `create_modulegraph()` API), with import cycle detection
-- Comprehensive test suite (80+ tests)
+- Graph depth control (`--depth`), directional filtering (`--direction`), call path listing (`--paths-from`/`--paths-to`)
+- Comprehensive test suite (200+ tests, 91% branch coverage)
 - Modernized build system and dependencies
 
 This revival was carried out by [Technologicat](https://github.com/Technologicat) with [Claude](https://claude.ai/) (Anthropic) as AI pair programmer. See [AUTHORS.md](AUTHORS.md) for the full contributor history.
@@ -46,6 +47,10 @@ This revival was carried out by [Technologicat](https://github.com/Technologicat
 - [Overview](#overview)
 - [Usage](#usage)
     - [CLI usage](#cli-usage)
+        - [Graph depth control](#graph-depth-control)
+        - [Filtering](#filtering)
+        - [Call path listing](#call-path-listing)
+        - [GraphViz layout options](#graphviz-layout-options)
     - [Python API](#python-api)
     - [Troubleshooting](#troubleshooting)
         - [GraphViz trouble in init_rank](#graphviz-trouble-in-init_rank)
@@ -92,25 +97,65 @@ Both CLI and Python API modes are available.
 
 See `pyan3 --help`.
 
-Example:
+Basic examples:
 
-`pyan3 *.py --uses --no-defines --colored --grouped --annotated --dot >myuses.dot`
+```bash
+# Generate DOT, then render with GraphViz
+pyan3 *.py --uses --no-defines --colored --grouped --annotated --dot >myuses.dot
+dot -Tsvg myuses.dot >myuses.svg
 
-Then render using your favorite GraphViz filter, mainly `dot` or `fdp`:
+# Pass a directory — auto-globs **/*.py
+pyan3 src/ --dot --colored --grouped >project.dot
 
-`dot -Tsvg myuses.dot >myuses.svg`
+# Generate SVG / HTML directly
+pyan3 *.py --uses --no-defines --colored --grouped --annotated --svg >myuses.svg
+pyan3 *.py --uses --no-defines --colored --grouped --annotated --html >myuses.html
 
-Or use directly
+# Output plain text — especially useful for feeding call graph info to coding AI agents
+pyan3 src/ --uses --no-defines --text
+```
 
-`pyan3 *.py --uses --no-defines --colored --grouped --annotated --svg >myuses.svg`
+### Graph depth control
 
-You can also export as an interactive HTML
+Collapse the graph to a desired level of detail:
 
-`pyan3 *.py --uses --no-defines --colored --grouped --annotated --html > myuses.html`
+```bash
+pyan3 src/ --dot --depth 0      # modules only (call-graph view, not import deps)
+pyan3 src/ --dot --depth 1      # + classes and top-level functions
+pyan3 src/ --dot --depth 2      # + methods
+pyan3 src/ --dot --depth max    # full detail (default)
+```
 
-Or as a plain-text dependency list
+### Filtering
 
-`pyan3 *.py --uses --no-defines --text`
+Focus on a specific function or namespace:
+
+```bash
+pyan3 src/ --dot --function pkg.mod.MyClass.method
+pyan3 src/ --dot --namespace pkg.mod
+
+# Control traversal direction (requires --function or --namespace)
+pyan3 src/ --dot --function pkg.mod.func --direction down   # callees only (what does this function call?)
+pyan3 src/ --dot --function pkg.mod.func --direction up     # callers only (what calls this function?)
+```
+
+### Call path listing
+
+List all call paths between two functions:
+
+```bash
+pyan3 src/ --paths-from pkg.mod.caller --paths-to pkg.mod.target
+```
+
+Uses depth-first search (DFS); results are sorted shortest first among those found, capped by `--max-paths` (default 100).
+
+### GraphViz layout options
+
+```bash
+pyan3 src/ --dot --graphviz-layout fdp   # force-directed layout (also: neato, sfdp, twopi, circo)
+pyan3 src/ --dot --dot-ranksep 1.5       # increase rank separation (inches)
+pyan3 src/ --dot --concentrate           # merge bidirectional edges into double-headed arrows
+```
 
 
 ## Python API
@@ -120,13 +165,26 @@ import pyan
 
 # Generate a call graph as a DOT string
 dot_source = pyan.create_callgraph(
-    filenames="pkg/**/*.py",
-    format="dot",        # also: "svg", "html", "tgf", "yed", "text"
+    filenames="pkg/**/*.py",   # also accepts a directory path
+    format="dot",              # also: "svg", "html", "tgf", "yed", "text"
     colored=True,
     nested_groups=True,
     draw_defines=True,
     draw_uses=True,
+    depth=2,                   # 0=modules, 1=+classes, 2=+methods, None=full
+    direction="both",          # "down" (callees), "up" (callers), "both"
+    concentrate=True,          # merge bidirectional edges
+    layout="dot",              # GraphViz layout algorithm
+    ranksep="0.5",             # rank separation (inches)
 )
+
+# Find call paths between two functions
+from pyan.analyzer import CallGraphVisitor
+v = CallGraphVisitor(["pkg/mod.py"])
+src = v.get_node("pkg.mod", "caller")
+tgt = v.get_node("pkg.mod", "target")
+paths = v.find_paths(src, tgt, max_paths=100)
+print(v.format_paths(paths))
 ```
 
 See `pyan.create_callgraph()` for the full list of parameters.
@@ -144,9 +202,13 @@ Usually either old or new rank (but often not both) works; this is a long-standi
 
 ### Too much detail?
 
-If the graph is visually unreadable due to too much detail, consider visualizing only a subset of the files in your project. Any references to files outside the analyzed set will be considered as undefined, and will not be drawn.
+Several strategies for reducing clutter:
 
-For a higher-level view, use `--module-level` mode (see below).
+- **`--depth`** — collapse to less detail: `--depth 2` for classes + methods, `--depth 1` for classes only, `--depth 0` for modules only
+- **`--function` / `--namespace`** — filter to show only calls related to a specific function or namespace
+- **`--direction down`** — show only callees (or `up` for callers); requires `--function` or `--namespace`
+- **`--module-level`** — switch to module-level import dependency view (see below)
+- Analyze only a subset of your project's files — references outside the analyzed set are not drawn
 
 
 ## Sphinx integration
@@ -193,16 +255,19 @@ was created at the toctree path `api`:
 
 # Module-level analysis
 
-The `--module-level` flag switches pyan3 from call-graph mode to **module-level import dependency analysis**. Instead of graphing individual functions and methods, it shows which modules import which other modules. This is useful for a high-level view of a large project.
+The `--module-level` flag switches pyan3 from call-graph mode to **module-level import dependency analysis**. Instead of graphing uses and defines relationships, it shows which modules import which other modules. This is useful for a high-level view of a large project.
 
 Both CLI and Python API modes are available.
 
 
 ## CLI usage
 
-```
+```bash
 pyan3 --module-level pkg/**/*.py --dot -c -e >modules.dot
 pyan3 --module-level pkg/**/*.py --dot -c -e | dot -Tsvg >modules.svg
+
+# Pass a directory — auto-globs **/*.py
+pyan3 --module-level src/ --dot -c -e >modules.dot
 ```
 
 The module-level mode has its own set of options (separate from the call-graph mode). Use `pyan3 --module-level --help` for the full list. Key options:
@@ -213,7 +278,11 @@ The module-level mode has its own set of options (separate from the call-graph m
 - `-e`, `--nested-groups` — nested subgraph clusters (implies `-g`)
 - `-C`, `--cycles` — detect and report import cycles to stdout
 - `--dot-rankdir` — layout direction (`TB`, `LR`, `BT`, `RL`)
-- `--root` — project root directory (file paths are made relative to this before deriving module names; if omitted, cwd is assumed)
+- `--dot-ranksep` — rank separation in inches
+- `--graphviz-layout` — layout algorithm (`dot`, `fdp`, `neato`, etc.)
+- `--concentrate` — merge bidirectional edges into double-headed arrows
+- `--init` — include `__init__` modules (excluded by default to reduce clutter)
+- `--root` — project root directory (file paths are made relative to this before deriving module names; if omitted, inferred automatically)
 
 
 ### Cycle detection
@@ -236,11 +305,15 @@ import pyan
 
 # Generate a module dependency graph as a DOT string
 dot_source = pyan.create_modulegraph(
-    filenames="pkg/**/*.py",
-    root=".",            # project root; paths made relative to this
-    format="dot",        # also: "svg", "html", "tgf", "yed", "text"
+    filenames="pkg/**/*.py",   # also accepts a directory path
+    root=".",                  # project root; paths made relative to this
+    format="dot",              # also: "svg", "html", "tgf", "yed", "text"
     colored=True,
     nested_groups=True,
+    with_init=False,           # exclude __init__ modules (default)
+    concentrate=True,          # merge bidirectional edges
+    layout="dot",              # GraphViz layout algorithm
+    ranksep="0.5",             # rank separation (inches)
 )
 ```
 
@@ -259,54 +332,44 @@ or
 python -m pip install pyan3
 ```
 
+To install the latest development version from GitHub:
+
+```bash
+pip install git+https://github.com/Technologicat/pyan.git
+```
+
 Pyan3 requires Python 3.10 or newer.
 
 For SVG and HTML output, you need the `dot` command from [Graphviz](https://graphviz.org/) installed on your system (e.g. `sudo apt install graphviz` on Debian/Ubuntu, `brew install graphviz` on macOS).
 
-Dot output requires no extra system dependencies.
+DOT and plain-text output require no extra system dependencies.
 
 
 ## Development setup
 
-This repository uses [uv](https://github.com/astral-sh/uv) for local builds and releases.
+This repository uses [uv](https://github.com/astral-sh/uv) for development.
 
 ```bash
-# install uv if needed
+# install uv if needed (see https://docs.astral.sh/uv/getting-started/installation/)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# set up a development environment (editable install + dev/test extras)
-uv sync --extra dev --extra test
+# set up a development environment (editable install + test extras)
+uv sync --extra test
 
-# alternatively, use the helper wrapper
-scripts/uv-dev.sh setup
+# run tests
+uv run pytest tests/ -v
 
 # run the CLI locally
 uv run pyan3 --help
 
-# build distribution artifacts
-uv build
+# lint
+uv run ruff check .
 
-# run the default test suite
-uv run pytest tests -q
+# coverage report
+uv run pytest tests/ --cov=pyan --cov-branch --cov-report=term-missing
 ```
 
-Helper scripts are provided for common workflows:
-
-- `./makedist.sh` – builds wheels and source distributions via `uv build`.
-- `./uploaddist.sh <version>` – publishes artifacts, preferring `uv publish` when available.
-- `scripts/test-python-versions.sh` – smoke-tests the package across the Python interpreters detected on your system.
-- `scripts/uv-dev.sh` – wraps the most common uv commands (setup, test, lint, build, matrix tests). Run with no arguments for an interactive menu.
-
-If you are new to uv, read [CONTRIBUTING.md](CONTRIBUTING.md) for a concise
-onboarding guide that covers:
-
-- Installing uv and managing Python versions.
-- Creating project environments, installing an editable copy, and running
-  tests/builds/lint.
-- Using helper scripts such as `scripts/uv-dev.sh` and `scripts/test-python-versions.sh`.
-- Links to the [ROADMAP](ROADMAP.md) and open issues (e.g.,
-  [#105](https://github.com/Technologicat/pyan/issues/105)) if you are looking
-  for contribution ideas.
+See [DEV-SETUP-UV.md](DEV-SETUP-UV.md) for a more detailed onboarding guide, and [open issues](https://github.com/Technologicat/pyan/issues) if you are looking for contribution ideas.
 
 
 # Features
@@ -350,8 +413,26 @@ _Items tagged with ☆ are new in Pyan3 (the Python 3 fork). Items tagged with �
 - Iterator protocol tracking (`__iter__`/`__next__`, `__aiter__`/`__anext__` for async) ★
 - `del` statement protocol tracking (`__delattr__`, `__delitem__`) ★
 - Local variable noise suppression — unresolved locals no longer create spurious wildcard nodes ★
+- Import-aware wildcard resolution — `*.name` wildcards only expand to targets whose module is actually imported ★
 - Source filename and line number annotation ☆
   - The annotation is appended to the node label. If grouping is off, namespace is included in the annotation. If grouping is on, only source filename and line number information is included, because the group title already shows the namespace.
+
+**Querying**:
+
+- Graph depth control — collapse to module, class, or full method level ★
+- Directional filtering — show only callers (`up`) or callees (`down`) of a function ★
+- Call path listing — find all call paths between two functions ★
+
+**GraphViz options**:
+
+- Layout algorithm selection (`dot`, `fdp`, `neato`, `sfdp`, `twopi`, `circo`) ★
+- Rank separation control ★
+- Bidirectional edge merging (`concentrate`) ★
+
+**Module-level analysis** ★:
+
+- `__init__` modules excluded by default (opt-in with `--init`) ★
+- Directory input — pass a directory path, auto-globs `**/*.py` ★
 
 ## TODO
 
