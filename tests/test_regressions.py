@@ -15,17 +15,10 @@ TESTS_DIR = os.path.dirname(__file__)
 
 def test_standalone_file_bare_module_name():
     """A .py file outside any package should get a bare module name."""
-    import tempfile
-    with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False, dir="/tmp") as f:
-        f.write("def hello():\n    pass\n")
-        path = f.name
-    try:
-        mod = os.path.splitext(os.path.basename(path))[0]
-        v = CallGraphVisitor([path], logger=logging.getLogger())
-        defines = get_in_dict(v.defines_edges, mod)
-        get_node(defines, f"{mod}.hello")
-    finally:
-        os.unlink(path)
+    filenames = [os.path.join(TESTS_DIR, "test_code_no_package/standalone.py")]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    defines = get_in_dict(v.defines_edges, "standalone")
+    get_node(defines, "standalone.hello")
 
 
 def test_issue2_annotated_assignment():
