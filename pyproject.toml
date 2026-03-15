@@ -143,8 +143,7 @@ combine-as-imports = true
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # unused imports in __init__.py are common
-"tests/test_code/**" = ["F821", "I001", "ARG", "B007", "B008", "C416"]  # test fixtures: intentionally weird code
-"tests/old_tests/**" = ["F821", "I001", "UP009", "UP015", "C416"]  # legacy crash-repro fixtures
+"tests/test_code/**" = ["F821", "I001", "ARG", "B007", "B008", "C416", "UP009", "UP015"]  # test fixtures: intentionally weird code
 "tests/orbital/**" = ["F841"]  # showcase test fixtures
 
 [tool.ruff.format]

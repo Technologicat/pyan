@@ -19,3 +19,4 @@ uv.lock
 00_tmp/
 *.zip
 .cache/
+architecture*

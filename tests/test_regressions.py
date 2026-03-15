@@ -15,34 +15,34 @@ TESTS_DIR = os.path.dirname(__file__)
 
 def test_issue2_annotated_assignment():
     """Issue #2: `a: int = 3` crashed visit_AnnAssign."""
-    filenames = [os.path.join(TESTS_DIR, "old_tests/issue2/pyan_err.py")]
+    filenames = [os.path.join(TESTS_DIR, "test_code/issue2/pyan_err.py")]
     v = CallGraphVisitor(filenames, logger=logging.getLogger())
 
     # Module-level uses: `print(a + b)` and `int` from the annotation.
-    uses = get_in_dict(v.uses_edges, "pyan_err")
+    uses = get_in_dict(v.uses_edges, "test_code.issue2.pyan_err")
     get_node(uses, "*.print")
 
 
 def test_issue3_nested_comprehensions():
     """Issue #3: nested list/dict/generator comprehensions."""
-    filenames = [os.path.join(TESTS_DIR, "old_tests/issue3/testi.py")]
+    filenames = [os.path.join(TESTS_DIR, "test_code/issue3/testi.py")]
     v = CallGraphVisitor(filenames, logger=logging.getLogger())
 
     # All three functions are defined under the module.
-    defines = get_in_dict(v.defines_edges, "testi")
-    get_node(defines, "testi.f")
-    get_node(defines, "testi.g")
-    get_node(defines, "testi.h")
+    defines = get_in_dict(v.defines_edges, "test_code.issue3.testi")
+    get_node(defines, "test_code.issue3.testi.f")
+    get_node(defines, "test_code.issue3.testi.g")
+    get_node(defines, "test_code.issue3.testi.h")
 
     # f and g both call range() inside their comprehensions.
-    f_uses = get_in_dict(v.uses_edges, "testi.f")
+    f_uses = get_in_dict(v.uses_edges, "test_code.issue3.testi.f")
     get_node(f_uses, "*.range")
 
-    g_uses = get_in_dict(v.uses_edges, "testi.g")
+    g_uses = get_in_dict(v.uses_edges, "test_code.issue3.testi.g")
     get_node(g_uses, "*.range")
 
     # h calls sorted() and .keys().
-    h_uses = get_in_dict(v.uses_edges, "testi.h")
+    h_uses = get_in_dict(v.uses_edges, "test_code.issue3.testi.h")
     get_node(h_uses, "*.sorted")
 
 
@@ -51,21 +51,21 @@ def test_issue5_external_deps_and_class_defs():
     should not crash the analyzer. Class and function definitions
     should still be found."""
     filenames = [
-        os.path.join(TESTS_DIR, "old_tests/issue5/meas_xrd.py"),
-        os.path.join(TESTS_DIR, "old_tests/issue5/plot_xrd.py"),
+        os.path.join(TESTS_DIR, "test_code/issue5/meas_xrd.py"),
+        os.path.join(TESTS_DIR, "test_code/issue5/plot_xrd.py"),
     ]
     v = CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
 
     # MeasXRD class is defined.
-    meas_defines = get_in_dict(v.defines_edges, "tests.old_tests.issue5.meas_xrd.MeasXRD")
-    get_node(meas_defines, "tests.old_tests.issue5.meas_xrd.MeasXRD.__init__")
+    meas_defines = get_in_dict(v.defines_edges, "tests.test_code.issue5.meas_xrd.MeasXRD")
+    get_node(meas_defines, "tests.test_code.issue5.meas_xrd.MeasXRD.__init__")
 
     # plot_xrd function is defined.
-    plot_defines = get_in_dict(v.defines_edges, "tests.old_tests.issue5.plot_xrd")
-    get_node(plot_defines, "tests.old_tests.issue5.plot_xrd.plot_xrd")
+    plot_defines = get_in_dict(v.defines_edges, "tests.test_code.issue5.plot_xrd")
+    get_node(plot_defines, "tests.test_code.issue5.plot_xrd.plot_xrd")
 
     # External imports appear as wildcard uses (unresolvable but no crash).
-    meas_uses = get_in_dict(v.uses_edges, "tests.old_tests.issue5.meas_xrd")
+    meas_uses = get_in_dict(v.uses_edges, "tests.test_code.issue5.meas_xrd")
     get_node(meas_uses, "*.numpy")
     get_node(meas_uses, "*.pandas.io.parsers")
 

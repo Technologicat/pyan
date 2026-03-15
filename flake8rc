@@ -31,4 +31,4 @@ ignore =
     W503,
     # line break after binary operator
     W504
-exclude = .git,__pycache__,docs/source/conf.py,old,build,dist,node_modules,instance,00_tmp,00_stuff,00_old,tests/test_code_312,tests/test_code,tests/old_tests
+exclude = .git,__pycache__,docs/source/conf.py,old,build,dist,node_modules,instance,00_tmp,00_stuff,00_old,tests/test_code_312,tests/test_code
