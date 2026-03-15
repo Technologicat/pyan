@@ -26,7 +26,8 @@ Items with GitHub ticket numbers are tracked externally. The rest are internal n
 
 - **D30: README update for 2.2.0**: ✓ Done. Updated CLI examples, Python API examples, feature list, dev setup, and install sections for all 2.2.0 features. Removed dead links to nonexistent CONTRIBUTING.md and ROADMAP.md.
 - **D31: Test suite organization**: Tests are spread across few modules (`test_features.py`, `test_regressions.py`, `test_modvis.py`, `test_writers.py`, `test_analyzer.py`, `test_sphinx.py`, `test_coverage.py`). Consider reorganizing by concern — e.g. separate CLI tests from unit tests, group by module under test.
-- **D32: Analyzer module split**: `analyzer.py` is ~1750 lines. Consider splitting into submodules (e.g. visitors, postprocessing, scope handling) without changing the public API.
+- **D32: Analyzer module split**: `analyzer.py` is ~2200 lines. Consider splitting into submodules (e.g. visitors, postprocessing, scope handling) without changing the public API.
+- **D33: Type annotations for pyan's own code**: Add type annotations to pyan's modules. The analyzer is the largest target (~2200 lines). Would improve IDE support and catch bugs.
 
 ## Done
 

@@ -105,7 +105,6 @@ source files → CallGraphVisitor (analyzer.py) → Node graph → VisualGraph (
 
 - `DESIGN-NOTES.md` — Future directions: edge confidence scoring, wildcard improvements, type inference.
 - `TODO_DEFERRED.md` — Detailed descriptions of all deferred work items.
-- `REMAINING-ITEMS.md` — Summary of open items post-2.0.0.
 - `DEV-SETUP-UV.md` — Development environment setup using `uv`.
 
 ## Code Conventions
