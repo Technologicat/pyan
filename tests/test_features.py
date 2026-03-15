@@ -365,6 +365,61 @@ def test_repr_builtin_resolution(v):
     get_node(uses, f"{PREFIX}.Printable.__repr__")
 
 
+# --- Setcomp / dictcomp / genexpr ---
+
+def test_setcomp_iter_protocol(v):
+    """Set comprehension should create __iter__/__next__ edges."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.use_setcomp")
+    get_node(uses, f"{PREFIX}.Sequence.__iter__")
+
+
+def test_dictcomp_iter_protocol(v):
+    """Dict comprehension should create __iter__/__next__ edges."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.use_dictcomp")
+    get_node(uses, f"{PREFIX}.Sequence.__iter__")
+
+
+def test_genexpr_iter_protocol(v):
+    """Generator expression should create __iter__/__next__ edges."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.use_genexpr")
+    get_node(uses, f"{PREFIX}.Sequence.__iter__")
+
+
+# --- Lambda with defaults ---
+
+def test_lambda_with_defaults(v):
+    """Lambda with positional default should be defined."""
+    defines = get_in_dict(v.defines_edges, PREFIX)
+    get_node(defines, f"{PREFIX}.lambda")
+
+
+# --- Import resolution ---
+
+IMPORTS_DIR = os.path.join(TESTS_DIR, "test_code/imports")
+IMPORTS_PREFIX = "test_code.imports"
+
+
+@pytest.fixture
+def v_imports():
+    from glob import glob
+    filenames = glob(os.path.join(IMPORTS_DIR, "**/*.py"), recursive=True)
+    return CallGraphVisitor(filenames, logger=logging.getLogger())
+
+
+def test_chained_import_resolution(v_imports):
+    """consumer imports Widget via reexporter; should resolve to provider.Widget."""
+    uses = get_in_dict(v_imports.uses_edges, f"{IMPORTS_PREFIX}.consumer.use_widget")
+    names = [n.get_name() for n in uses]
+    assert any("Widget" in n for n in names)
+
+
+def test_attr_of_import(v_imports):
+    """prov.helper() via `import ... as prov` should resolve."""
+    uses = get_in_dict(v_imports.uses_edges, f"{IMPORTS_PREFIX}.attr_consumer.use_provider_attr")
+    names = [n.get_name() for n in uses]
+    assert any("helper" in n for n in names)
+
+
 # --- Local variable noise suppression ---
 
 def test_local_no_unknown_node(v):

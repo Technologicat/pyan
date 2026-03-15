@@ -380,6 +380,29 @@ class Child(Parent):
         super().greet()
 
 
+# --- Setcomp / dictcomp / genexpr ---
+
+def use_setcomp():
+    seq = Sequence()
+    return {x for x in seq if x}
+
+
+def use_dictcomp():
+    seq = Sequence()
+    return {k: k for k in seq}
+
+
+def use_genexpr():
+    seq = Sequence()
+    return list(x for x in seq)  # noqa: C400  # test fixture: intentionally exercises genexpr
+
+
+# --- Lambda with defaults (exercises analyze_arguments) ---
+
+apply_default = lambda x, y=42: x + y  # noqa: E731  # test fixture
+apply_kwonly = lambda x, *, sep=",": x + sep  # noqa: E731  # test fixture
+
+
 # --- str()/repr() built-in resolution ---
 
 class Printable:
