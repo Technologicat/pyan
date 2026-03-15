@@ -193,6 +193,14 @@ def match_example(cmd):
             handle_default()
 
 
+def match_with_guard(cmd):
+    match cmd:
+        case Point(x=px, y=py) if px > 0:
+            handle_point(px, py)
+        case int() | float() as n:
+            handle_action(n)
+
+
 # --- Type annotations ---
 
 class MyType:
@@ -319,6 +327,72 @@ def func_with_lambda_default(x=lambda a, b: a):
 
 def func_with_call_default(x=identity(42)):
     return x
+
+
+# --- Keyword-only defaults ---
+
+def kwonly_defaults(*, sep=",", end="\n"):
+    return sep + end
+
+
+# --- Chained assignment ---
+
+def chained_assign():
+    a = b = Alpha()  # noqa: F841  # test fixture
+    b.alpha_method()
+
+
+# --- For-else ---
+
+def for_with_else(items):
+    for item in items:  # noqa: F841  # test fixture
+        pass
+    else:
+        len(items)
+
+
+# --- Nested attribute access ---
+
+class Outer:
+    class Inner:
+        def method(self):
+            pass
+
+def access_nested_attr():
+    o = Outer()
+    o.Inner.method()
+
+
+# --- String literal method ---
+
+def call_string_method():
+    return "hello".upper()
+
+
+# --- super() ---
+
+class Parent:
+    def greet(self):
+        pass
+
+class Child(Parent):
+    def greet(self):
+        super().greet()
+
+
+# --- str()/repr() built-in resolution ---
+
+class Printable:
+    def __str__(self):
+        return "printable"
+
+    def __repr__(self):
+        return "Printable()"
+
+def use_str_repr():
+    p = Printable()
+    s = str(p)  # noqa: F841  # test fixture
+    r = repr(p)  # noqa: F841  # test fixture
 
 
 # --- Local variable noise suppression ---

@@ -288,6 +288,83 @@ def test_call_in_default_no_crash(v):
     get_node(defines, f"{PREFIX}.func_with_call_default")
 
 
+# --- Keyword-only defaults ---
+
+def test_kwonly_defaults_defined(v):
+    """Function with keyword-only default args should be defined."""
+    defines = get_in_dict(v.defines_edges, PREFIX)
+    get_node(defines, f"{PREFIX}.kwonly_defaults")
+
+
+# --- Chained assignment ---
+
+def test_chained_assign(v):
+    """Chained assignment `a = b = Alpha()` should resolve through."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.chained_assign")
+    get_node(uses, f"{PREFIX}.Alpha.alpha_method")
+
+
+# --- For-else ---
+
+def test_for_else(v):
+    """for-else: the else clause should create a uses edge."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.for_with_else")
+    get_node(uses, "*.len")
+
+
+# --- Nested attribute access ---
+
+def test_nested_attr(v):
+    """o.Inner.method() should create a uses edge to Inner.method."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.access_nested_attr")
+    get_node(uses, f"{PREFIX}.Outer.Inner.method")
+
+
+# --- String literal method ---
+
+def test_string_method(v):
+    """'hello'.upper() should create a uses edge to str.upper."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.call_string_method")
+    names = [n.get_name() for n in uses]
+    assert any("upper" in n for n in names)
+
+
+# --- super() ---
+
+def test_super_call(v):
+    """super().greet() in Child should create a uses edge to Parent.greet."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.Child.greet")
+    get_node(uses, f"{PREFIX}.Parent.greet")
+
+
+# --- Match with guard ---
+
+def test_match_guard(v):
+    """Match statement with guard should not crash and should process body."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.match_with_guard")
+    get_node(uses, f"{PREFIX}.handle_point")
+
+
+def test_match_or_pattern(v):
+    """Match with `int() | float() as n` should process the or-pattern."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.match_with_guard")
+    get_node(uses, f"{PREFIX}.handle_action")
+
+
+# --- str()/repr() built-in resolution ---
+
+def test_str_builtin_resolution(v):
+    """str(p) should create a uses edge to Printable.__str__."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.use_str_repr")
+    get_node(uses, f"{PREFIX}.Printable.__str__")
+
+
+def test_repr_builtin_resolution(v):
+    """repr(p) should create a uses edge to Printable.__repr__."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.use_str_repr")
+    get_node(uses, f"{PREFIX}.Printable.__repr__")
+
+
 # --- Local variable noise suppression ---
 
 def test_local_no_unknown_node(v):
