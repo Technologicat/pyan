@@ -4,11 +4,14 @@ import ast
 import io
 import logging
 import os
+import shutil
 
 import pytest
 
 from pyan.main import main as pyan_main
 from pyan.node import Flavor, Node, make_safe_label
+
+has_dot = shutil.which("dot") is not None
 
 TESTS_DIR = os.path.dirname(__file__)
 FIXTURE = os.path.join(TESTS_DIR, "test_code/features.py")
@@ -183,11 +186,13 @@ class TestPyanCLI:
 class TestCreateCallgraphFormats:
     """Cover all format branches in create_callgraph()."""
 
+    @pytest.mark.skipif(not has_dot, reason="graphviz dot not installed")
     def test_html_format(self):
         from pyan import create_callgraph
         result = create_callgraph(FIXTURE, format="html")
         assert "<html" in result.lower() or "<svg" in result.lower()
 
+    @pytest.mark.skipif(not has_dot, reason="graphviz dot not installed")
     def test_svg_format(self):
         from pyan import create_callgraph
         result = create_callgraph(FIXTURE, format="svg")
