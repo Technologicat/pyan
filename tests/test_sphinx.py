@@ -55,6 +55,68 @@ class TestSphinxSetup:
         assert set(CallgraphDirective.option_spec.keys()) == expected
 
 
+class TestCallgraphDirectiveRun:
+    """Test CallgraphDirective.run() with a mock environment."""
+
+    def _make_directive(self, content, options=None):
+        """Create a CallgraphDirective with minimal mocking.
+
+        Uses object.__setattr__ to bypass Sphinx's property descriptors.
+        """
+        from unittest.mock import MagicMock
+
+        directive = CallgraphDirective.__new__(CallgraphDirective)
+        object.__setattr__(directive, "content", content)
+        object.__setattr__(directive, "options", options or {})
+        object.__setattr__(directive, "lineno", 1)
+
+        state = MagicMock()
+        env = MagicMock()
+        env.docname = "test"
+        state.document.settings.env = env
+        object.__setattr__(directive, "state", state)
+        object.__setattr__(directive, "state_machine", MagicMock())
+
+        return directive
+
+    def test_run_basic(self):
+        """Run with pyan as the target package (it's importable)."""
+        directive = self._make_directive(["pyan"])
+        result = directive.run()
+        assert len(result) == 1
+        node = result[0]
+        assert "digraph G" in node["code"]
+
+    def test_run_with_direction(self):
+        directive = self._make_directive(["pyan"], {"direction": "horizontal"})
+        result = directive.run()
+        assert "rankdir=LR" in result[0]["code"]
+
+    def test_run_no_groups(self):
+        directive = self._make_directive(["pyan"], {"no-groups": ""})
+        result = directive.run()
+        assert "digraph G" in result[0]["code"]
+
+    def test_run_annotated(self):
+        directive = self._make_directive(["pyan"], {"annotated": ""})
+        result = directive.run()
+        assert "digraph G" in result[0]["code"]
+
+    def test_run_with_caption(self):
+        from unittest.mock import MagicMock, patch
+        directive = self._make_directive(["pyan"], {"caption": "My Graph"})
+        # figure_wrapper returns a mock figure node
+        with patch("pyan.sphinx.figure_wrapper") as mock_fw:
+            mock_fw.return_value = MagicMock()
+            directive.run()
+            mock_fw.assert_called_once()
+
+    def test_run_with_zoomable(self):
+        directive = self._make_directive(["pyan"], {"zoomable": ""})
+        result = directive.run()
+        assert "zoomable-callgraph" in result[0].get("classes", [])
+
+
 class TestSphinxImports:
     def test_graphviz_node_class(self):
         from sphinx.ext.graphviz import graphviz

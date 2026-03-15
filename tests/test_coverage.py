@@ -176,7 +176,79 @@ class TestPyanCLI:
 # __init__.py coverage
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# create_callgraph() format dispatch
+# ---------------------------------------------------------------------------
+
+class TestCreateCallgraphFormats:
+    """Cover all format branches in create_callgraph()."""
+
+    def test_html_format(self):
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE, format="html")
+        assert "<html" in result.lower() or "<svg" in result.lower()
+
+    def test_svg_format(self):
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE, format="svg")
+        assert "<svg" in result.lower()
+
+    def test_tgf_format(self):
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE, format="tgf")
+        assert "#" in result
+
+    def test_yed_format(self):
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE, format="yed")
+        assert "graphml" in result.lower()
+
+    def test_text_format(self):
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE, format="text")
+        assert "[U]" in result or "[D]" in result
+
+    def test_unknown_format_raises(self):
+        from pyan import create_callgraph
+        with pytest.raises(ValueError, match="Unknown format"):
+            create_callgraph(FIXTURE, format="bogus")
+
+
+# ---------------------------------------------------------------------------
+# __init__.py / __main__.py
+# ---------------------------------------------------------------------------
+
 def test_version_available():
     from pyan import __version__
     assert isinstance(__version__, str)
     assert len(__version__) > 0
+
+
+def test_main_module_runnable():
+    """pyan.__main__ should be importable."""
+    import pyan.__main__  # noqa: F401
+
+
+# ---------------------------------------------------------------------------
+# visgraph.py: annotated labels + nested groups
+# ---------------------------------------------------------------------------
+
+class TestVisgraphAnnotated:
+    def test_annotated_grouped(self):
+        """Annotated + grouped uses get_annotated_name for labels."""
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE, format="dot", annotated=True, grouped=True)
+        assert "digraph G" in result
+
+    def test_annotated_ungrouped(self):
+        """Annotated + ungrouped uses get_long_annotated_name for labels."""
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE, format="dot", annotated=True, grouped=False)
+        assert "digraph G" in result
+
+    def test_nested_groups(self):
+        """Nested groups creates nested subgraph clusters."""
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE, format="dot", nested_groups=True)
+        assert "digraph G" in result
+        assert 'subgraph "cluster_' in result
