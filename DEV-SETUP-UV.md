@@ -1,9 +1,7 @@
-# Contributing
+# Development Setup with uv
 
-Welcome to the pyan3 contributor guide! This document assumes you are new to
-[uv](https://astral.sh/uv) and walks you through the entire workflow: installing
-uv, provisioning Python interpreters, creating environments, and running the
-project.
+This document walks you through setting up a development environment for Pyan3 using [uv](https://docs.astral.sh/uv/).
+
 
 ## 1. Install uv
 
@@ -15,150 +13,76 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 irm https://astral.sh/uv/install.ps1 | iex
 ```
 
-The installer places the executable in `~/.cargo/bin`. If that directory is not
-on your `PATH`, add it:
-
-```bash
-export PATH="$HOME/.cargo/bin:$PATH"
-```
-
-Verify the installation:
+To check that it's installed:
 
 ```bash
 uv --version
 ```
 
-## 2. Manage Python versions with uv
+The installer places the executable in `~/.local/bin` (Linux/macOS) or `%USERPROFILE%\.local\bin` (Windows). Make sure it's on your `PATH`.
 
-uv can download and manage multiple Python installs side-by-side (stored under
-`~/.cache/uv/python`). Examples:
+See the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/) for other methods (Homebrew, pipx, etc.) and platform-specific details.
 
-```bash
-# Install interpreters you want available
-uv python install 3.9 3.10 3.11 3.12
 
-# List everything uv knows about
-uv python list --all
-uv python list --installed
-
-# Run a command with a specific interpreter
-uv python 3.11 -- python -V
-uv python 3.10 -- pip list
-```
-
-You can also create virtual environments explicitly:
-
-```bash
-uv venv --python 3.11 .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-```
-
-## 3. Project setup (editable install)
+## 2. Project setup
 
 From the repository root:
 
 ```bash
-# Install the package in editable mode with dev + test extras
-uv sync --extra dev --extra test
+# Create a .venv and install pyan3 in editable mode with test dependencies
+uv sync --extra test
 ```
 
-`uv sync` creates or updates the local project environment (default: `.venv/`)
-and installs dependencies pinned in `uv.lock`.
+This creates `.venv/` (if it doesn't exist) and installs all dependencies.
 
-### Quick wrapper CLI
-
-For convenience, the repository ships with `scripts/uv-dev.sh`:
+Alternatively, to use a specific Python version:
 
 ```bash
-scripts/uv-dev                 # Interactive mode
-scripts/uv-dev.sh setup        # Equivalent to uv sync --extra dev --extra test
-scripts/uv-dev.sh test         # Run pytest
-scripts/uv-dev.sh lint         # Ruff lint
-scripts/uv-dev.sh build        # uv build
-scripts/uv-dev.sh shell        # Python REPL inside the project env
-scripts/uv-dev.sh test-matrix  # Multi-version test sweep via uv-managed venvs
+uv venv --python 3.14 .venv
+uv sync --extra test
 ```
 
-Run `scripts/uv-dev.sh --help` for the full list of commands.
+`uv` can use system Pythons or download its own — see `uv python list` to see what's available, and `uv python install 3.14` to download one.
 
-## 4. Everyday tasks
+
+## 3. Everyday tasks
 
 ```bash
-# Run CLI locally (uses project environment)
+# Run the CLI
 uv run pyan3 --help
 
-# Execute the test suite
-uv run pytest tests -q
+# Run tests
+uv run pytest tests/ -v
 
-# Lint / format
-uv run ruff check
-uv run ruff format
+# Lint
+uv run ruff check .
+
+# Coverage report
+uv run pytest tests/ --cov=pyan --cov-branch --cov-report=term-missing
 
 # Build sdist/wheel
 uv build
-
-# Run coverage-enabled tests
-uv run pytest tests -q --cov=pyan
-
-# Launch a Python shell with project dependencies available
-uv run python
 ```
 
-To exercise the test matrix across multiple interpreters, use
-`scripts/test-python-versions.sh`. The script will:
 
-1. Ensure the requested Python versions are installed via `uv python install`.
-2. Create dedicated environments under `.uv-venvs/`.
-3. Install the project with test extras.
-4. Run `pytest` in each environment.
+## 4. Testing across Python versions
 
-## 5. Answers to common onboarding questions
+Pyan3 supports Python 3.10–3.14. If you have multiple interpreters installed (e.g. from [deadsnakes](https://launchpad.net/~deadsnakes/+archive/ubuntu/ppa) on Ubuntu), you can test against each:
 
-**Does uv create a virtual environment for the project automatically?**
+```bash
+python3.10 -m pytest tests/ -v -o "addopts="
+python3.12 -m pytest tests/ -v -o "addopts="
+```
 
-- Yes. `uv sync` creates/updates a project environment (default `.venv/`).
-- You can override the target directory with `uv sync --venv-path <path>` or by
-  creating explicit envs with `uv venv`.
+The `-o "addopts="` override is needed to skip the coverage options configured in `pytest.ini` (which require the test extras to be installed in that interpreter's environment).
 
-**How do I install an editable copy of the package?**
+The `scripts/test-python-versions.sh` helper automates this for all detected interpreters.
 
-- `uv sync --extra dev --extra test` installs the project in editable mode.
-- Alternatively use `uv pip install -e '.[dev,test]'` if you prefer pip syntax.
 
-**How do I run tests?**
-
-- `uv run pytest tests -q` executes the standard suite.
-- Use `scripts/uv-dev.sh test` for a shorthand.
-- Run `scripts/test-python-versions.sh` to sweep the matrix (Python 3.9–3.12).
-
-**How do I build the package?**
-
-- `uv build` produces both the wheel and sdist under `dist/`.
-- `scripts/uv-dev.sh build` is a wrapper.
-
-**How do I manage multiple Python versions?**
-
-- `uv python install <version>` downloads an interpreter.
-- `uv python list --installed` shows available versions.
-- `uv python 3.11 -- <command>` runs a command using that interpreter.
-
-**Can I use uv with an existing venv or conda environment?**
-
-- Yes. Activate your environment first, then run `uv sync`. uv will install into
-  the active interpreter instead of creating `.venv`.
-
-## 6. Coding guidelines
-
-* Python 3.9+ typing standards (use built-in collection types).
-* Ruff enforces lint + formatting; run `scripts/uv-dev.sh lint` before opening a PR.
-* Please add or update tests when fixing bugs or implementing new features.
-
-## 7. Submitting changes
+## 5. Contributing
 
 1. Fork the repository and create a topic branch.
-2. Follow the instructions above to install dependencies and run tests.
-3. Keep commits focused; add tests and documentation when relevant.
-4. Open a Pull Request describing the change, referencing any related issue
-   (e.g., #105 for analyzer tests).
-5. Be prepared to iterate based on review feedback.
-
+2. Follow the instructions above to set up and run tests.
+3. Keep commits focused; add tests when fixing bugs or adding features.
+4. Lint with `uv run ruff check .` before opening a PR.
+5. Open a Pull Request describing the change, referencing any related [issue](https://github.com/Technologicat/pyan/issues).
