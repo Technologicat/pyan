@@ -1,59 +1,56 @@
 #!/bin/bash
-# UV-powered multi-version test runner
+# Multi-version test runner.
 # Usage: scripts/test-python-versions.sh
+#
+# Runs the test suite against each Python version in the matrix.
+# Uses uv to provision interpreters if needed.
 
 set -euo pipefail
 
 PROJECT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-PYTHON_VERSIONS=("3.9" "3.10" "3.11" "3.12")
+PYTHON_VERSIONS=("3.10" "3.11" "3.12" "3.13" "3.14")
 
 if ! command -v uv >/dev/null 2>&1; then
-    echo "❌ uv is required to run this script. Install it from https://astral.sh/uv/"
+    echo "uv is required. See https://docs.astral.sh/uv/getting-started/installation/"
     exit 1
 fi
 
 run_for_version() {
     local version="$1"
-    echo "----------------------------------------"
-    echo "Testing with Python ${version}"
-    echo "----------------------------------------"
+    echo "--- Python ${version} ---"
 
     if ! uv python install "${version}" >/dev/null 2>&1; then
-        echo "❌ Failed to provision Python ${version} via uv"
+        echo "SKIP: could not provision Python ${version}"
         return 1
     fi
 
     if uv run --project "${PROJECT_ROOT}" \
         --python "${version}" \
         --isolated \
-        --locked \
         --extra test \
         pytest tests -q; then
-        echo "✅ Tests passed for Python ${version}"
+        echo "PASS: Python ${version}"
     else
-        echo "❌ Tests failed for Python ${version}"
+        echo "FAIL: Python ${version}"
         return 1
     fi
-
-    echo "✅ Completed Python ${version}"
-    echo ""
+    echo
 }
 
-echo "Running pyan3 test suite across Python ${PYTHON_VERSIONS[*]}"
+echo "Testing pyan3 against Python ${PYTHON_VERSIONS[*]}"
+echo
 
-failed_versions=()
+failed=()
 for version in "${PYTHON_VERSIONS[@]}"; do
     if ! run_for_version "${version}"; then
-        failed_versions+=("${version}")
+        failed+=("${version}")
     fi
 done
 
-echo "========================================="
-echo "SUMMARY"
-echo "========================================="
-if [ ${#failed_versions[@]} -eq 0 ]; then
-    echo "✅ All configured Python versions passed!"
+echo "=== Summary ==="
+if [ ${#failed[@]} -eq 0 ]; then
+    echo "All versions passed."
 else
-    echo "❌ Failures encountered for: ${failed_versions[*]}"
+    echo "Failures: ${failed[*]}"
     exit 1
 fi
