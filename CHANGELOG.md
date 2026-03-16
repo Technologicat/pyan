@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.1 (in progress)
+
+*No user-visible changes yet.*
+
+
+---
+
 ## 2.2.0 (16 March 2026) — *Terra cognita* edition
 
 ### Bug fixes
