@@ -586,10 +586,10 @@ def test_format_paths(v_multi):
 # --- Depth filtering (#80) ---
 
 def test_depth_class_level_collapses_methods():
-    """depth=2 should collapse methods into their class."""
+    """depth=1 should collapse methods into their class."""
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
     v = CallGraphVisitor(filenames, logger=logging.getLogger())
-    v.filter_by_depth(2)
+    v.filter_by_depth(1)
 
     # Methods should be gone
     names = {n.get_name() for nodes in v.nodes.values() for n in nodes if n.defined}
@@ -601,10 +601,10 @@ def test_depth_class_level_collapses_methods():
 
 
 def test_depth_class_level_collapses_edges():
-    """depth=2 should collapse method→method edges to class→class edges."""
+    """depth=1 should collapse method→method edges to class→class edges."""
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
     v = CallGraphVisitor(filenames, logger=logging.getLogger())
-    v.filter_by_depth(2)
+    v.filter_by_depth(1)
 
     # Derived.baz → Base.bar should become Derived → Base
     derived_node = None
@@ -623,34 +623,90 @@ def test_depth_class_level_collapses_edges():
 
 
 def test_depth_module_level():
-    """depth=1 should show only modules, collapsing everything deeper."""
+    """depth=0 should show only modules, collapsing everything deeper."""
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
     v = CallGraphVisitor(filenames, logger=logging.getLogger())
-    v.filter_by_depth(1)
+    v.filter_by_depth(0)
 
-    # Only module-level nodes should remain
-    for nodes in v.nodes.values():
-        for n in nodes:
-            if n.defined:
-                assert n.get_level() <= 1, f"Node {n.get_name()} at level {n.get_level()} should be filtered"
+    # Only the module itself should remain as a defined node
+    defined_names = {n.get_name() for nodes in v.nodes.values() for n in nodes if n.defined}
+    assert "test_code.features" in defined_names
+    for name in defined_names:
+        assert name in v.module_to_filename, f"Node {name} should be a module at depth 0"
 
 
 def test_depth_module_level_cross_module(v_multi):
-    """depth=1 with multi-module input should collapse function edges to module edges."""
-    v_multi.filter_by_depth(1)
+    """depth=0 with multi-module input should collapse function edges to module edges."""
+    v_multi.filter_by_depth(0)
 
-    # submodule2.test_2 → submodule1.test_func1 should become submodule2 → submodule1
+    # Functions should be gone, modules should remain
     names = {n.get_name() for nodes in v_multi.nodes.values() for n in nodes if n.defined}
     assert "test_code.submodule2" in names
     assert "test_code.submodule1" in names
     assert "test_code.submodule2.test_2" not in names
+
+    # Uses edges should be remapped: test_2 → test_func1 becomes submodule2 → submodule1
+    all_uses_targets = {}
+    for src, tgts in v_multi.uses_edges.items():
+        all_uses_targets[src.get_name()] = {t.get_name() for t in tgts}
+    assert "test_code.submodule1" in all_uses_targets.get("test_code.submodule2", set()), \
+        "Cross-module uses edge should survive depth collapsing"
+
+
+def test_depth_dotted_module_uses_edges():
+    """Uses edges must survive depth collapsing even when module names contain dots.
+
+    The old implementation counted raw dots in the fully qualified name, so a
+    class in ``pkg.mod`` was treated as depth 2 instead of depth 1. This caused
+    the ancestor lookup to create phantom nodes (wrong namespace/name split),
+    which had ``defined=False`` and were silently dropped by ``remap_edges``.
+    """
+    filenames = [
+        os.path.join(TESTS_DIR, "test_code/depth_pkg/mod_a.py"),
+        os.path.join(TESTS_DIR, "test_code/depth_pkg/mod_b.py"),
+    ]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+
+    # Depth 1: methods collapse into classes; classes and modules remain
+    v.filter_by_depth(1)
+
+    names = {n.get_name() for nodes in v.nodes.values() for n in nodes if n.defined}
+    assert "test_code.depth_pkg.mod_a.ClassA" in names
+    assert "test_code.depth_pkg.mod_b.ClassB" in names
+    assert "test_code.depth_pkg.mod_a.ClassA.method_a" not in names  # collapsed
+
+    # The critical check: ClassA.method_a → ClassB should become ClassA → ClassB
+    uses_map = {src.get_name(): {t.get_name() for t in tgts}
+                for src, tgts in v.uses_edges.items()}
+    assert "test_code.depth_pkg.mod_b.ClassB" in uses_map.get("test_code.depth_pkg.mod_a.ClassA", set()), \
+        "Cross-module uses edge must survive depth collapsing with dotted module names"
+
+
+def test_depth_dotted_module_depth_zero():
+    """Depth 0 with dotted module names should collapse everything to modules."""
+    filenames = [
+        os.path.join(TESTS_DIR, "test_code/depth_pkg/mod_a.py"),
+        os.path.join(TESTS_DIR, "test_code/depth_pkg/mod_b.py"),
+    ]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v.filter_by_depth(0)
+
+    names = {n.get_name() for nodes in v.nodes.values() for n in nodes if n.defined}
+    assert "test_code.depth_pkg.mod_a" in names
+    assert "test_code.depth_pkg.mod_b" in names
+    assert "test_code.depth_pkg.mod_a.ClassA" not in names  # collapsed
+
+    uses_map = {src.get_name(): {t.get_name() for t in tgts}
+                for src, tgts in v.uses_edges.items()}
+    assert "test_code.depth_pkg.mod_b" in uses_map.get("test_code.depth_pkg.mod_a", set()), \
+        "Cross-module uses edge must survive depth-0 collapsing with dotted module names"
 
 
 def test_depth_no_self_edges():
     """Collapsing should not create self-edges (e.g. Base.bar → Base.foo → Base)."""
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
     v = CallGraphVisitor(filenames, logger=logging.getLogger())
-    v.filter_by_depth(2)
+    v.filter_by_depth(1)
 
     for n, edges in v.uses_edges.items():
         assert n not in edges, f"Self-edge on {n.get_name()}"

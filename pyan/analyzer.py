@@ -275,35 +275,59 @@ class CallGraphVisitor(ast.NodeVisitor):
     def filter_by_depth(self, max_depth):
         """Collapse the graph to at most `max_depth` nesting levels.
 
+        Depth is relative to each node's containing module, so the
+        result is consistent regardless of how many dots are in the
+        module's fully qualified name (e.g. ``pkg.sub.mod``).
+
         Nodes deeper than `max_depth` are removed. Edges involving
         removed nodes are redirected to their ancestor at `max_depth`,
         with self-edges suppressed.
 
         Args:
-            max_depth: maximum node level (0 = modules only,
-                1 = modules + top-level classes/functions, etc.).
+            max_depth: maximum nesting level within a module
+                (0 = modules only, 1 = + classes/top-level functions,
+                2 = + methods, etc.).
 
         Returns:
             self
         """
+        known_modules = set(self.module_to_filename)
+
+        def module_relative_depth(node):
+            """Return ``(module_name, depth_within_module)``."""
+            full = node.get_name()
+            if full in known_modules:
+                return full, 0
+            # Find the longest module name that is a prefix.
+            best = ""
+            for mod in known_modules:
+                if full.startswith(mod + ".") and len(mod) > len(best):
+                    best = mod
+            if best:
+                remainder = full[len(best) + 1:]
+                return best, 1 + remainder.count(".")
+            return None, node.get_level()  # fallback (external nodes)
+
+        def ancestor_at_depth(node, mod_name):
+            """Return the ancestor ``Node`` of `node` at `max_depth`."""
+            if max_depth == 0:
+                return self.get_node("", mod_name, None)
+            remainder = node.get_name()[len(mod_name) + 1:]
+            parts = remainder.split(".")
+            ancestor_suffix = ".".join(parts[:max_depth])
+            ancestor_full = mod_name + "." + ancestor_suffix
+            idx = ancestor_full.rfind(".")
+            return self.get_node(ancestor_full[:idx], ancestor_full[idx + 1:], None)
+
         # Build a mapping: deep node → ancestor at max_depth.
-        # A "deep node" is one whose nesting level exceeds max_depth.
-        # Collect them first to avoid mutating self.nodes during iteration.
-        deep_nodes = []
+        # A "deep node" is one whose module-relative depth exceeds max_depth.
+        ancestor_of = {}
         for node_list in self.nodes.values():
             for n in node_list:
-                if n.namespace is not None and n.defined and n.get_level() > max_depth:
-                    deep_nodes.append(n)
-
-        # Map each deep node to its ancestor at max_depth by truncating
-        # the dotted name.  E.g. at depth 2, "pkg.mod.Class.method" → "pkg.mod.Class".
-        ancestor_of = {}
-        for n in deep_nodes:
-            parts = n.get_name().split(".")
-            ancestor_short = parts[max_depth]
-            ancestor_ns = ".".join(parts[:max_depth]) if max_depth > 0 else ""
-            ancestor_node = self.get_node(ancestor_ns, ancestor_short, None)
-            ancestor_of[n] = ancestor_node
+                if n.namespace is not None and n.defined:
+                    mod, depth = module_relative_depth(n)
+                    if depth > max_depth:
+                        ancestor_of[n] = ancestor_at_depth(n, mod)
 
         # Remap edges: redirect deep endpoints to their ancestor.
         def remap_edges(edge_dict):

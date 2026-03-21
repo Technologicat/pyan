@@ -2,7 +2,21 @@
 
 ## 2.2.1 (in progress)
 
-*No user-visible changes yet.*
+### Bug fixes
+
+- **Missing uses edges for names in default argument values** — the #61 fix
+  (2.2.0) correctly moved default-value visiting to the enclosing scope, but
+  lost uses edges from the function to names referenced in its defaults.
+  `def f(cb=wrapper(func))` now correctly shows `f → wrapper` and
+  `f → func`.  (#116)
+- **`--depth` dropped almost all uses edges** — `filter_by_depth` counted
+  raw dots in the fully qualified name, so modules with dotted names (e.g.
+  `pkg.sub.mod`) inflated the depth of every node inside them.  Ancestor
+  lookup then created phantom nodes with the wrong namespace/name split,
+  which were silently discarded.  Depth is now computed relative to each
+  node's containing module, giving consistent behaviour regardless of
+  package depth.  The depth scale is: 0 = modules, 1 = classes/top-level
+  functions, 2 = methods, etc.
 
 
 ---
