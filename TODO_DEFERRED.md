@@ -28,6 +28,13 @@ Items with GitHub ticket numbers are tracked externally. The rest are internal n
 - **D31: Test suite organization**: Tests are spread across few modules (`test_features.py`, `test_regressions.py`, `test_modvis.py`, `test_writers.py`, `test_analyzer.py`, `test_sphinx.py`, `test_coverage.py`). Consider reorganizing by concern — e.g. separate CLI tests from unit tests, group by module under test.
 - **D32: Analyzer module split**: `analyzer.py` is ~2200 lines. Consider splitting into submodules (e.g. visitors, postprocessing, scope handling) without changing the public API.
 - **D33: Type annotations for pyan's own code**: Add type annotations to pyan's modules. The analyzer is the largest target (~2200 lines). Would improve IDE support and catch bugs.
+- **D34: Document recommended options in README**: The README should include a recommended set of options for common use cases, e.g.:
+  - `pyan3 src/*.py --dot --colored --no-defines --concentrate --file output.dot` for a clean uses-only call graph
+  - Laying out with `fdp` (works well with Pyan call graphs): `fdp -Txdot output.dot -o output.xdot`
+  - `--depth 1` for module+class/function overview, default depth for full detail
+
+Discovered during raven-xdot-viewer dark mode contrast fix.
+
 ## Done
 
 - **D1**: Rename `sanitize_exprs` → `canonize_exprs` (`38fffd0`)
