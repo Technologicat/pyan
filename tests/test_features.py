@@ -288,6 +288,13 @@ def test_call_in_default_no_crash(v):
     get_node(defines, f"{PREFIX}.func_with_call_default")
 
 
+def test_function_as_default_arg_uses(v):
+    """Function passed as arg in a default value should create uses edges from the function (#116)."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.func_with_func_as_default_arg")
+    get_node(uses, f"{PREFIX}.wrapper")
+    get_node(uses, f"{PREFIX}.identity")
+
+
 # --- Keyword-only defaults ---
 
 def test_kwonly_defaults_defined(v):

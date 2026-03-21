@@ -328,6 +328,12 @@ def func_with_lambda_default(x=lambda a, b: a):
 def func_with_call_default(x=identity(42)):
     return x
 
+def wrapper(func):
+    return func
+
+def func_with_func_as_default_arg(cb=wrapper(identity)):
+    return cb
+
 
 # --- Keyword-only defaults ---
 

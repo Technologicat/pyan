@@ -590,6 +590,12 @@ class CallGraphVisitor(ast.NodeVisitor):
         # Bind args to the default values that were already visited above.
         self._bind_function_defaults(node.args, default_values)
 
+        # Supplement uses edges: defaults were visited in the enclosing scope
+        # (for symtable correctness), but the function itself also "uses" the
+        # names referenced in its defaults — e.g. `def f(cb=some_func)` should
+        # show `f → some_func`.
+        self._record_default_uses_in_function(node.args)
+
         # Visit type annotations to create uses edges for referenced types.
         #
         # NOTE: Strictly, Python evaluates annotations in the *enclosing*
@@ -702,6 +708,31 @@ class CallGraphVisitor(ast.NodeVisitor):
             for tgt, val in zip(ast_args.kwonlyargs, kw, strict=False):
                 if val is not None:
                     self._bind_target(tgt, val)
+
+    def _record_default_uses_in_function(self, ast_args):
+        """Record uses edges from the current function to names in default values.
+
+        Default value expressions are visited in the enclosing scope (by
+        ``_visit_function_defaults``) because Python evaluates them at definition
+        time. But for call-graph purposes, the function *uses* those names —
+        e.g. ``def f(cb=some_func)`` should show ``f → some_func``.
+
+        This walks default value ASTs and adds supplementary uses edges from the
+        function (the current namespace) without re-triggering the full visitor
+        (which would conflict with symtable scope expectations).
+        """
+        from_node = self.get_node_of_current_namespace()
+        defaults = list(ast_args.defaults or [])
+        defaults.extend(v for v in (ast_args.kw_defaults or []) if v is not None)
+        for val in defaults:
+            for ast_node in ast.walk(val):
+                if isinstance(ast_node, ast.Name) and isinstance(ast_node.ctx, ast.Load):
+                    to_node = self.get_value(ast_node.id)
+                    if not isinstance(to_node, Node):
+                        if ast_node.id in self.scope_stack[-1].locals:
+                            continue
+                        to_node = self.get_node(None, ast_node.id, ast_node, flavor=Flavor.UNKNOWN)
+                    self.add_uses_edge(from_node, to_node)
 
     def _visit_function_annotations(self, node):
         """Visit type annotations on a FunctionDef in the current (enclosing) scope."""
