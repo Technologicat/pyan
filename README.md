@@ -157,6 +157,8 @@ pyan3 src/ --dot --dot-ranksep 1.5       # increase rank separation (inches)
 pyan3 src/ --dot --concentrate           # merge bidirectional edges into double-headed arrows
 ```
 
+**Note on `--concentrate`:** GraphViz's edge concentration can produce small gaps at edge split/merge points (endpoint coordinates differ by ~0.02–0.09 graph units). This is a known GraphViz precision issue, visible at high zoom in interactive viewers. The visual output is still useful — just be aware that concentrated edges may not join perfectly.
+
 
 ## Python API
 
@@ -280,7 +282,7 @@ The module-level mode has its own set of options (separate from the call-graph m
 - `--dot-rankdir` — layout direction (`TB`, `LR`, `BT`, `RL`)
 - `--dot-ranksep` — rank separation in inches
 - `--graphviz-layout` — layout algorithm (`dot`, `fdp`, `neato`, etc.)
-- `--concentrate` — merge bidirectional edges into double-headed arrows
+- `--concentrate` — merge bidirectional edges into double-headed arrows (note: may produce small gaps at split points due to GraphViz precision; see above)
 - `--init` — include `__init__` modules (excluded by default to reduce clutter)
 - `--root` — project root directory (file paths are made relative to this before deriving module names; if omitted, inferred automatically)
 
