@@ -5,9 +5,9 @@ import os
 
 import pytest
 
+from pyan.anutils import infer_root
 from pyan.modvis import (
     ImportVisitor,
-    _infer_root,
     create_modulegraph,
     filename_to_module_name,
     main,
@@ -56,18 +56,18 @@ class TestInferRoot:
         # Given absolute paths inside the fixture packages,
         # inference should land on FIXTURE_DIR.
         files = fixture_files()
-        assert os.path.abspath(_infer_root(files)) == os.path.abspath(FIXTURE_DIR)
+        assert os.path.abspath(infer_root(files)) == os.path.abspath(FIXTURE_DIR)
 
     def test_single_file_in_package(self):
         f = os.path.join(FIXTURE_DIR, "pkg_a", "alpha.py")
         # pkg_a has __init__.py, so root should be its parent (FIXTURE_DIR)
-        assert os.path.abspath(_infer_root([f])) == os.path.abspath(FIXTURE_DIR)
+        assert os.path.abspath(infer_root([f])) == os.path.abspath(FIXTURE_DIR)
 
     def test_single_top_level_file(self, tmp_path):
         # A lone .py file with no __init__.py → root is its directory
         f = tmp_path / "standalone.py"
         f.write_text("")
-        assert _infer_root([str(f)]) == str(tmp_path)
+        assert infer_root([str(f)]) == str(tmp_path)
 
 
 class TestSplitModuleName:

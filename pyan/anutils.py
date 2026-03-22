@@ -24,6 +24,33 @@ def expand_sources(patterns):
     return result
 
 
+def infer_root(filenames):
+    """Infer the project root from a list of ``.py`` file paths.
+
+    Finds the deepest common ancestor directory of all *filenames*,
+    then walks up while the directory contains ``__init__.py`` (those
+    are packages, not the root).  The first directory without
+    ``__init__.py`` is returned as the root.
+
+    Falls back to cwd when *filenames* is empty.
+    """
+    abspaths = [os.path.abspath(f) for f in filenames]
+    if not abspaths:
+        return os.getcwd()
+    common = os.path.dirname(abspaths[0]) if len(abspaths) == 1 else os.path.commonpath(abspaths)
+    # If commonpath landed on a file (single file, or all files share a name prefix),
+    # step up to the containing directory.
+    if not os.path.isdir(common):
+        common = os.path.dirname(common)
+    # Walk up while directory is a package (contains __init__.py).
+    while os.path.isfile(os.path.join(common, "__init__.py")):
+        parent = os.path.dirname(common)
+        if parent == common:  # filesystem root
+            break
+        common = parent
+    return common
+
+
 def head(lst):
     if len(lst):
         return lst[0]
@@ -37,9 +64,25 @@ def tail(lst):
 
 
 def get_module_name(filename, root: str = None):
-    """Try to determine the full module name of a source file, by figuring out
-    if its directory looks like a package (i.e. has an __init__.py file or
-    there is a .py file in it )."""
+    """Determine the full module name of a source file.
+
+    When *root* is given, the module name is the dotted path from *root*
+    to *filename* (with ``.py`` stripped).  This is the reliable mode —
+    use :func:`infer_root` to obtain a suitable *root* from a set of
+    source files.
+
+    .. deprecated:: 2.2.2
+        The *root* = ``None`` mode is **unreliable** and should not be
+        used.  It walks up the directory tree using ``__init__.py`` as
+        the only package marker, which **silently produces wrong names**
+        for namespace packages (PEP 420 — directories without
+        ``__init__.py``).  Always pass an explicit *root*.
+    """
+    if root is not None:
+        # Normalise both to absolute so the comparison is reliable
+        # regardless of whether the caller passed relative or absolute paths.
+        filename = os.path.abspath(filename)
+        root = os.path.abspath(root)
 
     if os.path.basename(filename) == "__init__.py":
         # init file means module name is directory name
@@ -59,14 +102,22 @@ def get_module_name(filename, root: str = None):
             is_root = any(f == "__init__.py" for f in os.listdir(potential_root))
             directories.insert(0, (potential_root, is_root))
 
-        # keep directories where itself of parent is root
+        # keep directories where itself or parent is root
         while not directories[0][1]:
             directories.pop(0)
 
     else:  # root is already known - just walk up until it is matched
         while directories[0][0] != root:
             potential_root = os.path.dirname(directories[0][0])
+            if potential_root == directories[0][0]:
+                # Hit filesystem root without matching — root is not an
+                # ancestor of filename.  Fall back to what we have.
+                break
             directories.insert(0, (potential_root, True))
+        # The root directory itself is not part of the module name — it's
+        # the directory from which module paths are resolved (like sys.path).
+        if directories[0][0] == root:
+            directories.pop(0)
 
     mod_name = ".".join([os.path.basename(f[0]) for f in directories])
     return mod_name

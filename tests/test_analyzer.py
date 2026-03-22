@@ -59,6 +59,6 @@ def test_resolve_package_with_known_root():
     dirname = os.path.dirname(__file__)
     filenames = glob(os.path.join(dirname, "test_code/**/*.py"), recursive=True)
     callgraph = CallGraphVisitor(filenames, logger=logging.getLogger(), root=dirname)
-    dirname_base = os.path.basename(dirname)
-    defines = get_in_dict(callgraph.defines_edges, f"{dirname_base}.test_code.subpackage2.submodule_hidden1")
-    get_node(defines, f"{dirname_base}.test_code.subpackage2.submodule_hidden1.test_func1")
+    # Root directory itself is not part of the module name (like sys.path).
+    defines = get_in_dict(callgraph.defines_edges, "test_code.subpackage2.submodule_hidden1")
+    get_node(defines, "test_code.subpackage2.submodule_hidden1.test_func1")

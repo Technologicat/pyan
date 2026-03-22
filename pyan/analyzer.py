@@ -15,6 +15,7 @@ from .anutils import (
     format_alias,
     get_ast_node_name,
     get_module_name,
+    infer_root,
     resolve_method_resolution_order,
     tail,
 )
@@ -54,13 +55,19 @@ class CallGraphVisitor(ast.NodeVisitor):
     def __init__(self, filenames, root: str = None, logger=None):
         self.logger = logger or logging.getLogger(__name__)
 
+        # Infer root from filenames when not explicitly given.
+        # This ensures namespace packages (directories without __init__.py)
+        # get correct dotted module names.  See #117.
+        if root is None:
+            root = infer_root(filenames)
+        self.root = root
+
         # full module names for all given files
         self.module_to_filename = {}  # inverse mapping for recording which file each AST node came from
         for filename in filenames:
-            mod_name = get_module_name(filename)
+            mod_name = get_module_name(filename, root=self.root)
             self.module_to_filename[mod_name] = filename
         self.filenames = filenames
-        self.root = root
 
         # data gathered from analysis
         self.defines_edges = {}

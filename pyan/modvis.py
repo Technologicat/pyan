@@ -10,34 +10,7 @@ import logging
 import os
 
 from . import node, visgraph, writers
-from .anutils import expand_sources
-
-
-def _infer_root(filenames):
-    """Infer the project root from a list of ``.py`` file paths.
-
-    Finds the deepest common ancestor directory of all *filenames*,
-    then walks up while the directory contains ``__init__.py`` (those
-    are packages, not the root).  The first directory without
-    ``__init__.py`` is returned as the root.
-
-    Falls back to cwd when *filenames* is empty.
-    """
-    abspaths = [os.path.abspath(f) for f in filenames]
-    if not abspaths:
-        return os.getcwd()
-    common = os.path.dirname(abspaths[0]) if len(abspaths) == 1 else os.path.commonpath(abspaths)
-    # If commonpath landed on a file (single file, or all files share a name prefix),
-    # step up to the containing directory.
-    if not os.path.isdir(common):
-        common = os.path.dirname(common)
-    # Walk up while directory is a package (contains __init__.py).
-    while os.path.isfile(os.path.join(common, "__init__.py")):
-        parent = os.path.dirname(common)
-        if parent == common:  # filesystem root
-            break
-        common = parent
-    return common
+from .anutils import expand_sources, infer_root
 
 
 def filename_to_module_name(fullpath, root=None):  # Not anutils.get_module_name: module-level analysis needs __init__ as a distinct node (not folded into the package name).
@@ -126,7 +99,7 @@ class ImportVisitor(ast.NodeVisitor):
         self.modules = {}  # modname: {dep0, dep1, ...}
         self.fullpaths = {}  # modname: fullpath
         self.logger = logger
-        self.root = root if root is not None else _infer_root(filenames)
+        self.root = root if root is not None else infer_root(filenames)
         self.analyze(filenames)
 
     def analyze(self, filenames):
