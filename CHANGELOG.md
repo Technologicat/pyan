@@ -1,8 +1,28 @@
 # Changelog
 
-## 2.2.2 (in progress)
+## 2.2.2 (23 March 2026) — *Hotfix*
 
-*No user-visible changes yet.*
+### Bug fixes
+
+- **Namespace packages lose cross-module edges** — when a regular package
+  (with `__init__.py`) called into a namespace package (without
+  `__init__.py`), the edge was silently lost.  `get_module_name()` used
+  `__init__.py` as the sole package marker, stripping namespace-package
+  directories from module names and breaking edge resolution.  The analyzer
+  now auto-infers the project root from the input filenames and uses it
+  consistently for all module name resolution.  (#117 — thanks @doctorgu)
+
+### Internal
+
+- **`infer_root()` promoted to public API** — moved from `modvis._infer_root`
+  to `anutils.infer_root`, shared by both the call-graph and module-graph
+  analyzers.
+- **`get_module_name()` `root=None` mode deprecated** — the heuristic
+  walk-up is unreliable for namespace packages.  All internal call sites
+  now always pass an explicit root.
+- **Root excluded from module names** — `get_module_name()` with an explicit
+  root no longer includes the root directory's basename in the output,
+  matching Python's `sys.path` semantics.
 
 
 ---
