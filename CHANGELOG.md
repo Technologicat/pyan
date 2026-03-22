@@ -1,6 +1,15 @@
 # Changelog
 
-## 2.2.1 (in progress)
+## 2.2.1 (22 March 2026) — *Hotfix*
+
+### Documentation
+
+- **Recommended options in README** — added a section with recommended CLI
+  options for common use cases: clean uses-only graphs, `fdp` layout for
+  larger projects, and `--depth 1` for high-level overviews.  Re-rendered
+  the example graph with `--no-defines --concentrate`.
+- **`--concentrate` precision caveat** — noted that GraphViz's edge
+  concentration can produce small gaps at split/merge points.
 
 ### Bug fixes
 

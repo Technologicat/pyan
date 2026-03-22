@@ -47,6 +47,7 @@ This revival was carried out by [Technologicat](https://github.com/Technologicat
 - [Overview](#overview)
 - [Usage](#usage)
     - [CLI usage](#cli-usage)
+        - [Recommended options](#recommended-options)
         - [Graph depth control](#graph-depth-control)
         - [Filtering](#filtering)
         - [Call path listing](#call-path-listing)
@@ -73,17 +74,25 @@ This revival was carried out by [Technologicat](https://github.com/Technologicat
 
 # Overview
 
+<!-- To regenerate graph0:
+     pyan3 tests/orbital/*.py --dot --colored --no-defines --concentrate --file graph0.dot
+     dot -Tsvg graph0.dot -o graph0.svg
+     dot -Tpng graph0.dot -o graph0.png
+     rm graph0.dot
+-->
 [![Example output](graph0.png "Example: GraphViz rendering of Pyan output (click for .svg)")](graph0.svg)
 
-**Defines** relations are drawn with _dotted gray arrows_.
+This example was rendered with the [recommended options](#recommended-options): `--colored --no-defines --concentrate`.
 
-**Uses** relations are drawn with _black solid arrows_. Recursion is indicated by an arrow from a node to itself. [Mutual recursion](https://en.wikipedia.org/wiki/Mutual_recursion#Basic_examples) between nodes X and Y is indicated by a pair of arrows, one pointing from X to Y, and the other from Y to X.
+**Uses** relations are drawn with _black solid arrows_. Recursion is indicated by an arrow from a node to itself. [Mutual recursion](https://en.wikipedia.org/wiki/Mutual_recursion#Basic_examples) between nodes X and Y is indicated by a pair of arrows, one pointing from X to Y, and the other from Y to X. With `--concentrate`, bidirectional edges are merged into double-headed arrows.
+
+**Defines** relations (drawn with _dotted gray arrows_) can be enabled with `--defines`.
 
 **Nodes** are always filled, and made translucent to clearly show any arrows passing underneath them. This is especially useful for large graphs with GraphViz's `fdp` filter. If colored output is not enabled, the fill is white.
 
 In **node coloring**, the [HSL](https://en.wikipedia.org/wiki/HSL_and_HSV) color model is used. The **hue** is determined by the _filename_ the node comes from. The **lightness** is determined by _depth of namespace nesting_, with darker meaning more deeply nested. Saturation is constant. The spacing between different hues depends on the number of files analyzed; better results are obtained for fewer files.
 
-**Groups** are filled with translucent gray to avoid clashes with any node color.
+**Groups** can be enabled with `--grouped` (and `--nested-groups` for nested subgraph clusters). Groups are filled with translucent gray to avoid clashes with any node color.
 
 The nodes can be **annotated** by _filename and source line number_ information.
 
@@ -114,6 +123,29 @@ pyan3 *.py --uses --no-defines --colored --grouped --annotated --html >myuses.ht
 # Output plain text — especially useful for feeding call graph info to coding AI agents
 pyan3 src/ --uses --no-defines --text
 ```
+
+### Recommended options
+
+For a clean uses-only call graph:
+
+```bash
+pyan3 src/*.py --dot --colored --no-defines --concentrate --file output.dot
+dot -Tsvg output.dot -o output.svg
+```
+
+This omits defines edges (which tend to clutter the graph) and merges bidirectional uses edges into double-headed arrows. The `dot` layout works well for hierarchical call graphs; for larger graphs, `fdp` (force-directed) can produce more readable results:
+
+```bash
+pyan3 src/*.py --dot --colored --no-defines --concentrate --graphviz-layout fdp --file output.dot
+fdp -Tsvg output.dot -o output.svg
+```
+
+For a high-level overview, add `--depth 1` to collapse everything down to modules, classes, and top-level functions:
+
+```bash
+pyan3 src/*.py --dot --colored --no-defines --concentrate --depth 1 --file overview.dot
+```
+
 
 ### Graph depth control
 
