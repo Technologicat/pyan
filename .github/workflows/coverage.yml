@@ -15,7 +15,6 @@ jobs:
       uses: actions/setup-python@v6
       with:
         python-version: "3.14"
-        allow-prereleases: true
     - name: Install system dependencies
       run: |
         sudo apt-get update -q
