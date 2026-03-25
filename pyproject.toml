@@ -46,6 +46,11 @@ dev = [
     'twine>=6.0.0',
     'urllib3>=2.6.3',       # transitive via twine → requests; floor for CVE fixes
     'cryptography>=46.0.5', # transitive via twine → keyring; floor for CVE fixes
+    "flake8",
+    "autopep8",
+    "importmagic",
+    "epc",
+    "jedi>=0.19.2",
 ]
 
 test = [
