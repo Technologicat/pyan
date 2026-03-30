@@ -47,3 +47,5 @@ Items with GitHub ticket numbers are tracked externally. The rest are internal n
 - **D17**: README example graph
 - **D34**: Document recommended options in README
 - **D27**: Directional graph filtering (`1e096ec`)
+
+- **D35: Audit typing: abstract parameter types, concrete return types**: Parameters should use abstract types from `collections.abc` (`Mapping`, `Sequence`, `Iterable`) for widest-possible-accepted semantics. Return types should use concrete lowercase builtins (`tuple[int, int]`, `list[int]`, `dict[str, int]`) — PEP 585, Python 3.9+. The capitalized `typing` forms (`Dict`, `List`, `Tuple`) are deprecated aliases for the builtins and offer no extra width — avoid them. Audit existing type hints across the codebase for consistency. (Discovered during raven-cherrypick compare mode planning, 2026-03-30.)
