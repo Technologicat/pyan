@@ -6,8 +6,6 @@ Items with GitHub ticket numbers are tracked externally. The rest are internal n
 
 ### With GitHub tickets
 
-- **D13: Per-anonymous-scope isolation** (#110): Multiple comprehensions or lambdas in the same function share one scope key. Would need numbered keys to isolate each scope's bindings. 3.12+ `symtable` quirk complicates this — see ticket for details.
-
 ### Internal
 
 - **D14: "Node" terminology overload**: Three concepts share the name "node": (1) AST node (`ast.AST`), (2) Pyan's analysis graph node (`Node` class), (3) visualization/output node. Consider introducing distinct terminology.

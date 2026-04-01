@@ -74,7 +74,7 @@ def test_multiple_inheritance(v):
 def test_lambda_definition(v):
     """Lambda is defined as a child of the enclosing function."""
     defines = get_in_dict(v.defines_edges, f"{PREFIX}.make_adder")
-    get_node(defines, f"{PREFIX}.make_adder.lambda")
+    get_node(defines, f"{PREFIX}.make_adder.lambda.0")
 
 
 # --- Closures ---
@@ -392,12 +392,28 @@ def test_genexpr_iter_protocol(v):
     get_node(uses, f"{PREFIX}.Sequence.__iter__")
 
 
+# --- Per-anonymous-scope isolation (#110) ---
+
+def test_multi_listcomp_isolated_scopes(v):
+    """Two listcomps in the same function should get separate scope nodes."""
+    defines = get_in_dict(v.defines_edges, f"{PREFIX}.multi_listcomp")
+    get_node(defines, f"{PREFIX}.multi_listcomp.listcomp.0")
+    get_node(defines, f"{PREFIX}.multi_listcomp.listcomp.1")
+
+
+def test_multi_lambda_isolated_scopes(v):
+    """Two lambdas in the same function should get separate scope nodes."""
+    defines = get_in_dict(v.defines_edges, f"{PREFIX}.multi_lambda")
+    get_node(defines, f"{PREFIX}.multi_lambda.lambda.0")
+    get_node(defines, f"{PREFIX}.multi_lambda.lambda.1")
+
+
 # --- Lambda with defaults ---
 
 def test_lambda_with_defaults(v):
     """Lambda with positional default should be defined."""
     defines = get_in_dict(v.defines_edges, PREFIX)
-    get_node(defines, f"{PREFIX}.lambda")
+    get_node(defines, f"{PREFIX}.lambda.0")
 
 
 # --- Import resolution ---

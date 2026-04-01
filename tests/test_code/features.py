@@ -403,6 +403,21 @@ def use_genexpr():
     return list(x for x in seq)  # noqa: C400  # test fixture: intentionally exercises genexpr
 
 
+# --- Per-anonymous-scope isolation (#110) ---
+
+def multi_listcomp():
+    seq = Sequence()
+    a = [x for x in seq]  # noqa: C416  # test fixture
+    b = [y for y in seq]  # noqa: C416  # test fixture
+    return a, b
+
+
+def multi_lambda():
+    f = lambda x: x + 1  # noqa: E731  # test fixture
+    g = lambda y: y * 2  # noqa: E731  # test fixture
+    return f, g
+
+
 # --- Lambda with defaults (exercises analyze_arguments) ---
 
 apply_default = lambda x, y=42: x + y  # noqa: E731  # test fixture

@@ -21,6 +21,10 @@ from .anutils import (
 )
 from .node import Flavor, Node
 
+# Anonymous scope type names — lambdas, comprehensions, generator expressions.
+# These get numbered per parent scope to isolate each instance's bindings.
+_ANON_SCOPE_NAMES = frozenset({"lambda", "listcomp", "setcomp", "dictcomp", "genexpr"})
+
 # TODO: add Cython support (strip type annotations in a preprocess step, then treat as Python)
 # TODO: built-in functions (range(), enumerate(), zip(), iter(), ...):
 #       add to a special scope "built-in" in analyze_scopes() (or ignore altogether)
@@ -91,6 +95,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.scope_stack = []  # the Scope objects currently in scope
         self.class_stack = []  # Nodes for class definitions currently in scope
         self.context_stack = []  # for detecting which FunctionDefs are methods
+        self._anon_scope_idx = {}  # (parent_ns, scope_type) → next index
 
         # Analyze.
         self.process()
@@ -115,6 +120,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             content = f.read()
         self.filename = filename
         self.module_name = get_module_name(filename, root=self.root)
+        self._anon_scope_idx = {}  # reset per file — must match between analyze_scopes and visitor
         self.analyze_scopes(content, filename)  # add to the currently known scopes
         self.visit(ast.parse(content, filename))
         self.module_name = None
@@ -654,9 +660,9 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.visit_FunctionDef(node)  # TODO: alias for now; tag async functions in output in a future version?
 
     def visit_Lambda(self, node):
-        # TODO: avoid lumping together all lambdas in the same namespace.
         self.logger.debug(f"Lambda, {self.filename}:{node.lineno}")
-        with ExecuteInInnerScope(self, "lambda") as scope_ctx:
+        numbered_label = self._next_anon_scope_name("lambda", node)
+        with ExecuteInInnerScope(self, numbered_label) as scope_ctx:
             self.generate_args_nodes(node.args, scope_ctx.inner_ns)
             self.analyze_arguments(node.args)
             self.visit(node.body)  # single expr
@@ -1167,6 +1173,28 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.logger.debug(f"GeneratorExp, {self.filename}:{node.lineno}")
         return self.analyze_comprehension(node, "genexpr")
 
+    def _next_anon_scope_name(self, scope_type, ast_node):
+        """Return a numbered scope name like ``listcomp.0``, ``lambda.1``, etc.
+
+        Each anonymous scope instance in a parent namespace gets a unique index,
+        so that multiple comprehensions or lambdas don't share bindings.
+
+        The AST node is used for deduplication: if the same node is visited
+        more than once (e.g. a ``for`` loop iter expression visited by both
+        ``visit_For`` and ``analyze_binding``), the same name is returned.
+        """
+        parent_ns = self.get_node_of_current_namespace().get_name()
+        # Dedup by AST node identity (line + col is unique per scope instance).
+        dedup_key = (parent_ns, scope_type, ast_node.lineno, ast_node.col_offset)
+        if dedup_key in self._anon_scope_idx:
+            return self._anon_scope_idx[dedup_key]
+        count_key = (parent_ns, scope_type)
+        idx = self._anon_scope_idx.get(count_key, 0)
+        self._anon_scope_idx[count_key] = idx + 1
+        name = f"{scope_type}.{idx}"
+        self._anon_scope_idx[dedup_key] = name
+        return name
+
     def analyze_comprehension(self, node, label, field1="elt", field2=None):
         """Analyze a comprehension node (listcomp, setcomp, dictcomp, genexpr).
 
@@ -1197,19 +1225,25 @@ class CallGraphVisitor(ast.NodeVisitor):
             iter_node = self.visit(expr)
         self._add_iterator_protocol_edges(iter_node, is_async=outermost.is_async)
 
+        # Give each comprehension instance a unique scope name (e.g. listcomp.0,
+        # listcomp.1) so that multiple comprehensions in the same function don't
+        # share bindings.  The numbering must match analyze_scopes() (pre-3.12)
+        # since both iterate children/nodes in AST order.
+        numbered_label = self._next_anon_scope_name(label, node)
+
         # Ensure comprehension scope exists. On Python 3.12+ (PEP 709),
         # symtable no longer reports listcomp/setcomp/dictcomp as child scopes.
         # Create a synthetic scope with the iteration target names to preserve
         # variable isolation during analysis.
         parent_ns = self.get_node_of_current_namespace().get_name()
-        inner_ns = f"{parent_ns}.{label}"
+        inner_ns = f"{parent_ns}.{numbered_label}"
         if inner_ns not in self.scopes:
             target_names = set()
             for gen in gens:
                 self._collect_target_names(gen.target, target_names)
-            self.scopes[inner_ns] = Scope.from_names(label, target_names)
+            self.scopes[inner_ns] = Scope.from_names(numbered_label, target_names)
 
-        with ExecuteInInnerScope(self, label) as scope_ctx:
+        with ExecuteInInnerScope(self, numbered_label) as scope_ctx:
             # Bind outermost targets to the iterator value in inner scope.
             for tgt in outermost_targets:
                 self._bind_target(tgt, iter_node)
@@ -1714,8 +1748,21 @@ class CallGraphVisitor(ast.NodeVisitor):
             sc = Scope(table)
             ns = f"{parent_ns}.{sc.name}" if len(sc.name) else parent_ns
             scopes[ns] = sc
+            anon_counts = {}  # number duplicate anonymous scope children
             for t in table.get_children():
-                process(ns, t)
+                child_name = t.get_name()
+                if child_name in _ANON_SCOPE_NAMES:
+                    idx = anon_counts.get(child_name, 0)
+                    anon_counts[child_name] = idx + 1
+                    child_sc = Scope(t)
+                    numbered_name = f"{child_name}.{idx}"
+                    child_sc.name = numbered_name
+                    child_ns = f"{ns}.{numbered_name}"
+                    scopes[child_ns] = child_sc
+                    for sub_t in t.get_children():
+                        process(child_ns, sub_t)
+                else:
+                    process(ns, t)
 
         process(self.module_name, symtable.symtable(code, filename, compile_type="exec"))
 
@@ -2266,7 +2313,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         # BUG: resolve relative imports causes (RuntimeError: dictionary changed size during iteration)
         # temporary solution is adding list to force a copy of 'self.nodes'
         for name in list(self.nodes):
-            if name in ("lambda", "listcomp", "setcomp", "dictcomp", "genexpr"):
+            if name.partition(".")[0] in _ANON_SCOPE_NAMES:
                 for n in self.nodes[name]:
                     pn = self.get_parent_node(n)
                     if n in self.uses_edges:

@@ -18,6 +18,13 @@
   edge to the class itself, so these classes no longer appear
   disconnected in the graph.  (#113)
 
+- **Per-anonymous-scope isolation** — multiple lambdas or comprehensions
+  in the same function no longer share a single scope.  Each instance
+  now gets a numbered scope key (e.g. `listcomp.0`, `listcomp.1`),
+  preventing the second instance's bindings from overwriting the first's.
+  Works on both pre-3.12 (symtable-based) and 3.12+ (PEP 709 synthetic)
+  scope paths.  (#110)
+
 - **Module-graph multi-project coloring** — modules are now colored by
   top-level directory relative to the project root, matching the
   call-graph analyzer's approach. Previously, modules from different
