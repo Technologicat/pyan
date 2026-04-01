@@ -148,9 +148,12 @@ class VisualGraph:
                     return n.get_long_annotated_name()
 
         else:
-
-            def labeler(n):
-                return n.get_short_name()
+            if grouped:
+                def labeler(n):
+                    return n.get_short_name()
+            else:
+                def labeler(n):
+                    return n.get_class_prefixed_name()
 
         logger = logger or logging.getLogger(__name__)
 

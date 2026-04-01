@@ -105,6 +105,17 @@ class Node:
         else:
             return self.name
 
+    def get_class_prefixed_name(self):
+        """Return the name prefixed with the owning class for methods, or the short name otherwise.
+
+        Useful for ungrouped display where no group title provides namespace context."""
+        if self.namespace is None:
+            return "*." + self.name
+        if self.flavor in (Flavor.METHOD, Flavor.STATICMETHOD, Flavor.CLASSMETHOD):
+            class_name = self.namespace.rsplit(".", 1)[-1]
+            return f"{class_name}.{self.name}"
+        return self.name
+
     def get_annotated_name(self):
         """Return the short name, plus module and line number of definition site, if available.
         Names of unknown nodes will include the *. prefix."""

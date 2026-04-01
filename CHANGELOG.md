@@ -13,6 +13,11 @@
   Sphinx directive (`:exclude:` option, comma-separated).
   (#119 — thanks @lightswitch05)
 
+- **Class-prefixed method labels when ungrouped** — when grouping is off,
+  method labels are now prefixed with the class name (e.g. `MyClass.run`
+  instead of just `run`), making it possible to tell which class a method
+  belongs to without annotations.  (#112)
+
 
 ---
 

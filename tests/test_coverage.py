@@ -72,6 +72,34 @@ class TestNodeLabels:
         assert n.get_long_annotated_name() == "foo"
 
 
+class TestClassPrefixedName:
+    """Cover get_class_prefixed_name — class-qualified labels for methods."""
+
+    def test_method(self):
+        n = Node("pkg.mod.MyClass", "run", None, "test.py", Flavor.METHOD)
+        assert n.get_class_prefixed_name() == "MyClass.run"
+
+    def test_staticmethod(self):
+        n = Node("pkg.mod.MyClass", "create", None, "test.py", Flavor.STATICMETHOD)
+        assert n.get_class_prefixed_name() == "MyClass.create"
+
+    def test_classmethod(self):
+        n = Node("pkg.mod.MyClass", "from_dict", None, "test.py", Flavor.CLASSMETHOD)
+        assert n.get_class_prefixed_name() == "MyClass.from_dict"
+
+    def test_function_not_prefixed(self):
+        n = Node("pkg.mod", "helper", None, "test.py", Flavor.FUNCTION)
+        assert n.get_class_prefixed_name() == "helper"
+
+    def test_wildcard(self):
+        n = Node(None, "foo", None, "test.py", Flavor.UNKNOWN)
+        assert n.get_class_prefixed_name() == "*.foo"
+
+    def test_top_level(self):
+        n = Node("", "main", None, "test.py", Flavor.FUNCTION)
+        assert n.get_class_prefixed_name() == "main"
+
+
 class TestNodeNamespace:
     """Cover get_toplevel_namespace edge cases."""
 
@@ -250,6 +278,23 @@ class TestVisgraphAnnotated:
         from pyan import create_callgraph
         result = create_callgraph(FIXTURE, format="dot", annotated=True, grouped=False)
         assert "digraph G" in result
+
+    def test_ungrouped_class_prefixed_methods(self):
+        """Ungrouped + not annotated uses class-prefixed labels for methods.
+        Also verifies that grouped=False overrides nested_groups default."""
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE, format="dot", grouped=False, annotated=False)
+        # features.py defines Decorated with methods — labels should be class-prefixed
+        assert "Decorated.regular" in result
+
+    def test_grouped_short_names(self):
+        """Grouped + not annotated uses short (unprefixed) labels."""
+        from pyan import create_callgraph
+        result = create_callgraph(FIXTURE, format="dot", grouped=True, annotated=False)
+        # When grouped, the group title shows the class — labels should be just the method name.
+        # Check that 'regular' appears as a label (not prefixed with 'Decorated.').
+        # In DOT, labels look like: label="regular"
+        assert 'label="regular"' in result
 
     def test_nested_groups(self):
         """Nested groups creates nested subgraph clusters."""

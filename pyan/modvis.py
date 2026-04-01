@@ -347,7 +347,9 @@ def create_modulegraph(
         filenames = [filenames]
     filenames = expand_sources(filenames, exclude=exclude)
 
-    if nested_groups:
+    if not grouped:
+        nested_groups = False
+    elif nested_groups:
         grouped = True
     graph_options = {
         "draw_defines": False,

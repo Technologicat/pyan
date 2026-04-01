@@ -134,7 +134,9 @@ def create_callgraph(
         filenames = [filenames]
     filenames = expand_sources(filenames, exclude=exclude)
 
-    if nested_groups:
+    if not grouped:
+        nested_groups = False
+    elif nested_groups:
         grouped = True
     graph_options = {
         "draw_defines": draw_defines,
