@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.1 (in progress)
+
+*No user-visible changes yet.*
+
+
+---
+
 ## 2.3.0 (2 April 2026) — *Carta marina* edition
 
 ### New features
