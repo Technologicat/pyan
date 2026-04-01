@@ -13,6 +13,11 @@
   Sphinx directive (`:exclude:` option, comma-separated).
   (#119 — thanks @lightswitch05)
 
+- **Class-level constant attribute access** — accessing class constants
+  (e.g. `Color.RED` on an Enum, or `Config.DEBUG`) now creates a uses
+  edge to the class itself, so these classes no longer appear
+  disconnected in the graph.  (#113)
+
 - **Class-prefixed method labels when ungrouped** — when grouping is off,
   method labels are now prefixed with the class name (e.g. `MyClass.run`
   instead of just `run`), making it possible to tell which class a method

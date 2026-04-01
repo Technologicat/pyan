@@ -113,3 +113,4 @@ source files → CallGraphVisitor (analyzer.py) → Node graph → VisualGraph (
 - **Python version**: 3.10+ (uses `match` statements, `type` aliases in test code).
 - **No external deps** beyond `jinja2` (HTML output only).
 - **Test code organization**: version-specific syntax tests go in separate directories (e.g. `tests/test_code_312/`) to avoid `SyntaxError` on older Pythons.
+- **Lint suppression**: see global coding style rules. In this codebase, SIM102 is suppressed where nested `if` carries semantic meaning (e.g. guard + side-effect in `analyzer.py`).

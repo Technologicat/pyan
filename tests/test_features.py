@@ -438,6 +438,22 @@ def test_local_no_unknown_node(v):
     assert not any(n.endswith(".x") for n in names)
 
 
+# --- Class-level constant attributes ---
+
+def test_class_constant_creates_uses_edge_to_class(v):
+    """Settings.DEBUG should create a uses edge to the Settings class."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.read_setting")
+    get_node(uses, f"{PREFIX}.Settings")
+
+
+def test_class_constant_with_enum():
+    """Enum member access should create a uses edge to the Enum class."""
+    filenames = [os.path.join(TESTS_DIR, "test_code/enum_example.py")]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    uses = get_in_dict(v.uses_edges, "test_code.enum_example.use_color")
+    get_node(uses, "test_code.enum_example.Color")
+
+
 # --- Type aliases (PEP 695, Python 3.12+) ---
 
 PREFIX_312 = "test_code_312.type_aliases"

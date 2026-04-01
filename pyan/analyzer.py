@@ -921,6 +921,15 @@ class CallGraphVisitor(ast.NodeVisitor):
                 if self.add_uses_edge(from_node, attr_node):
                     self.logger.info(f"New edge added for Use from {from_node} to {attr_node}")
 
+                # If the resolved attr won't appear in the graph (not defined)
+                # and the object is a class, also connect to the class itself.
+                # This handles Enum members, class constants, and similar patterns
+                # where the attr resolves to a type-of-constant node (e.g. Color.RED
+                # resolves to Color.int) that is invisible in the output.
+                if not attr_node.defined and isinstance(obj_node, Node) and obj_node.flavor == Flavor.CLASS:  # noqa: SIM102
+                    if self.add_uses_edge(from_node, obj_node):
+                        self.logger.info(f"New edge added for Use from {from_node} to class {obj_node} (attr {node.attr} not defined)")
+
                 # remove resolved wildcard from current site to <Node *.attr>
                 if attr_node.namespace is not None:
                     self.remove_wild(from_node, attr_node, node.attr)
@@ -956,6 +965,11 @@ class CallGraphVisitor(ast.NodeVisitor):
                         "New edge added for Use from {from_node} to {to_node} (target obj {obj_node} known but "
                         f"target attr {node.attr} not resolved; maybe fwd ref or unanalyzed import)"
                     )
+
+                # Same as above: if the object is a class, also connect to it.
+                if obj_node.flavor == Flavor.CLASS:  # noqa: SIM102
+                    if self.add_uses_edge(from_node, obj_node):
+                        self.logger.info(f"New edge added for Use from {from_node} to class {obj_node} (attr {node.attr} unresolved)")
 
                 # remove resolved wildcard from current site to <Node *.attr>
                 self.remove_wild(from_node, obj_node, node.attr)

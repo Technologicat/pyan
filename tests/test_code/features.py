@@ -430,3 +430,13 @@ def local_noise_example(items):
     """Unresolved local `x` should not produce a wildcard UNKNOWN node."""
     x = len(items)  # noqa: F841  # test fixture
     return items
+
+
+# --- Class-level constant attributes ---
+
+class Settings:
+    DEBUG = True
+    VERSION = "1.0"
+
+def read_setting():
+    return Settings.DEBUG
