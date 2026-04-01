@@ -50,7 +50,7 @@ class TestSphinxSetup:
             "alt", "align", "caption", "name", "class",
             "no-groups", "no-defines", "no-uses", "no-colors",
             "nested-groups", "annotated", "direction",
-            "toctree", "zoomable",
+            "exclude", "toctree", "zoomable",
         }
         assert set(CallgraphDirective.option_spec.keys()) == expected
 

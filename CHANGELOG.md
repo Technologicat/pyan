@@ -1,8 +1,17 @@
 # Changelog
 
-## 2.2.3 (in progress)
+## 2.3.0 (in progress)
 
-*No user-visible changes yet.*
+### New features
+
+- **File exclusion** (`-x` / `--exclude`) — exclude files matching glob
+  patterns before analysis.  Patterns without a path separator match
+  against the basename (e.g. `test_*.py`); patterns with a separator
+  match against the full path (e.g. `*/tests/*`).  Available in both
+  call-graph and module-level modes, via CLI, Python API (`exclude`
+  parameter in `create_callgraph` / `create_modulegraph`), and the
+  Sphinx directive (`:exclude:` option, comma-separated).
+  (#119 — thanks @lightswitch05)
 
 
 ---

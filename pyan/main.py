@@ -64,6 +64,7 @@ def create_callgraph(
     direction: str = "both",
     concentrate: bool = False,
     depth: int | None = None,
+    exclude: list[str] | None = None,
     logger=None,
 ) -> str:
     """Create a call graph based on static code analysis.
@@ -120,6 +121,10 @@ def create_callgraph(
         depth: collapse the graph to at most this many nesting levels.
             0 = modules only, 1 = + classes/top-level functions,
             2 = + methods. ``None`` (default) = full detail.
+        exclude: list of exclusion patterns.  Patterns without a path
+            separator match against the basename (e.g. ``"test_*.py"``);
+            patterns with a separator match against the full path
+            (e.g. ``"*/tests/*"``).
         logger: optional ``logging.Logger`` instance.
 
     Returns:
@@ -127,7 +132,7 @@ def create_callgraph(
     """
     if isinstance(filenames, str):
         filenames = [filenames]
-    filenames = expand_sources(filenames)
+    filenames = expand_sources(filenames, exclude=exclude)
 
     if nested_groups:
         grouped = True
@@ -407,6 +412,22 @@ def main(cli_args=None):
     )
 
     parser.add_argument(
+        "-x",
+        "--exclude",
+        action="append",
+        default=[],
+        dest="exclude",
+        metavar="PATTERN",
+        help=(
+            "exclude files matching PATTERN. "
+            "Patterns without a path separator match against the basename; "
+            "patterns with a separator match against the full path. "
+            "Can be repeated. Quote the pattern to prevent shell expansion "
+            "(e.g. --exclude 'test_*.py' --exclude '*/tests/*')."
+        ),
+    )
+
+    parser.add_argument(
         "--module-level",
         action="store_true",
         default=False,
@@ -416,7 +437,7 @@ def main(cli_args=None):
 
     known_args, unknown_args = parser.parse_known_args(cli_args)
 
-    filenames = [os.path.abspath(fn2) for fn2 in expand_sources(unknown_args)]
+    filenames = [os.path.abspath(fn2) for fn2 in expand_sources(unknown_args, exclude=known_args.exclude)]
 
     # determine root
     root = os.path.abspath(known_args.root) if known_args.root is not None else None

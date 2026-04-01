@@ -300,6 +300,7 @@ def create_modulegraph(
     grouped=True,
     with_init=False,
     concentrate=False,
+    exclude=None,
     logger=None,
 ):
     """Create a module-level dependency graph based on static import analysis.
@@ -333,6 +334,10 @@ def create_modulegraph(
             Excluded by default to reduce clutter.
         concentrate: merge bidirectional edges into single double-headed
             arrows (GraphViz ``concentrate`` attribute). [dot/svg/html only]
+        exclude: list of exclusion patterns.  Patterns without a path
+            separator match against the basename (e.g. ``"test_*.py"``);
+            patterns with a separator match against the full path
+            (e.g. ``"*/tests/*"``).
         logger: optional ``logging.Logger`` instance.
 
     Returns:
@@ -340,7 +345,7 @@ def create_modulegraph(
     """
     if isinstance(filenames, str):
         filenames = [filenames]
-    filenames = expand_sources(filenames)
+    filenames = expand_sources(filenames, exclude=exclude)
 
     if nested_groups:
         grouped = True
@@ -485,9 +490,24 @@ def main(cli_args=None):
         dest="root",
         help="Package root directory. Inferred by default.",
     )
+    parser.add_argument(
+        "-x",
+        "--exclude",
+        action="append",
+        default=[],
+        dest="exclude",
+        metavar="PATTERN",
+        help=(
+            "exclude files matching PATTERN. "
+            "Patterns without a path separator match against the basename; "
+            "patterns with a separator match against the full path. "
+            "Can be repeated. Quote the pattern to prevent shell expansion "
+            "(e.g. --exclude 'test_*.py' --exclude '*/tests/*')."
+        ),
+    )
 
     known_args, unknown_args = parser.parse_known_args(cli_args)
-    filenames = expand_sources(unknown_args)
+    filenames = expand_sources(unknown_args, exclude=known_args.exclude)
     if len(unknown_args) == 0:
         parser.error("Need one or more filenames to process")
 

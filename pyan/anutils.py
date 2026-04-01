@@ -3,6 +3,7 @@
 """Utilities for analyzer."""
 
 import ast
+from fnmatch import fnmatch
 from glob import glob
 import os
 import os.path
@@ -10,18 +11,40 @@ import os.path
 from .node import Flavor
 
 
-def expand_sources(patterns):
+def expand_sources(patterns, exclude=None):
     """Expand source file patterns, treating directories as ``dir/**/*.py``.
 
     Accepts a list of file paths, glob patterns, or directory paths.
     Directories are expanded to ``dir/**/*.py`` recursively.
+
+    Args:
+        patterns: list of file paths, glob patterns, or directory paths.
+        exclude: optional list of fnmatch patterns to exclude from the
+            result.  Patterns without a path separator are matched
+            against the basename (e.g. ``"test_*.py"``); patterns with
+            a separator are matched against the full path (e.g.
+            ``"*/tests/*"``).
     """
     result = []
     for pat in patterns:
         if os.path.isdir(pat):
             pat = os.path.join(pat, "**", "*.py")
         result.extend(glob(pat, recursive=True))
+    if exclude:
+        result = [f for f in result if not _matches_exclude(f, exclude)]
     return result
+
+
+def _matches_exclude(filepath, patterns):
+    """Return True if *filepath* matches any of the exclusion *patterns*."""
+    for pat in patterns:
+        if os.sep in pat or "/" in pat:
+            if fnmatch(filepath, pat):
+                return True
+        else:
+            if fnmatch(os.path.basename(filepath), pat):
+                return True
+    return False
 
 
 def infer_root(filenames):

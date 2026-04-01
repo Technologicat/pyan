@@ -58,6 +58,7 @@ class CallgraphDirective(SphinxDirective):
         "nested-groups": directives.unchanged,
         "annotated": directives.unchanged,
         "direction": direction_spec,
+        "exclude": directives.unchanged,
         "toctree": directives.unchanged,
         "zoomable": directives.unchanged,
     }
@@ -72,6 +73,9 @@ class CallgraphDirective(SphinxDirective):
         direction = "vertical"
         if "direction" in self.options:
             direction = self.options["direction"]
+        exclude = None
+        if "exclude" in self.options:
+            exclude = [p.strip() for p in self.options["exclude"].split(",")]
         dotcode = create_callgraph(
             filenames=f"{base_path}/**/*.py",
             root=base_path,
@@ -85,6 +89,7 @@ class CallgraphDirective(SphinxDirective):
             colored="no-colors" not in self.options,
             annotated="annotated" in self.options,
             rankdir={"horizontal": "LR", "vertical": "TB"}[direction],
+            exclude=exclude,
         )
         node = graphviz()
 

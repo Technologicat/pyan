@@ -52,6 +52,7 @@ This revival was carried out by [Technologicat](https://github.com/Technologicat
         - [Recommended options](#recommended-options)
         - [Graph depth control](#graph-depth-control)
         - [Filtering](#filtering)
+        - [Excluding files](#excluding-files)
         - [Call path listing](#call-path-listing)
         - [GraphViz layout options](#graphviz-layout-options)
     - [Python API](#python-api)
@@ -173,6 +174,21 @@ pyan3 src/ --dot --function pkg.mod.func --direction down   # callees only (what
 pyan3 src/ --dot --function pkg.mod.func --direction up     # callers only (what calls this function?)
 ```
 
+### Excluding files
+
+Use `-x` / `--exclude` to filter out files before analysis. Patterns without a path separator match against the basename; patterns with a separator match against the full path. The option can be repeated. **Quote the pattern** to prevent the shell from expanding glob characters.
+
+```bash
+# Exclude test files
+pyan3 'src/**/*.py' --dot -x 'test_*.py' -x 'conftest.py'
+
+# Exclude an entire directory
+pyan3 'src/**/*.py' --dot --exclude '*/tests/*'
+
+# Combine both
+pyan3 'src/**/*.py' --dot -x 'test_*.py' -x '*/tests/*' -x '*/fixtures/*'
+```
+
 ### Call path listing
 
 List all call paths between two functions:
@@ -210,6 +226,7 @@ dot_source = pyan.create_callgraph(
     depth=2,                   # 0=modules, 1=+classes, 2=+methods, None=full
     direction="both",          # "down" (callees), "up" (callers), "both"
     concentrate=True,          # merge bidirectional edges
+    exclude=["test_*.py", "*/tests/*"],  # exclude files matching these patterns
     layout="dot",              # GraphViz layout algorithm
     ranksep="0.5",             # rank separation (inches)
 )
@@ -243,6 +260,7 @@ Several strategies for reducing clutter:
 - **`--depth`** — collapse to less detail: `--depth 2` for classes + methods, `--depth 1` for classes only, `--depth 0` for modules only
 - **`--function` / `--namespace`** — filter to show only calls related to a specific function or namespace
 - **`--direction down`** — show only callees (or `up` for callers); requires `--function` or `--namespace`
+- **`--exclude`** / **`-x`** — exclude files by pattern (e.g. `-x 'test_*.py' -x '*/tests/*'`)
 - **`--module-level`** — switch to module-level import dependency view (see below)
 - Analyze only a subset of your project's files — references outside the analyzed set are not drawn
 
@@ -274,6 +292,7 @@ This adds a callgraph directive which has all the options of the [graphviz direc
 - **:nested-groups:** (boolean flag): if to group by modules and submodules
 - **:annotated:** (boolean flag): annotate callgraph with file names
 - **:direction:** (string): "horizontal" or "vertical" callgraph
+- **:exclude:** (string): comma-separated list of exclusion patterns (e.g. `test_*.py, */tests/*`)
 - **:toctree:** (string): path to toctree (as used with autosummary) to link elements of callgraph to documentation (makes all nodes clickable)
 - **:zoomable:** (boolean flag): enables users to zoom and pan callgraph
 
@@ -317,6 +336,7 @@ The module-level mode has its own set of options (separate from the call-graph m
 - `--dot-ranksep` — rank separation in inches
 - `--graphviz-layout` — layout algorithm (`dot`, `fdp`, `neato`, etc.)
 - `--concentrate` — merge bidirectional edges into double-headed arrows (note: may produce small gaps at split points due to GraphViz precision; see above)
+- `-x`, `--exclude` — exclude files matching a pattern (repeatable; see [Excluding files](#excluding-files))
 - `--init` — include `__init__` modules (excluded by default to reduce clutter)
 - `--root` — project root directory (file paths are made relative to this before deriving module names; if omitted, inferred automatically)
 
@@ -348,6 +368,7 @@ dot_source = pyan.create_modulegraph(
     nested_groups=True,
     with_init=False,           # exclude __init__ modules (default)
     concentrate=True,          # merge bidirectional edges
+    exclude=["test_*.py"],     # exclude files matching these patterns
     layout="dot",              # GraphViz layout algorithm
     ranksep="0.5",             # rank separation (inches)
 )
@@ -458,6 +479,7 @@ _Items tagged with ☆ are new in Pyan3 (the Python 3 fork). Items tagged with �
 - Graph depth control — collapse to module, class, or full method level ★
 - Directional filtering — show only callers (`up`) or callees (`down`) of a function ★
 - Call path listing — find all call paths between two functions ★
+- File exclusion by pattern — skip test files, fixtures, etc. before analysis ★
 
 **GraphViz options**:
 
