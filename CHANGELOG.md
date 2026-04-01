@@ -18,6 +18,12 @@
   edge to the class itself, so these classes no longer appear
   disconnected in the graph.  (#113)
 
+- **Module-graph multi-project coloring** — modules are now colored by
+  top-level directory relative to the project root, matching the
+  call-graph analyzer's approach. Previously, modules from different
+  projects could share colors if their immediate parent directories
+  had the same name.  (#111)
+
 - **Class-prefixed method labels when ungrouped** — when grouping is off,
   method labels are now prefixed with the class name (e.g. `MyClass.run`
   instead of just `run`), making it possible to tell which class a method

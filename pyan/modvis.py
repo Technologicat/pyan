@@ -255,12 +255,12 @@ class ImportVisitor(ast.NodeVisitor):
             if not with_init and (m.endswith(".__init__") or m == "__init__"):
                 continue
             ns, mod = split_module_name(m)
-            package = os.path.dirname(self.fullpaths[m])
-            # print("{}: ns={}, mod={}, fn={}".format(m, ns, mod, fn))
-            # HACK: The `filename` attribute of the node determines the visual color.
-            # HACK: We are visualizing at module level, so color by package.
-            # See TODO_DEFERRED.md "modvis multi-project coloring".
-            n = node.Node(namespace=ns, name=mod, ast_node=None, filename=package, flavor=node.Flavor.MODULE)
+            # The `filename` attribute of the node determines the visual color.
+            # Color by top-level directory relative to root, so that modules
+            # from different projects get distinct hues in multi-project runs.
+            relpath = os.path.relpath(self.fullpaths[m], self.root)
+            color_key = relpath.split(os.sep)[0]
+            n = node.Node(namespace=ns, name=mod, ast_node=None, filename=color_key, flavor=node.Flavor.MODULE)
             n.defined = True
             # Pyan's analyzer.py allows several nodes to share the same short name,
             # which is used as the key to self.nodes; but we use the fully qualified

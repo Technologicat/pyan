@@ -378,6 +378,41 @@ class TestConcentrate:
         result = create_modulegraph(fixture_files(), root=FIXTURE_DIR, format="dot", concentrate=True)
         assert "concentrate=true" in result
 
+
+# ---------------------------------------------------------------------------
+# Multi-project coloring (#111)
+# ---------------------------------------------------------------------------
+
+class TestMultiProjectColoring:
+    def test_distinct_packages_get_distinct_color_keys(self):
+        """Modules in pkg_a and pkg_b should get different color keys (filename attr)."""
+        logger = logging.getLogger("test_modvis")
+        logger.setLevel(logging.WARNING)
+        v = ImportVisitor(fixture_files(), logger, root=FIXTURE_DIR)
+        v.prepare_graph()
+        color_keys = {}
+        for m, node_list in v.nodes.items():
+            n = node_list[0]
+            top_pkg = m.split(".")[0]
+            color_keys.setdefault(top_pkg, set()).add(n.filename)
+        # Each top-level package should map to exactly one color key
+        for pkg, keys in color_keys.items():
+            assert len(keys) == 1, f"{pkg} has multiple color keys: {keys}"
+        # And the two packages should have *different* keys
+        all_keys = [next(iter(keys)) for keys in color_keys.values()]
+        assert len(set(all_keys)) == len(all_keys), f"Packages share color keys: {color_keys}"
+
+    def test_color_key_is_top_level_dir(self):
+        """The color key should be the top-level directory name relative to root."""
+        logger = logging.getLogger("test_modvis")
+        logger.setLevel(logging.WARNING)
+        v = ImportVisitor(fixture_files(), logger, root=FIXTURE_DIR)
+        v.prepare_graph()
+        for m, node_list in v.nodes.items():
+            n = node_list[0]
+            expected = m.split(".")[0]
+            assert n.filename == expected, f"Module {m}: expected color key {expected!r}, got {n.filename!r}"
+
     def test_callgraph_cli_concentrate(self, capsys):
         """pyan3 --concentrate adds concentrate=true to DOT output."""
         from pyan.main import main as pyan_main

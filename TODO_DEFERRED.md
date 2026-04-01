@@ -7,9 +7,6 @@ Items with GitHub ticket numbers are tracked externally. The rest are internal n
 ### With GitHub tickets
 
 - **D13: Per-anonymous-scope isolation** (#110): Multiple comprehensions or lambdas in the same function share one scope key. Would need numbered keys to isolate each scope's bindings. 3.12+ `symtable` quirk complicates this — see ticket for details.
-- **D15: modvis multi-project coloring** (#111): Color by top-level directory, not immediate package. Would match call-graph analyzer's approach.
-- **D21: Prefix methods by class name in graph** (#112): When grouping is off, method labels should include the class name for clarity.
-- **D25: Enum attribute tracking** (#113): `Color.RED` should create a uses edge to the Enum class.
 
 ### Internal
 
