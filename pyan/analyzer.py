@@ -57,7 +57,7 @@ class CallGraphVisitor(ast.NodeVisitor):
     can be gathered."""
 
     def __init__(self, filenames, root: str = None, logger=None):
-        self.logger = logger or logging.getLogger(__name__)
+        self._init_common(logger)
 
         # Infer root from filenames when not explicitly given.
         # This ensures namespace packages (directories without __init__.py)
@@ -67,13 +67,53 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.root = root
 
         # full module names for all given files
-        self.module_to_filename = {}  # inverse mapping for recording which file each AST node came from
         for filename in filenames:
             mod_name = get_module_name(filename, root=self.root)
             self.module_to_filename[mod_name] = filename
         self.filenames = filenames
 
+        # Analyze.
+        self.process()
+
+    @classmethod
+    def from_sources(cls, sources, logger=None):
+        """Create a CallGraphVisitor from in-memory sources (no file I/O).
+
+        Args:
+            sources: iterable of ``(source, module_name)`` pairs, where
+                *source* is either a ``str`` (source text) or an
+                ``ast.Module`` (parsed AST — will be unparsed via
+                ``ast.unparse`` to obtain source text for ``symtable``).
+                *module_name* must be the fully qualified dotted name
+                (e.g. ``"pkg.sub.mod"``, not just ``"mod"``), matching
+                how Python's import system identifies the module.
+            logger: optional ``logging.Logger`` instance.
+
+        Returns:
+            A fully analyzed ``CallGraphVisitor``.
+        """
+        self = cls.__new__(cls)
+        self._init_common(logger)
+        self.root = ""
+
+        # Normalize sources: unparse ASTs, store source text.
+        self._source_texts = {}  # module_name → source text
+        for source, module_name in sources:
+            if isinstance(source, ast.AST):
+                source = ast.unparse(source)
+            self._source_texts[module_name] = source
+            self.module_to_filename[module_name] = module_name  # use module name as stand-in
+        self.filenames = list(self._source_texts.keys())  # module names as "filenames"
+
+        self.process()
+        return self
+
+    def _init_common(self, logger):
+        """Shared initialization for both constructors."""
+        self.logger = logger or logging.getLogger(__name__)
+
         # data gathered from analysis
+        self.module_to_filename = {}  # module name → filename (or module name itself in source mode)
         self.defines_edges = {}
         self.uses_edges = {}
         self.nodes = {}  # Node name: list of Node objects (in possibly different namespaces)
@@ -97,9 +137,6 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.context_stack = []  # for detecting which FunctionDefs are methods
         self._anon_scope_idx = {}  # (parent_ns, scope_type) → next index
 
-        # Analyze.
-        self.process()
-
     def process(self):
         """Analyze the set of files, twice so that any forward-references are picked up."""
         for pas in range(2):
@@ -111,18 +148,28 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.postprocess()
 
     def process_one(self, filename):
-        """Analyze the specified Python source file."""
+        """Analyze one source unit (file path, or module name in source mode).
+
+        In source mode, module names must be fully qualified; specifically,
+        they must match what you passed to `from_sources` (which see).
+        """
         if filename not in self.filenames:
             raise ValueError(
                 f"Filename '{filename}' has not been preprocessed (was not given to __init__, which got {self.filenames})"
             )
-        with open(filename, encoding="utf-8") as f:
-            content = f.read()
-        self.filename = filename
-        self.module_name = get_module_name(filename, root=self.root)
-        self._anon_scope_idx = {}  # reset per file — must match between analyze_scopes and visitor
-        self.analyze_scopes(content, filename)  # add to the currently known scopes
-        self.visit(ast.parse(content, filename))
+        # In source mode, _source_texts holds the code; in file mode, read from disk.
+        if hasattr(self, "_source_texts"):
+            content = self._source_texts[filename]
+            self.filename = filename  # module name as stand-in
+            self.module_name = filename
+        else:
+            with open(filename, encoding="utf-8") as f:
+                content = f.read()
+            self.filename = filename
+            self.module_name = get_module_name(filename, root=self.root)
+        self._anon_scope_idx = {}  # reset per source unit — must match between analyze_scopes and visitor
+        self.analyze_scopes(content, self.filename)  # add to the currently known scopes
+        self.visit(ast.parse(content, self.filename))
         self.module_name = None
         self.filename = None
 

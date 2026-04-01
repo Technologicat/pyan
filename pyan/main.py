@@ -23,14 +23,19 @@ from .visgraph import VisualGraph
 from .writers import DotWriter, HTMLWriter, SVGWriter, TextWriter, TgfWriter, YedWriter
 
 
-def _build_graph(filenames, root=None, function=None, namespace=None,
+def _build_graph(filenames=None, root=None, sources=None, function=None, namespace=None,
                  max_iter=1000, direction="both", depth=None,
                  logger=None, graph_options=None):
     """Analyze source files, optionally filter, and build a VisualGraph.
 
+    If `sources` is given (source mode / sans-IO mode), it overrides `filenames` and `root`.
+
     Shared core of ``create_callgraph()`` and ``main()``.
     """
-    v = CallGraphVisitor(filenames, root=root, logger=logger)
+    if sources is not None:
+        v = CallGraphVisitor.from_sources(sources, logger=logger)
+    else:
+        v = CallGraphVisitor(filenames, root=root, logger=logger)
     if function or namespace:
         if function:
             function_name = function.split(".")[-1]
@@ -47,6 +52,7 @@ def _build_graph(filenames, root=None, function=None, namespace=None,
 def create_callgraph(
     filenames: list[str] | str = "**/*.py",
     root: str = None,
+    sources: list[tuple] | None = None,
     function: str | None = None,
     namespace: str | None = None,
     format: str = "dot",
@@ -74,7 +80,13 @@ def create_callgraph(
             to identify filenames to parse (``**`` for multiple directories).
             Example: ``**/*.py`` for all Python files.
         root: path to the package root directory. Defaults to ``None``
-            (inferred automatically).
+            (inferred automatically). Ignored when *sources* is given.
+        sources: alternative to *filenames* and *root* — an iterable of
+            ``(source, module_name)`` pairs for analysis without file I/O.
+            *source* can be a ``str`` (source text) or ``ast.Module``
+            (will be unparsed).  *module_name* must be the fully
+            qualified dotted name (e.g. ``"pkg.sub.mod"``).
+            When given, *filenames*, *root*, and *exclude* are ignored.
         function: fully qualified function name to filter for, e.g.
             ``"my_module.my_function"``. Only calls related to this
             function will be included.
@@ -130,9 +142,12 @@ def create_callgraph(
     Returns:
         The call graph as a string in the requested format.
     """
-    if isinstance(filenames, str):
-        filenames = [filenames]
-    filenames = expand_sources(filenames, exclude=exclude)
+    if sources is not None:
+        filenames = None
+    else:
+        if isinstance(filenames, str):
+            filenames = [filenames]
+        filenames = expand_sources(filenames, exclude=exclude)
 
     if not grouped:
         nested_groups = False
@@ -148,9 +163,9 @@ def create_callgraph(
         "annotated": annotated,
     }
 
-    graph = _build_graph(filenames, root=root, function=function,
-                         namespace=namespace, max_iter=max_iter,
-                         direction=direction, depth=depth,
+    graph = _build_graph(filenames=filenames, root=root, sources=sources,
+                         function=function, namespace=namespace,
+                         max_iter=max_iter, direction=direction, depth=depth,
                          logger=logger, graph_options=graph_options)
 
     stream = io.StringIO()

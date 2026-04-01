@@ -44,30 +44,31 @@ This revival was carried out by [Technologicat](https://github.com/Technologicat
 **Table of Contents**
 
 - [Pyan3](#pyan3)
-    - [Note](#note)
-    - [Revived! [February 2026]](#revived-february-2026)
+  - [Note](#note)
+  - [Revived! [February 2026]](#revived-february-2026)
 - [Overview](#overview)
 - [Usage](#usage)
-    - [CLI usage](#cli-usage)
-        - [Recommended options](#recommended-options)
-        - [Graph depth control](#graph-depth-control)
-        - [Filtering](#filtering)
-        - [Excluding files](#excluding-files)
-        - [Call path listing](#call-path-listing)
-        - [GraphViz layout options](#graphviz-layout-options)
-    - [Python API](#python-api)
-    - [Troubleshooting](#troubleshooting)
-        - [GraphViz trouble in init_rank](#graphviz-trouble-in-init_rank)
-        - [Too much detail?](#too-much-detail)
-    - [Sphinx integration](#sphinx-integration)
+  - [CLI usage](#cli-usage)
+    - [Recommended options](#recommended-options)
+    - [Graph depth control](#graph-depth-control)
+    - [Filtering](#filtering)
+    - [Excluding files](#excluding-files)
+    - [Call path listing](#call-path-listing)
+    - [GraphViz layout options](#graphviz-layout-options)
+  - [Python API](#python-api)
+    - [Sans-IO / in-memory analysis](#sans-io--in-memory-analysis)
+  - [Troubleshooting](#troubleshooting)
+    - [GraphViz trouble in init_rank](#graphviz-trouble-in-init_rank)
+    - [Too much detail?](#too-much-detail)
+  - [Sphinx integration](#sphinx-integration)
 - [Module-level analysis](#module-level-analysis)
-    - [CLI usage](#cli-usage-1)
-        - [Cycle detection](#cycle-detection)
-    - [Python API](#python-api-1)
+  - [CLI usage](#cli-usage-1)
+    - [Cycle detection](#cycle-detection)
+  - [Python API](#python-api-1)
 - [Install](#install)
-    - [Development setup](#development-setup)
+  - [Development setup](#development-setup)
 - [Features](#features)
-    - [TODO](#todo)
+  - [TODO](#todo)
 - [How Pyan works](#how-pyan-works)
 - [Authors](#authors)
 - [License](#license)
@@ -243,6 +244,35 @@ print(v.format_paths(paths))
 See `pyan.create_callgraph()` for the full list of parameters.
 
 
+### Sans-IO / in-memory analysis
+
+For tools that already have source text in memory (e.g. macro expanders, code editors, notebook kernels), the analysis can run without any file I/O:
+
+```python
+from pyan.analyzer import CallGraphVisitor
+
+# From source text — module_name must be fully qualified (dotted)
+v = CallGraphVisitor.from_sources([
+    (src_alpha, "pkg.alpha"),
+    (src_beta, "pkg.beta"),
+])
+
+# From a pre-parsed AST (ast.unparse recovers source for symtable)
+import ast
+tree = ast.parse(src_alpha)
+v = CallGraphVisitor.from_sources([
+    (tree, "pkg.alpha"),
+])
+
+# Or via the high-level API
+import pyan
+dot = pyan.create_callgraph(
+    sources=[(src_alpha, "pkg.alpha"), (src_beta, "pkg.beta")],
+    format="dot",
+)
+```
+
+
 ## Troubleshooting
 
 ### GraphViz trouble in init_rank
@@ -371,6 +401,18 @@ dot_source = pyan.create_modulegraph(
     exclude=["test_*.py"],     # exclude files matching these patterns
     layout="dot",              # GraphViz layout algorithm
     ranksep="0.5",             # rank separation (inches)
+)
+```
+
+The sans-IO mode works here too:
+
+```python
+dot = pyan.create_modulegraph(
+    sources=[
+        (src_alpha, "pkg.alpha"),
+        (src_beta, "pkg.beta"),
+    ],
+    format="dot",
 )
 ```
 

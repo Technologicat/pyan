@@ -102,6 +102,34 @@ class ImportVisitor(ast.NodeVisitor):
         self.root = root if root is not None else infer_root(filenames)
         self.analyze(filenames)
 
+    @classmethod
+    def from_sources(cls, sources, logger=None):
+        """Create an ImportVisitor from in-memory sources (no file I/O).
+
+        Args:
+            sources: iterable of ``(source, module_name)`` pairs, where
+                *source* is either a ``str`` (source text) or an
+                ``ast.Module`` (parsed AST — will be unparsed).
+                *module_name* must be the fully qualified dotted name
+                (e.g. ``"pkg.sub.mod"``).
+            logger: optional ``logging.Logger`` instance.
+
+        Returns:
+            A fully analyzed ``ImportVisitor``.
+        """
+        self = cls.__new__(cls)
+        self.modules = {}
+        self.fullpaths = {}
+        self.logger = logger or logging.getLogger(__name__)
+        self.root = ""
+        for source, module_name in sources:
+            if isinstance(source, ast.AST):
+                source = ast.unparse(source)
+            self.current_module = module_name
+            self.fullpaths[module_name] = module_name  # use module name as stand-in
+            self.visit(ast.parse(source, module_name))
+        return self
+
     def analyze(self, filenames):
         for fullpath in filenames:
             with open(fullpath, encoding="utf-8") as f:
@@ -288,8 +316,9 @@ class ImportVisitor(ast.NodeVisitor):
 
 
 def create_modulegraph(
-    filenames,
+    filenames=None,
     root=None,
+    sources=None,
     format="dot",
     rankdir="LR",
     ranksep="0.5",
@@ -311,7 +340,13 @@ def create_modulegraph(
             Example: ``"pkg/**/*.py"`` for all Python files in a package.
         root: path to the project root directory.  File paths are made
             relative to *root* before deriving dotted module names.
-            Inferred by default.
+            Inferred by default. Ignored when *sources* is given.
+        sources: alternative to *filenames* and *root* — an iterable of
+            ``(source, module_name)`` pairs for analysis without file I/O.
+            *source* can be a ``str`` (source text) or ``ast.Module``
+            (will be unparsed).  *module_name* must be the fully
+            qualified dotted name (e.g. ``"pkg.sub.mod"``).
+            When given, *filenames*, *root*, and *exclude* are ignored.
         format: output format — one of ``"dot"``, ``"svg"``, ``"html"``,
             ``"tgf"``, ``"yed"``, ``"text"``.
             SVG and HTML require the Graphviz ``dot`` binary to be installed.
@@ -343,9 +378,12 @@ def create_modulegraph(
     Returns:
         The module dependency graph as a string in the requested format.
     """
-    if isinstance(filenames, str):
-        filenames = [filenames]
-    filenames = expand_sources(filenames, exclude=exclude)
+    if sources is not None:
+        filenames = None
+    else:
+        if isinstance(filenames, str):
+            filenames = [filenames]
+        filenames = expand_sources(filenames, exclude=exclude)
 
     if not grouped:
         nested_groups = False
@@ -361,7 +399,10 @@ def create_modulegraph(
         "annotated": annotated,
     }
 
-    v = ImportVisitor(filenames, logger or logging.getLogger(__name__), root=root)
+    if sources is not None:
+        v = ImportVisitor.from_sources(sources, logger=logger or logging.getLogger(__name__))
+    else:
+        v = ImportVisitor(filenames, logger or logging.getLogger(__name__), root=root)
     v.prepare_graph(with_init=with_init)
     graph = visgraph.VisualGraph.from_visitor(v, options=graph_options, logger=logger)
 

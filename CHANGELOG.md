@@ -18,6 +18,13 @@
   edge to the class itself, so these classes no longer appear
   disconnected in the graph.  (#113)
 
+- **Sans-IO analysis via `from_sources`** — `CallGraphVisitor.from_sources()`
+  and `create_callgraph(sources=...)` accept `(source_text, module_name)`
+  pairs (or `(ast.Module, module_name)`) for analysis without any file
+  I/O.  Useful for embedding pyan in tools that already have source text
+  in memory, or for analyzing ASTs from macro expanders.
+  (#101 — thanks @tristanlatr)
+
 - **Per-anonymous-scope isolation** — multiple lambdas or comprehensions
   in the same function no longer share a single scope.  Each instance
   now gets a numbered scope key (e.g. `listcomp.0`, `listcomp.1`),
