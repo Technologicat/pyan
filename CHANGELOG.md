@@ -1,8 +1,24 @@
 # Changelog
 
-## 2.3.1 (in progress)
+## 2.3.1 (in progress) — *Hotfix*
 
-*No user-visible changes yet.*
+### Bug fixes
+
+- **Relative imports in `__init__.py` resolve to wrong parent package** —
+  `from . import alpha` in a nested package init (e.g. `pkg/sub/__init__.py`)
+  resolved to the grandparent (`pkg.alpha`) instead of the package itself
+  (`pkg.sub.alpha`).  Affected all `__init__` modules whose fully qualified
+  name contains at least one dot; top-level packages were correct by accident.
+  The bug was present in both file-based and sans-IO (`from_sources`) modes.
+  (#121 — thanks @tristanlatr for spotting this in the #101 follow-up)
+
+### Notes
+
+- **`from_sources()`: `__init__` naming convention** — to get correct relative
+  import resolution for package `__init__` modules, pass `"pkg.sub.__init__"`
+  as the module name (not just `"pkg.sub"`). The previous behaviour silently
+  produced wrong or missing edges. Applies to both `CallGraphVisitor.from_sources()`
+  and `ImportVisitor.from_sources()`.
 
 
 ---

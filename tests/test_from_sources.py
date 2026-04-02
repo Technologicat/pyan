@@ -153,6 +153,54 @@ class TestImportVisitorFromSources:
         assert "pkg.alpha" in v.modules.get("pkg.beta", set())
 
 
+# --- Relative imports in __init__ modules (sans-IO) ---
+
+class TestFromSourcesInitRelativeImport:
+    """Relative imports in __init__ modules must resolve to the package itself,
+    not to the parent.  This tests the sans-IO path; the file-based equivalent
+    is in test_regressions.py (test_init_imports_*)."""
+
+    def test_nested_init_dot_import(self):
+        """from . import alpha in pkg.sub.__init__ should resolve to pkg.sub.alpha."""
+        src_alpha = "def greet(): pass\n"
+        src_init = "from . import alpha\n"
+        v = CallGraphVisitor.from_sources([
+            (src_alpha, "pkg.sub.alpha"),
+            (src_init, "pkg.sub.__init__"),
+        ])
+        sub_uses = {n.get_name() for n in v.uses_edges.get(
+            v.get_node("", "pkg.sub"), []
+        )}
+        assert "pkg.sub.alpha" in sub_uses
+
+    def test_nested_init_dotdot_import(self):
+        """from .. import helpers in app.pkg.sub.__init__ should resolve to app.pkg.helpers.
+
+        Uses a three-level name so rsplit(".", 2) has enough dots to
+        over-strip — with only "app.pkg.sub" the test passes by accident.
+        """
+        src_helpers = "def helper(): pass\n"
+        src_init = "from .. import helpers\n"
+        v = CallGraphVisitor.from_sources([
+            (src_helpers, "app.pkg.helpers"),
+            (src_init, "app.pkg.sub.__init__"),
+        ])
+        sub_uses = {n.get_name() for n in v.uses_edges.get(
+            v.get_node("", "app.pkg.sub"), []
+        )}
+        assert "app.pkg.helpers" in sub_uses
+
+    def test_modvis_init_dot_import(self):
+        """ImportVisitor: from . import alpha in pkg.sub.__init__."""
+        src_alpha = "def greet(): pass\n"
+        src_init = "from . import alpha\n"
+        v = ImportVisitor.from_sources([
+            (src_alpha, "pkg.sub.alpha"),
+            (src_init, "pkg.sub.__init__"),
+        ])
+        assert "pkg.sub.alpha" in v.modules.get("pkg.sub.__init__", set())
+
+
 class TestCreateModulegraphSources:
     def test_text_output(self):
         """create_modulegraph(sources=...) should produce text output."""

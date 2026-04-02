@@ -85,8 +85,11 @@ def create_callgraph(
             ``(source, module_name)`` pairs for analysis without file I/O.
             *source* can be a ``str`` (source text) or ``ast.Module``
             (will be unparsed).  *module_name* must be the fully
-            qualified dotted name (e.g. ``"pkg.sub.mod"``).
-            When given, *filenames*, *root*, and *exclude* are ignored.
+            qualified dotted name (e.g. ``"pkg.sub.mod"``).  For
+            package ``__init__`` modules, append ``.__init__``
+            (e.g. ``"pkg.__init__"``) so that relative imports resolve
+            correctly.  When given, *filenames*, *root*, and *exclude*
+            are ignored.
         function: fully qualified function name to filter for, e.g.
             ``"my_module.my_function"``. Only calls related to this
             function will be included.

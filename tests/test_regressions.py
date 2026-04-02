@@ -159,3 +159,60 @@ def test_issue117_namespace_package_edge():
     # func2 uses func3
     func2_uses = get_in_dict(v.uses_edges, "dir2.file2.func2")
     get_node(func2_uses, "dir2.file3.func3")
+
+
+# --- Issue #121: relative imports in __init__.py resolve incorrectly ---
+#
+# get_module_name() folds pkg/__init__.py → "pkg", but the rsplit logic
+# in visit_ImportFrom always strips one dotted component for level-1
+# imports.  That's correct for regular modules (strip filename to get
+# parent package) but wrong for __init__ modules where the module name
+# IS the package — they need zero levels stripped.
+#
+# Result: `from . import alpha` in pkg/sub/__init__.py resolves to
+# pkg.alpha instead of pkg.sub.alpha.  The bug affects ALL __init__
+# modules whose module name contains at least one dot (i.e. anything
+# deeper than a single top-level package).
+
+INIT_IMPORTS_DIR = os.path.join(TESTS_DIR, "test_code/init_imports")
+INIT_IMPORTS_PREFIX = "test_code.init_imports"
+
+
+def _init_imports_visitor():
+    """Shared fixture: analyze the init_imports test package."""
+    from glob import glob as globfunc
+
+    filenames = sorted(globfunc(os.path.join(INIT_IMPORTS_DIR, "**/*.py"), recursive=True))
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
+
+
+def test_init_imports_regular_module_relative_import():
+    """Control: from . import alpha in a regular module (beta.py) works."""
+    v = _init_imports_visitor()
+    beta = f"{INIT_IMPORTS_PREFIX}.mypkg.sub.beta"
+    beta_uses = get_in_dict(v.uses_edges, beta)
+    get_node(beta_uses, f"{INIT_IMPORTS_PREFIX}.mypkg.sub.alpha")
+
+
+def test_init_imports_nested_init_dot_import():
+    """BUG: from . import alpha in sub/__init__.py should resolve to mypkg.sub.alpha."""
+    v = _init_imports_visitor()
+    sub_init = f"{INIT_IMPORTS_PREFIX}.mypkg.sub"
+    sub_uses = get_in_dict(v.uses_edges, sub_init)
+    get_node(sub_uses, f"{INIT_IMPORTS_PREFIX}.mypkg.sub.alpha")
+
+
+def test_init_imports_nested_init_dotdot_import():
+    """BUG: from .. import helpers in sub/__init__.py should resolve to mypkg.helpers."""
+    v = _init_imports_visitor()
+    sub_init = f"{INIT_IMPORTS_PREFIX}.mypkg.sub"
+    sub_uses = get_in_dict(v.uses_edges, sub_init)
+    get_node(sub_uses, f"{INIT_IMPORTS_PREFIX}.mypkg.helpers")
+
+
+def test_init_imports_toplevel_init_dot_import():
+    """BUG: from . import sub in mypkg/__init__.py should resolve to mypkg.sub."""
+    v = _init_imports_visitor()
+    mypkg_init = f"{INIT_IMPORTS_PREFIX}.mypkg"
+    mypkg_uses = get_in_dict(v.uses_edges, mypkg_init)
+    get_node(mypkg_uses, f"{INIT_IMPORTS_PREFIX}.mypkg.sub")

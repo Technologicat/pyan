@@ -251,8 +251,11 @@ For tools that already have source text in memory (e.g. macro expanders, code ed
 ```python
 from pyan.analyzer import CallGraphVisitor
 
-# From source text — module_name must be fully qualified (dotted)
+# From source text — module_name must be fully qualified (dotted).
+# For package __init__ modules, append ".__init__" so that relative
+# imports resolve correctly (e.g. "pkg.sub.__init__", not "pkg.sub").
 v = CallGraphVisitor.from_sources([
+    (src_init, "pkg.__init__"),
     (src_alpha, "pkg.alpha"),
     (src_beta, "pkg.beta"),
 ])

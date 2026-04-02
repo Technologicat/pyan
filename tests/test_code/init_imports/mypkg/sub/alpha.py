@@ -1,0 +1,2 @@
+def greet():
+    return "hello"

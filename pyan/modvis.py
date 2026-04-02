@@ -111,7 +111,9 @@ class ImportVisitor(ast.NodeVisitor):
                 *source* is either a ``str`` (source text) or an
                 ``ast.Module`` (parsed AST — will be unparsed).
                 *module_name* must be the fully qualified dotted name
-                (e.g. ``"pkg.sub.mod"``).
+                (e.g. ``"pkg.sub.mod"``).  For package ``__init__``
+                modules, append ``.__init__`` (e.g. ``"pkg.__init__"``)
+                so that relative imports resolve correctly.
             logger: optional ``logging.Logger`` instance.
 
         Returns:
