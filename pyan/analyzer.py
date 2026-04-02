@@ -16,6 +16,7 @@ from .anutils import (
     get_ast_node_name,
     get_module_name,
     infer_root,
+    resolve_import,
     resolve_method_resolution_order,
     tail,
 )
@@ -167,23 +168,28 @@ class CallGraphVisitor(ast.NodeVisitor):
                 f"Filename '{filename}' has not been preprocessed (was not given to __init__, which got {self.filenames})"
             )
         # In source mode, _source_texts holds the code; in file mode, read from disk.
+        #
+        # module_name:          display name for node naming (no __init__)
+        # _import_module_name:  name for import resolution (with __init__
+        #                       when applicable, matching CPython's __name__)
         if hasattr(self, "_source_texts"):
             content = self._source_texts[filename]
             self.filename = filename  # module name as stand-in
-            # Accept "pkg.sub.__init__" to mark package init modules;
-            # strip __init__ for node naming but remember the flag.
             if filename.endswith(".__init__"):
                 self.module_name = filename.removesuffix(".__init__")
-                self.is_init_module = True
+                self._import_module_name = filename
             else:
                 self.module_name = filename
-                self.is_init_module = False
+                self._import_module_name = filename
         else:
             with open(filename, encoding="utf-8") as f:
                 content = f.read()
             self.filename = filename
             self.module_name = get_module_name(filename, root=self.root)
-            self.is_init_module = filename.endswith("__init__.py")
+            if filename.endswith("__init__.py"):
+                self._import_module_name = self.module_name + ".__init__"
+            else:
+                self._import_module_name = self.module_name
         self._anon_scope_idx = {}  # reset per source unit — must match between analyze_scopes and visitor
         self.analyze_scopes(content, self.filename)  # add to the currently known scopes
         self.visit(ast.parse(content, self.filename))
@@ -884,29 +890,19 @@ class CallGraphVisitor(ast.NodeVisitor):
         #
         # As a solution, we register imports here and later, when all files have been parsed, resolve them.
         from_node = self.get_node_of_current_namespace()
-        if node.module is None:  # resolve relative imports 'None' such as "from . import foo"
+        if node.module is None:  # "from . import foo" — node.module is None
             self.logger.debug(
                 "ImportFrom (original) from {} import {}, {}:{}".format("." * node.level, [format_alias(x) for x in node.names], self.filename, node.lineno)
             )
-            # For __init__ modules the module name IS the package, so
-            # "from ." means this package — one fewer level to strip.
-            tgt_level = node.level - 1 if self.is_init_module else node.level
-            if tgt_level == 0:  # noqa: SIM108
-                tgt_name = self.module_name
-            else:
-                tgt_name = self.module_name.rsplit(".", tgt_level)[0]
+            tgt_name = resolve_import(current=self._import_module_name, target="", level=node.level, logger=self.logger)
             self.logger.debug(
                 f"ImportFrom (resolved): from {tgt_name} import {[format_alias(x) for x in node.names]}, {self.filename}:{node.lineno}"
             )
-        elif node.level != 0:  # resolve from ..module import foo
+        elif node.level != 0:  # "from ..module import foo"
             self.logger.debug(
                 f"ImportFrom (original): from {node.module} import {[format_alias(x) for x in node.names]}, {self.filename}:{node.lineno}"
             )
-            tgt_level = node.level - 1 if self.is_init_module else node.level
-            if tgt_level == 0:
-                tgt_name = self.module_name + "." + node.module
-            else:
-                tgt_name = self.module_name.rsplit(".", tgt_level)[0] + "." + node.module
+            tgt_name = resolve_import(current=self._import_module_name, target=node.module, level=node.level, logger=self.logger)
             self.logger.debug(
                 f"ImportFrom (resolved): from {tgt_name} import {[format_alias(x) for x in node.names]}, {self.filename}:{node.lineno}"
             )

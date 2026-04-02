@@ -5,13 +5,12 @@ import os
 
 import pytest
 
-from pyan.anutils import infer_root
+from pyan.anutils import infer_root, resolve_import
 from pyan.modvis import (
     ImportVisitor,
     create_modulegraph,
     filename_to_module_name,
     main,
-    resolve,
     split_module_name,
 )
 
@@ -83,24 +82,27 @@ class TestSplitModuleName:
 
 class TestResolve:
     def test_absolute(self):
-        assert resolve(current="anything", target="os.path", level=0) == "os.path"
+        assert resolve_import(current="anything", target="os.path", level=0) == "os.path"
 
     def test_relative_level1(self):
-        assert resolve(current="pkg.sub.mod", target="sibling", level=1) == "pkg.sub.sibling"
+        assert resolve_import(current="pkg.sub.mod", target="sibling", level=1) == "pkg.sub.sibling"
 
     def test_relative_level2(self):
-        assert resolve(current="pkg.sub.mod", target="other", level=2) == "pkg.other"
+        assert resolve_import(current="pkg.sub.mod", target="other", level=2) == "pkg.other"
 
-    def test_relative_level3_to_top(self):
-        assert resolve(current="pkg.sub.mod", target="top", level=3) == ".top"
+    def test_relative_beyond_root(self):
+        # Level 3 on a 3-component name goes above root — CPython would
+        # raise ImportError.  We log an error and return "" so the result
+        # can't accidentally match a real module.
+        assert resolve_import(current="pkg.sub.mod", target="top", level=3) == ""
 
     def test_negative_level(self):
         with pytest.raises(ValueError, match="must be >= 0"):
-            resolve(current="pkg.mod", target="target", level=-1)
+            resolve_import(current="pkg.mod", target="target", level=-1)
 
     def test_level_too_large(self):
-        with pytest.raises(ValueError, match="too large"):
-            resolve(current="pkg.mod", target="target", level=5)
+        # Beyond root — returns "" (logs error, doesn't raise).
+        assert resolve_import(current="pkg.mod", target="target", level=5) == ""
 
 
 # ---------------------------------------------------------------------------

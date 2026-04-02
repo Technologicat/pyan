@@ -10,6 +10,20 @@ import os.path
 
 from .node import Flavor
 
+__all__ = [
+    "ExecuteInInnerScope",
+    "Scope",
+    "UnresolvedSuperCallError",
+    "canonize_exprs",
+    "expand_sources",
+    "format_alias",
+    "get_ast_node_name",
+    "get_module_name",
+    "infer_root",
+    "resolve_import",
+    "resolve_method_resolution_order",
+]
+
 
 def expand_sources(patterns, exclude=None):
     """Expand source file patterns, treating directories as ``dir/**/*.py``.
@@ -144,6 +158,51 @@ def get_module_name(filename, root: str = None):
 
     mod_name = ".".join([os.path.basename(f[0]) for f in directories])
     return mod_name
+
+
+def resolve_import(*, current, target, level, logger=None):
+    """Return the fully qualified name of *target* in a relative import.
+
+    Resolves relative imports by stripping *level* trailing components
+    from *current* (the importing module's fully qualified name), then
+    appending *target*.
+
+    This matches CPython's resolution against ``__package__``: both
+    regular modules and ``__init__`` modules have their own name as
+    the final component, so stripping one level always lands on the
+    containing package — **provided** that ``__init__`` modules are
+    named with the ``.__init__`` suffix (e.g. ``"pkg.sub.__init__"``).
+
+    If *level* is 0 the import is absolute, so *target* is returned
+    as-is.  An empty *target* (``from . import name`` — where each
+    *name* is resolved separately) returns just the base package.
+
+    If *level* exceeds the depth of *current* (relative import beyond
+    the top-level package), an empty string is returned — this ensures
+    the result won't accidentally match any real module name.
+
+    See also:
+        https://alex.dzyoba.com/blog/python-import/
+        https://stackoverflow.com/questions/14132789/
+    """
+    if level < 0:
+        raise ValueError(f"Relative import level must be >= 0, got {level}")
+    if level == 0:
+        return target
+    base = current
+    for _ in range(level):
+        k = base.rfind(".")
+        if k == -1:
+            if logger:
+                logger.error(
+                    f"Relative import level {level} exceeds module depth of '{current}' "
+                    f"(attempted relative import beyond top-level package)"
+                )
+            return ""
+        base = base[:k]
+    if target:
+        return f"{base}.{target}" if base else target
+    return base
 
 
 def format_alias(x):

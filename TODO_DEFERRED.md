@@ -8,8 +8,6 @@ Items with GitHub ticket numbers are tracked externally. The rest are internal n
 
 ### Internal
 
-- **D34: Unify relative import resolution across analyzer and modvis** (#121): Both `analyzer.py` and `modvis.py` implement relative import resolution independently. `modvis.py` has a clean standalone `resolve()` function and keeps `__init__` in module names internally; `analyzer.py` inlines the logic via `rsplit` and folds `__init__` away in `get_module_name`. The surgical #121 fix adds an `is_init_module` flag to adjust the rsplit level, but the cleaner long-term solution is: (1) keep `__init__` in module names internally in the analyzer (strip only for display), (2) extract a shared `resolve()` function, (3) retire the inline rsplit logic.
-
 - **D14: "Node" terminology overload**: Three concepts share the name "node": (1) AST node (`ast.AST`), (2) Pyan's analysis graph node (`Node` class), (3) visualization/output node. Consider introducing distinct terminology.
 - **D18: Edge confidence scoring**: Determine confidence of detected edges. See [DESIGN-NOTES.md](DESIGN-NOTES.md).
 - **D19: Improved wildcard resolution**: Partly addressed by #88 fix (import-aware expansion). Remainder: see [johnyf/pyan#5](https://github.com/johnyf/pyan/issues/5).
@@ -28,6 +26,7 @@ Items with GitHub ticket numbers are tracked externally. The rest are internal n
 
 ## Done
 
+- **D34**: Unify relative import resolution — shared `resolve_import()` in `anutils.py`, `_import_module_name` with `__init__` in analyzer
 - **D1**: Rename `sanitize_exprs` → `canonize_exprs` (`38fffd0`)
 - **D2**: `resolve()` keyword-only params (`a402739`)
 - **D3**: Unify output format support (`600f724`)

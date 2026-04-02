@@ -22,6 +22,11 @@ from .anutils import expand_sources
 from .visgraph import VisualGraph
 from .writers import DotWriter, HTMLWriter, SVGWriter, TextWriter, TgfWriter, YedWriter
 
+__all__ = [
+    "create_callgraph",
+    "main",
+]
+
 
 def _build_graph(filenames=None, root=None, sources=None, function=None, namespace=None,
                  max_iter=1000, direction="both", depth=None,

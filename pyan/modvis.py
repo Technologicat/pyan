@@ -10,7 +10,15 @@ import logging
 import os
 
 from . import node, visgraph, writers
-from .anutils import expand_sources, infer_root
+from .anutils import expand_sources, infer_root, resolve_import
+
+__all__ = [
+    "ImportVisitor",
+    "create_modulegraph",
+    "filename_to_module_name",
+    "main",
+    "split_module_name",
+]
 
 
 def filename_to_module_name(fullpath, root=None):  # Not anutils.get_module_name: module-level analysis needs __init__ as a distinct node (not folded into the package name).
@@ -57,41 +65,6 @@ def split_module_name(m):
 #     return py_files
 
 
-def resolve(*, current, target, level):
-    """Return fully qualified name of *target* in an import.
-
-    If level == 0, the import is absolute, hence *target* is already the
-    fully qualified name (and will be returned as-is).
-
-    Relative imports (level > 0) are resolved by stripping *level* trailing
-    components from *current*, then appending *target*.  This matches
-    CPython's resolution against ``__package__``: both regular modules and
-    ``__init__`` modules have their own name as the final component, so
-    stripping one level always lands on the containing package.
-
-    The resolution is correct given correct module names.  When using
-    ``filename_to_module_name``, pass the ``root`` parameter (or ensure
-    cwd is the project root) so that dotted names are derived correctly.
-
-    For background on Python's import resolution, see:
-        https://alex.dzyoba.com/blog/python-import/
-        https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time
-    """
-    if level < 0:
-        raise ValueError(f"Relative import level must be >= 0, got {level}")
-    if level == 0:  # absolute import
-        return target
-    # level > 0
-    if level > current.count(".") + 1:  # foo.bar.baz -> max level 3, pointing to top level
-        raise ValueError(f"Relative import level {level} too large for module name {current}")
-    base = current
-    for _ in range(level):
-        k = base.rfind(".")
-        if k == -1:
-            base = ""
-            break
-        base = base[:k]
-    return ".".join((base, target))
 
 
 class ImportVisitor(ast.NodeVisitor):
@@ -180,7 +153,7 @@ class ImportVisitor(ast.NodeVisitor):
             self.logger.debug(
                 f"{self.current_module}:{node.lineno}: ImportFrom '{node.module}', relative import level {node.level}"
             )
-            absname = resolve(current=self.current_module, target=node.module, level=node.level)
+            absname = resolve_import(current=self.current_module, target=node.module, level=node.level, logger=self.logger)
             if node.level > 0:
                 self.logger.debug(f"    resolved relative import to '{absname}'")
             self.add_dependency(absname)
@@ -203,7 +176,7 @@ class ImportVisitor(ast.NodeVisitor):
                         self.current_module, node.lineno, "." * node.level, alias.name, node.level
                     )
                 )
-                absname = resolve(current=self.current_module, target=alias.name, level=node.level)
+                absname = resolve_import(current=self.current_module, target=alias.name, level=node.level, logger=self.logger)
                 if node.level > 0:
                     self.logger.debug(f"    resolved relative import to '{absname}'")
                 self.add_dependency(absname)
