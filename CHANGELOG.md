@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.2 (in progress)
+
+*No user-visible changes yet.*
+
+
+---
+
 ## 2.3.1 (2 April 2026) — *Hotfix*
 
 ### Bug fixes
