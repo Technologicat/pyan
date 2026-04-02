@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.3.1 (in progress) — *Hotfix*
+## 2.3.1 (2 April 2026) — *Hotfix*
 
 ### Bug fixes
 
