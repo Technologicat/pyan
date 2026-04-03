@@ -1,15 +1,13 @@
 """Tests targeting coverage gaps in node.py, main.py, and __init__.py."""
 
 import ast
-import io
-import logging
 import os
 import shutil
 
 import pytest
 
 from pyan.main import main as pyan_main
-from pyan.node import Flavor, Node, make_safe_label
+from pyan.node import Flavor, Node
 
 has_dot = shutil.which("dot") is not None
 
@@ -47,6 +45,10 @@ class TestNodeLabels:
 
     def test_annotated_name_top_level(self):
         n = Node("", "foo", None, "test.py", Flavor.FUNCTION)
+        assert n.get_annotated_name() == r"foo\n(test.py)"
+
+    def test_annotated_name_top_level_no_filename(self):
+        n = Node("", "foo", None, None, Flavor.FUNCTION)
         assert n.get_annotated_name() == "foo"
 
     def test_long_annotated_name_wildcard(self):
@@ -69,6 +71,10 @@ class TestNodeLabels:
 
     def test_long_annotated_name_top_level(self):
         n = Node("", "foo", None, "test.py", Flavor.FUNCTION)
+        assert n.get_long_annotated_name() == r"foo\n(test.py)"
+
+    def test_long_annotated_name_top_level_no_filename(self):
+        n = Node("", "foo", None, None, Flavor.FUNCTION)
         assert n.get_long_annotated_name() == "foo"
 
 

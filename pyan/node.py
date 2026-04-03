@@ -116,30 +116,52 @@ class Node:
             return f"{class_name}.{self.name}"
         return self.name
 
+    def get_annotation_parts(self):
+        """Return annotation data as a list of strings.
+
+        This is the single source of truth for annotation content, used by
+        both the label methods (``get_annotated_name``, ``get_long_annotated_name``)
+        and the tooltip builder in ``visgraph``.
+
+        For non-module nodes: ``[filename:lineno, flavor in namespace]``
+        (without lineno if no ``ast_node``).
+        For module nodes: ``[filename]``.
+        For unknown or unannotatable nodes: ``[]``.
+        """
+        if self.namespace is None:
+            return []
+        if self.get_level() < 1:  # top-level module
+            if self.filename:
+                return [self.filename]
+            return []
+        parts = []
+        if self.ast_node is not None:
+            parts.append(f"{self.filename}:{self.ast_node.lineno}")
+        parts.append(f"{self.flavor!r} in {self.namespace}")
+        return parts
+
     def get_annotated_name(self):
         """Return the short name, plus module and line number of definition site, if available.
-        Names of unknown nodes will include the *. prefix."""
+        Names of unknown nodes will include the ``*.`` prefix."""
         if self.namespace is None:
             return "*." + self.name
-        else:
-            if self.get_level() >= 1 and self.ast_node is not None:
-                return f"{self.name}\\n({self.filename}:{self.ast_node.lineno})"
-            else:
-                return self.name
+        parts = self.get_annotation_parts()
+        if parts:
+            return f"{self.name}\\n({parts[0]})"
+        return self.name
 
     def get_long_annotated_name(self):
         """Return the short name, plus namespace, and module and line number of definition site, if available.
-        Names of unknown nodes will include the *. prefix."""
+        Names of unknown nodes will include the ``*.`` prefix."""
         if self.namespace is None:
             return "*." + self.name
-        else:
-            if self.get_level() >= 1:
-                if self.ast_node is not None:
-                    return f"{self.name}\\n\\n({self.filename}:{self.ast_node.lineno},\\n{self.flavor!r} in {self.namespace})"
-                else:
-                    return f"{self.name}\\n\\n({repr(self.flavor)} in {self.namespace})"
-            else:
-                return self.name
+        parts = self.get_annotation_parts()
+        if not parts:
+            return self.name
+        if self.get_level() >= 1:
+            sep = ",\\n"
+            return f"{self.name}\\n\\n({sep.join(parts)})"
+        return f"{self.name}\\n({parts[0]})"
 
     def get_name(self):
         """Return the full name of this node."""

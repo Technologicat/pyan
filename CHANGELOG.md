@@ -1,8 +1,21 @@
 # Changelog
 
-## 2.3.2 (in progress)
+## 2.4.0 (3 April 2026) — *Here be dragons*
 
-*No user-visible changes yet.*
+### New features
+
+- **Node tooltips in DOT output** — all defined nodes now carry a `tooltip`
+  attribute containing the fully qualified name plus annotation details
+  (filename, line number, flavor).  This is always emitted, independent of
+  `--annotated`.  Graph viewers that support the `tooltip` attribute (such
+  as [raven-xdot-viewer](https://github.com/Technologicat/raven)) can
+  display this information on hover.
+
+### Internal
+
+- **`Node.get_annotation_parts()`** — new method that serves as the single
+  source of truth for annotation content, used by both the label methods
+  and the tooltip builder.
 
 
 ---

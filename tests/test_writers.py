@@ -4,6 +4,7 @@ from glob import glob
 import io
 import logging
 import os
+import re
 import shutil
 import xml.etree.ElementTree as ET
 
@@ -95,6 +96,40 @@ class TestDotWriter:
         writer.run()
         dot = buf.getvalue()
         assert "concentrate=true" in dot
+
+    def test_tooltip_present(self, graph):
+        """Tooltip attribute should be emitted for all defined nodes."""
+        buf = io.StringIO()
+        writer = DotWriter(graph, output=buf, logger=logging.getLogger())
+        writer.run()
+        dot = buf.getvalue()
+        assert "tooltip=" in dot
+
+    def test_tooltip_contains_filename_and_lineno(self, graph):
+        """Tooltip for non-module nodes should include the source filename and line number."""
+        buf = io.StringIO()
+        writer = DotWriter(graph, output=buf, logger=logging.getLogger())
+        writer.run()
+        dot = buf.getvalue()
+        # Non-module tooltips reference .py files with line numbers (digits after colon)
+        assert re.search(r'tooltip="[^"]*\.py:\d+', dot)
+
+    def test_tooltip_contains_flavor_and_namespace(self, graph):
+        """Tooltip for non-module nodes should include the flavor and namespace."""
+        buf = io.StringIO()
+        writer = DotWriter(graph, output=buf, logger=logging.getLogger())
+        writer.run()
+        dot = buf.getvalue()
+        assert "\\nfunction in " in dot or "\\nmethod in " in dot or "\\nclass in " in dot
+
+    def test_tooltip_module_node(self, graph):
+        """Module-level nodes should have a tooltip with qualified name and filename."""
+        buf = io.StringIO()
+        writer = DotWriter(graph, output=buf, logger=logging.getLogger())
+        writer.run()
+        dot = buf.getvalue()
+        # Module tooltips contain the qualified module name and .py filename
+        assert re.search(r'tooltip="test_code\.[^"]*\\n[^"]*\.py"', dot)
 
 
 # ---------------------------------------------------------------------------

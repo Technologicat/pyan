@@ -98,7 +98,9 @@ In **node coloring**, the [HSL](https://en.wikipedia.org/wiki/HSL_and_HSV) color
 
 **Groups** can be enabled with `--grouped` (and `--nested-groups` for nested subgraph clusters). Groups are filled with translucent gray to avoid clashes with any node color.
 
-The nodes can be **annotated** by _filename and source line number_ information.
+The nodes can be **annotated** by _filename and source line number_ information. When `--annotated` is used, the node label is extended to include the source file, line number, and flavor (for functions/classes/methods) or just the filename (for modules).
+
+Additionally, all defined nodes always receive a **tooltip** attribute in the DOT output, regardless of `--annotated`. The tooltip contains the fully qualified name plus annotation details. Graph viewers that support the `tooltip` attribute (such as [raven-xdot-viewer](https://github.com/Technologicat/raven)) can display this information on hover.
 
 
 # Usage
@@ -323,7 +325,7 @@ This adds a callgraph directive which has all the options of the [graphviz direc
 - **:no-uses:** (boolean flag): if to not draw edges that show how a function uses other functions
 - **:no-colors:** (boolean flag): if to not color in callgraph (default is coloring)
 - **:nested-groups:** (boolean flag): if to group by modules and submodules
-- **:annotated:** (boolean flag): annotate callgraph with file names
+- **:annotated:** (boolean flag): annotate callgraph node labels with file names, line numbers, and flavors
 - **:direction:** (string): "horizontal" or "vertical" callgraph
 - **:exclude:** (string): comma-separated list of exclusion patterns (e.g. `test_*.py, */tests/*`)
 - **:toctree:** (string): path to toctree (as used with autosummary) to link elements of callgraph to documentation (makes all nodes clickable)

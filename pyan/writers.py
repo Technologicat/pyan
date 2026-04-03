@@ -176,9 +176,10 @@ class DotWriter(Writer):
 
     def write_node(self, node):
         self.log(f"Write node {node.label}")
+        tooltip_attr = f', tooltip="{node.tooltip}"' if node.tooltip else ""
         self.write(
             f'{self._dot_id(node.id)} [label="{node.label}", style="filled", fillcolor="{node.fill_color}",'
-            f' fontcolor="{node.text_color}", group="{node.group}"];'
+            f' fontcolor="{node.text_color}", group="{node.group}"{tooltip_attr}];'
         )
 
     def write_edge(self, edge):

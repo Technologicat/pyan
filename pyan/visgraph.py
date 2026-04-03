@@ -77,16 +77,17 @@ class VisualNode:
     A node in the output graph: colors, internal ID, human-readable label, ...
     """
 
-    def __init__(self, id, label="", flavor="", fill_color="", text_color="", group=""):
+    def __init__(self, id, label="", flavor="", fill_color="", text_color="", group="", tooltip=""):
         self.id = id  # graphing software friendly label (no special chars)
         self.label = label  # human-friendly label
         self.flavor = flavor
         self.fill_color = fill_color
         self.text_color = text_color
         self.group = group
+        self.tooltip = tooltip  # annotation for hover display (always populated for defined nodes)
 
     def __repr__(self):
-        optionals = [repr(s) for s in [self.label, self.flavor, self.fill_color, self.text_color, self.group] if s]
+        optionals = [repr(s) for s in [self.label, self.flavor, self.fill_color, self.text_color, self.group, self.tooltip] if s]
         if optionals:
             return "VisualNode(" + repr(self.id) + ", " + ", ".join(optionals) + ")"
         else:
@@ -155,6 +156,20 @@ class VisualGraph:
                 def labeler(n):
                     return n.get_class_prefixed_name()
 
+        def make_tooltip(n):
+            """Build tooltip annotation from source node data.
+
+            Always populated for defined nodes — independent of the
+            ``annotated`` option (which controls the *label*).
+
+            Uses ``Node.get_annotation_parts`` as the single source of truth
+            for annotation content; prepends the fully qualified name.
+            """
+            parts = n.get_annotation_parts()
+            if not parts:
+                return ""
+            return "\\n".join([n.get_name()] + parts)
+
         logger = logger or logging.getLogger(__name__)
 
         # collect and sort defined nodes
@@ -190,6 +205,7 @@ class VisualGraph:
                 fill_color=fill_RGBA,
                 text_color=text_RGB,
                 group=idx,
+                tooltip=make_tooltip(node),
             )
             nodes_dict[node] = visual_node
 
