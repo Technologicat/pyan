@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.1 (in progress)
+
+*No user-visible changes yet.*
+
+
+---
+
 ## 2.4.0 (3 April 2026) — *Here be dragons*
 
 ### New features
