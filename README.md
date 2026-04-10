@@ -12,13 +12,6 @@ We use [semantic versioning](https://semver.org/).
 
 Pyan takes one or more Python source files, performs a (rather superficial) static analysis, and constructs a directed graph of the objects in the combined source, and how they define or use each other. The graph can be output for rendering by GraphViz or yEd, or as a plain-text dependency list.
 
-This project has 2 official repositories:
-
-- The original stable [davidfraser/pyan](https://github.com/davidfraser/pyan).
-- The development repository [Technologicat/pyan](https://github.com/Technologicat/pyan)
-
-> The PyPI package [pyan3](https://pypi.org/project/pyan3/) is built from development
-
 ## Note
 
 The static analysis approach Pyan takes is different from running the code and seeing which functions are called and how often. There are various tools that will generate a call graph that way, usually using a debugger or profiling trace hooks, such as [Python Call Graph](https://pycallgraph.readthedocs.org/).
@@ -38,6 +31,15 @@ Pyan3 is back in development. The analyzer has been modernized and tested on **P
 - Modernized build system and dependencies
 
 This revival was carried out by [Technologicat](https://github.com/Technologicat) with [Claude](https://claude.ai/) (Anthropic) as AI pair programmer. See [AUTHORS.md](AUTHORS.md) for the full contributor history.
+
+The project **previously had** 2 official repositories:
+
+- The original stable [davidfraser/pyan](https://github.com/davidfraser/pyan).
+- The development repository [Technologicat/pyan](https://github.com/Technologicat/pyan)
+
+> The PyPI package [pyan3](https://pypi.org/project/pyan3/) is built from development
+
+The original stable has been archived; the development repository is now the sole official repository of Pyan3.
 
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
