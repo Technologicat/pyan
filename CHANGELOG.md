@@ -1,8 +1,27 @@
 # Changelog
 
-## 2.4.1 (in progress)
+## 2.4.1 (11 April 2026) — *Hotfix: Terra Generica*
 
-*No user-visible changes yet.*
+### Bug fixes
+
+- **Crash on PEP 695 generic syntax** — `class C[T]`, `def f[T]`, and
+  `type A[T] = ...` (Python 3.12+) caused a `KeyError` in
+  `visit_FunctionDef` because CPython's `symtable` inserts an implicit
+  type-parameter scope that doubled the namespace path.  The fix
+  preserves the type-parameter scope as a proper lexical closure
+  (essentially a let-over-lambda), matching Python's actual scoping
+  semantics.  Handles all PEP 695 forms: generic classes, generic
+  functions, generic methods, nested generics, multiple/bounded type
+  parameters, and type parameter shadowing in class bodies.
+  (#123 — thanks @uselessscat)
+
+### Internal
+
+- **Visitor scope management via context managers** — `visit_Module`,
+  `visit_ClassDef`, `visit_FunctionDef`, and `visit_TypeAlias` now use
+  `contextlib.contextmanager`-based helpers (`_module_scope`,
+  `_class_scope`, `_function_scope`, `_type_params_scope`) instead of
+  manual push/pop pairs, guaranteeing cleanup on exception.
 
 
 ---
