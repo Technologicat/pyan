@@ -619,8 +619,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         # PEP 695 (#123): the type-parameter closure scope (if any) sits
         # between the enclosing scope and the class scope on scope_stack,
         # matching Python's actual lexical structure for generic classes.
-        with self._type_params_scope(node.name), \
-             self._class_scope(node, to_node):
+        with (self._type_params_scope(node.name),
+              self._class_scope(node, to_node)):
             self.class_base_ast_nodes[to_node] = []
             for b in node.bases:
                 # gather info for resolution of inherited attributes in pass 2 (see get_attribute())
@@ -673,8 +673,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         # between the enclosing and function scopes.  Defaults are visited
         # above in the enclosing scope (matching Python's evaluation
         # semantics).
-        with self._type_params_scope(node.name), \
-             self._function_scope(node) as inner_ns:
+        with (self._type_params_scope(node.name),
+              self._function_scope(node) as inner_ns):
 
             # Capture which names correspond to function args.
             #
@@ -1141,8 +1141,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         # analyze_scopes stores it under a synthetic key so that both
         # parameterized and simple aliases have their type-alias scope
         # directly under the enclosing namespace.
-        with self._type_params_scope(node.name.id), \
-             ExecuteInInnerScope(self, node.name.id):
+        with (self._type_params_scope(node.name.id),
+              ExecuteInInnerScope(self, node.name.id)):
             self.visit(node.value)
 
     def visit_AugAssign(self, node):
