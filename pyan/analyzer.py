@@ -26,6 +26,17 @@ from .node import Flavor, Node
 # These get numbered per parent scope to isolate each instance's bindings.
 _ANON_SCOPE_NAMES = frozenset({"lambda", "listcomp", "setcomp", "dictcomp", "genexpr"})
 
+# PEP 695 (Python 3.12+) type-parameter scope type identifiers.
+# On 3.12, symtable.get_type() returns the raw string 'type parameter';
+# on 3.13+, it returns SymbolTableType.TYPE_PARAMETERS (value='type parameters').
+_TYPE_PARAMS_SCOPE_TYPES = frozenset({"type parameter", "type parameters"})
+
+
+def _is_type_params_scope(table):
+    """Return True if *table* is a PEP 695 type-parameter scope."""
+    tp = table.get_type()
+    return getattr(tp, "value", tp) in _TYPE_PARAMS_SCOPE_TYPES
+
 # TODO: add Cython support (strip type annotations in a preprocess step, then treat as Python)
 # TODO: built-in functions (range(), enumerate(), zip(), iter(), ...):
 #       add to a special scope "built-in" in analyze_scopes() (or ignore altogether)
@@ -610,26 +621,34 @@ class CallGraphVisitor(ast.NodeVisitor):
         #
         self.set_value(node.name, to_node)
 
-        self.class_stack.append(to_node)
-        self.name_stack.append(node.name)
-        inner_ns = self.get_node_of_current_namespace().get_name()
-        self.scope_stack.append(self.scopes[inner_ns])
-        self.context_stack.append(f"ClassDef {node.name}")
+        # PEP 695 (#123): push the type-parameter closure scope (if any)
+        # before entering the class scope. This sits between the enclosing
+        # scope and the class scope on scope_stack, matching Python's
+        # actual lexical structure for generic classes.
+        has_type_params = self._push_type_params_scope(node.name)
+        try:
+            self.class_stack.append(to_node)
+            self.name_stack.append(node.name)
+            inner_ns = self.get_node_of_current_namespace().get_name()
+            self.scope_stack.append(self.scopes[inner_ns])
+            self.context_stack.append(f"ClassDef {node.name}")
 
-        self.class_base_ast_nodes[to_node] = []
-        for b in node.bases:
-            # gather info for resolution of inherited attributes in pass 2 (see get_attribute())
-            self.class_base_ast_nodes[to_node].append(b)
-            # mark uses from a derived class to its bases (via names appearing in a load context).
-            self.visit(b)
+            self.class_base_ast_nodes[to_node] = []
+            for b in node.bases:
+                # gather info for resolution of inherited attributes in pass 2 (see get_attribute())
+                self.class_base_ast_nodes[to_node].append(b)
+                # mark uses from a derived class to its bases (via names appearing in a load context).
+                self.visit(b)
 
-        for stmt in node.body:
-            self.visit(stmt)
+            for stmt in node.body:
+                self.visit(stmt)
 
-        self.context_stack.pop()
-        self.scope_stack.pop()
-        self.name_stack.pop()
-        self.class_stack.pop()
+            self.context_stack.pop()
+            self.scope_stack.pop()
+            self.name_stack.pop()
+            self.class_stack.pop()
+        finally:
+            self._pop_type_params_scope(has_type_params)
 
     def visit_FunctionDef(self, node):
         self.logger.debug(f"FunctionDef {node.name}, {self.filename}:{node.lineno}")
@@ -669,62 +688,71 @@ class CallGraphVisitor(ast.NodeVisitor):
         #
         default_values = self._visit_function_defaults(node.args)
 
-        # Enter the function scope
-        #
-        self.name_stack.append(node.name)
-        inner_ns = self.get_node_of_current_namespace().get_name()
-        self.scope_stack.append(self.scopes[inner_ns])
-        self.context_stack.append(f"FunctionDef {node.name}")
+        # PEP 695 (#123): push the type-parameter closure scope (if any)
+        # before entering the function scope.  Defaults are visited above
+        # in the enclosing scope (matching Python's evaluation semantics);
+        # the type-parameter scope sits between the enclosing and function
+        # scopes.
+        has_type_params = self._push_type_params_scope(node.name)
+        try:
+            # Enter the function scope
+            #
+            self.name_stack.append(node.name)
+            inner_ns = self.get_node_of_current_namespace().get_name()
+            self.scope_stack.append(self.scopes[inner_ns])
+            self.context_stack.append(f"FunctionDef {node.name}")
 
-        # Capture which names correspond to function args.
-        #
-        self.generate_args_nodes(node.args, inner_ns)
+            # Capture which names correspond to function args.
+            #
+            self.generate_args_nodes(node.args, inner_ns)
 
-        # self_name is just an ordinary name in the method namespace, except
-        # that its value is implicitly set by Python when the method is called.
-        #
-        # Bind self_name in the function namespace to its initial value,
-        # i.e. the current class. (Class, because Pyan cares only about
-        # object types, not instances.)
-        #
-        # After this point, self_name behaves like any other name.
-        #
-        if self_name is not None:
-            class_node = self.get_current_class()
-            self.scopes[inner_ns].defs[self_name] = class_node
-            self.logger.info(f'Method def: setting self name "{self_name}" to {class_node}')
+            # self_name is just an ordinary name in the method namespace, except
+            # that its value is implicitly set by Python when the method is called.
+            #
+            # Bind self_name in the function namespace to its initial value,
+            # i.e. the current class. (Class, because Pyan cares only about
+            # object types, not instances.)
+            #
+            # After this point, self_name behaves like any other name.
+            #
+            if self_name is not None:
+                class_node = self.get_current_class()
+                self.scopes[inner_ns].defs[self_name] = class_node
+                self.logger.info(f'Method def: setting self name "{self_name}" to {class_node}')
 
-        # Bind args to the default values that were already visited above.
-        self._bind_function_defaults(node.args, default_values)
+            # Bind args to the default values that were already visited above.
+            self._bind_function_defaults(node.args, default_values)
 
-        # Supplement uses edges: defaults were visited in the enclosing scope
-        # (for symtable correctness), but the function itself also "uses" the
-        # names referenced in its defaults — e.g. `def f(cb=some_func)` should
-        # show `f → some_func`.
-        self._record_default_uses_in_function(node.args)
+            # Supplement uses edges: defaults were visited in the enclosing scope
+            # (for symtable correctness), but the function itself also "uses" the
+            # names referenced in its defaults — e.g. `def f(cb=some_func)` should
+            # show `f → some_func`.
+            self._record_default_uses_in_function(node.args)
 
-        # Visit type annotations to create uses edges for referenced types.
-        #
-        # NOTE: Strictly, Python evaluates annotations in the *enclosing*
-        # scope (like defaults), so visiting them here — inside the function
-        # scope — is technically wrong. We do it anyway because attributing
-        # annotation uses edges to the function (rather than the module) is
-        # far more useful in the call graph. This works because annotations
-        # rarely contain expressions that trigger scope lookups (lambdas,
-        # comprehensions). If an edge case surfaces, defaults show the
-        # pattern: visit in enclosing scope, bind inside.
-        self._visit_function_annotations(node)
+            # Visit type annotations to create uses edges for referenced types.
+            #
+            # NOTE: Strictly, Python evaluates annotations in the *enclosing*
+            # scope (like defaults), so visiting them here — inside the function
+            # scope — is technically wrong. We do it anyway because attributing
+            # annotation uses edges to the function (rather than the module) is
+            # far more useful in the call graph. This works because annotations
+            # rarely contain expressions that trigger scope lookups (lambdas,
+            # comprehensions). If an edge case surfaces, defaults show the
+            # pattern: visit in enclosing scope, bind inside.
+            self._visit_function_annotations(node)
 
-        # Analyze the function body
-        #
-        for stmt in node.body:
-            self.visit(stmt)
+            # Analyze the function body
+            #
+            for stmt in node.body:
+                self.visit(stmt)
 
-        # Exit the function scope
-        #
-        self.context_stack.pop()
-        self.scope_stack.pop()
-        self.name_stack.pop()
+            # Exit the function scope
+            #
+            self.context_stack.pop()
+            self.scope_stack.pop()
+            self.name_stack.pop()
+        finally:
+            self._pop_type_params_scope(has_type_params)
 
     def visit_AsyncFunctionDef(self, node):
         self.visit_FunctionDef(node)  # TODO: alias for now; tag async functions in output in a future version?
@@ -1142,18 +1170,17 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.associate_node(to_node, node, self.filename)
         self.set_value(node.name.id, to_node)
 
-        # Visit the type value inside its scope. Parameterized aliases have
-        # two nested scopes (type parameter scope → type alias scope); simple
-        # aliases have just one (type alias scope). CPython's symtable names
-        # both scopes after the alias (e.g. "Matrix" and "Matrix.Matrix"),
-        # hence the repeated name in ExecuteInInnerScope calls.
-        if node.type_params:
-            with ExecuteInInnerScope(self, node.name.id):  # type parameter scope  # noqa: SIM117
-                with ExecuteInInnerScope(self, node.name.id):  # type alias scope
-                    self.visit(node.value)
-        else:
+        # Visit the type value inside its scope.  For parameterized aliases,
+        # the type-parameter closure scope is pushed first (see #123);
+        # analyze_scopes stores it under a synthetic key so that both
+        # parameterized and simple aliases have their type-alias scope
+        # directly under the enclosing namespace.
+        has_type_params = self._push_type_params_scope(node.name.id)
+        try:
             with ExecuteInInnerScope(self, node.name.id):
                 self.visit(node.value)
+        finally:
+            self._pop_type_params_scope(has_type_params)
 
     def visit_AugAssign(self, node):
         targets = canonize_exprs(node.target)
@@ -1799,7 +1826,43 @@ class CallGraphVisitor(ast.NodeVisitor):
     # Scope analysis
 
     def analyze_scopes(self, code, filename):
-        """Gather lexical scope information."""
+        """Gather lexical scope information.
+
+        PEP 695 handling (Python 3.12+, #123):
+
+        Generic classes, functions, and type aliases (``class C[T]``,
+        ``def f[T]``, ``type A[T] = ...``) get an implicit
+        *type-parameter scope* in CPython's ``symtable``.  This scope is
+        a real lexical closure — it sits between the enclosing scope and
+        the entity scope, binding the type parameter names (``T``, etc.)
+        so they are visible inside the entity body without polluting the
+        enclosing namespace.
+
+        In ``symtable``, the type-parameter scope has the **same name**
+        as the entity it wraps, which would normally double the dotted
+        namespace path (``mod.C.C.method`` instead of
+        ``mod.C.method``).  The AST, however, has no corresponding
+        intermediate node — the visitor walks ``ClassDef`` → body
+        directly.
+
+        To reconcile these two views we:
+
+        1. Detect type-parameter scopes (``_is_type_params_scope``).
+        2. Store them under a synthetic key
+           ``<parent_ns>.<type_params>.<entity_name>`` so that the
+           visitors can push them onto ``scope_stack`` for correct
+           lexical lookup (see ``_push_type_params_scope``).
+        3. Process their children under the **parent** namespace, so
+           the actual entity lands at the correct dotted name.
+
+        This preserves the closure semantics that Python itself uses —
+        essentially a let-over-lambda: ``T`` is bound once at class
+        definition time, and all methods close over that binding.
+        Even if the class body shadows ``T`` with an assignment, methods
+        still see the type-parameter ``T``, because Python's class scope
+        is not a closure scope (methods cannot see bare names from the
+        class body — they must use ``self.x`` or ``type(self).x``).
+        """
 
         # Below, ns is the fully qualified ("dotted") name of sc.
         #
@@ -1827,6 +1890,15 @@ class CallGraphVisitor(ast.NodeVisitor):
                     scopes[child_ns] = child_sc
                     for sub_t in t.get_children():
                         process(child_ns, sub_t)
+                elif _is_type_params_scope(t):
+                    # PEP 695 (#123): store the type-parameter scope
+                    # under a synthetic key and process its children
+                    # under the current namespace (see docstring above).
+                    tp_scope = Scope(t)
+                    tp_key = f"{ns}.<type_params>.{child_name}"
+                    scopes[tp_key] = tp_scope
+                    for sub_t in t.get_children():
+                        process(ns, sub_t)
                 else:
                     process(ns, t)
 
@@ -1844,6 +1916,28 @@ class CallGraphVisitor(ast.NodeVisitor):
                         oldsc.defs[name] = sc.defs[name]
 
         self.logger.debug(f"Scopes now: {self.scopes}")
+
+    def _push_type_params_scope(self, entity_name):
+        """Push the PEP 695 type-parameter closure scope, if one exists.
+
+        Call this *before* entering the entity's own scope (class/function/alias).
+        Returns True if a scope was pushed; the caller must call
+        ``_pop_type_params_scope(True)`` after leaving the entity scope.
+
+        On Python < 3.12, or for non-generic entities, this is a no-op
+        that returns False.
+        """
+        ns = self.get_node_of_current_namespace().get_name()
+        key = f"{ns}.<type_params>.{entity_name}"
+        if key in self.scopes:
+            self.scope_stack.append(self.scopes[key])
+            return True
+        return False
+
+    def _pop_type_params_scope(self, pushed):
+        """Pop the type-parameter scope if one was pushed."""
+        if pushed:
+            self.scope_stack.pop()
 
     def get_current_class(self):
         """Return the node representing the current class, or None if not inside a class definition."""
