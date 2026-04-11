@@ -4,6 +4,7 @@
 
 import ast
 from collections import defaultdict
+from contextlib import contextmanager
 import logging
 import symtable
 
@@ -586,14 +587,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         module_node = self.get_node("", self.module_name, node, flavor=Flavor.MODULE)
         self.associate_node(module_node, node, filename=self.filename)
 
-        ns = self.module_name
-        self.name_stack.append(ns)
-        self.scope_stack.append(self.scopes[ns])
-        self.context_stack.append(f"Module {ns}")
-        self.generic_visit(node)  # visit the **children** of node
-        self.context_stack.pop()
-        self.scope_stack.pop()
-        self.name_stack.pop()
+        with self._module_scope(self.module_name):
+            self.generic_visit(node)  # visit the **children** of node
 
         if self.add_defines_edge(module_node, None):
             self.logger.info(f"Def Module {node}")
@@ -621,18 +616,11 @@ class CallGraphVisitor(ast.NodeVisitor):
         #
         self.set_value(node.name, to_node)
 
-        # PEP 695 (#123): push the type-parameter closure scope (if any)
-        # before entering the class scope. This sits between the enclosing
-        # scope and the class scope on scope_stack, matching Python's
-        # actual lexical structure for generic classes.
-        has_type_params = self._push_type_params_scope(node.name)
-        try:
-            self.class_stack.append(to_node)
-            self.name_stack.append(node.name)
-            inner_ns = self.get_node_of_current_namespace().get_name()
-            self.scope_stack.append(self.scopes[inner_ns])
-            self.context_stack.append(f"ClassDef {node.name}")
-
+        # PEP 695 (#123): the type-parameter closure scope (if any) sits
+        # between the enclosing scope and the class scope on scope_stack,
+        # matching Python's actual lexical structure for generic classes.
+        with self._type_params_scope(node.name), \
+             self._class_scope(node, to_node):
             self.class_base_ast_nodes[to_node] = []
             for b in node.bases:
                 # gather info for resolution of inherited attributes in pass 2 (see get_attribute())
@@ -642,13 +630,6 @@ class CallGraphVisitor(ast.NodeVisitor):
 
             for stmt in node.body:
                 self.visit(stmt)
-
-            self.context_stack.pop()
-            self.scope_stack.pop()
-            self.name_stack.pop()
-            self.class_stack.pop()
-        finally:
-            self._pop_type_params_scope(has_type_params)
 
     def visit_FunctionDef(self, node):
         self.logger.debug(f"FunctionDef {node.name}, {self.filename}:{node.lineno}")
@@ -688,19 +669,12 @@ class CallGraphVisitor(ast.NodeVisitor):
         #
         default_values = self._visit_function_defaults(node.args)
 
-        # PEP 695 (#123): push the type-parameter closure scope (if any)
-        # before entering the function scope.  Defaults are visited above
-        # in the enclosing scope (matching Python's evaluation semantics);
-        # the type-parameter scope sits between the enclosing and function
-        # scopes.
-        has_type_params = self._push_type_params_scope(node.name)
-        try:
-            # Enter the function scope
-            #
-            self.name_stack.append(node.name)
-            inner_ns = self.get_node_of_current_namespace().get_name()
-            self.scope_stack.append(self.scopes[inner_ns])
-            self.context_stack.append(f"FunctionDef {node.name}")
+        # PEP 695 (#123): the type-parameter closure scope (if any) sits
+        # between the enclosing and function scopes.  Defaults are visited
+        # above in the enclosing scope (matching Python's evaluation
+        # semantics).
+        with self._type_params_scope(node.name), \
+             self._function_scope(node) as inner_ns:
 
             # Capture which names correspond to function args.
             #
@@ -745,14 +719,6 @@ class CallGraphVisitor(ast.NodeVisitor):
             #
             for stmt in node.body:
                 self.visit(stmt)
-
-            # Exit the function scope
-            #
-            self.context_stack.pop()
-            self.scope_stack.pop()
-            self.name_stack.pop()
-        finally:
-            self._pop_type_params_scope(has_type_params)
 
     def visit_AsyncFunctionDef(self, node):
         self.visit_FunctionDef(node)  # TODO: alias for now; tag async functions in output in a future version?
@@ -1175,12 +1141,9 @@ class CallGraphVisitor(ast.NodeVisitor):
         # analyze_scopes stores it under a synthetic key so that both
         # parameterized and simple aliases have their type-alias scope
         # directly under the enclosing namespace.
-        has_type_params = self._push_type_params_scope(node.name.id)
-        try:
-            with ExecuteInInnerScope(self, node.name.id):
-                self.visit(node.value)
-        finally:
-            self._pop_type_params_scope(has_type_params)
+        with self._type_params_scope(node.name.id), \
+             ExecuteInInnerScope(self, node.name.id):
+            self.visit(node.value)
 
     def visit_AugAssign(self, node):
         targets = canonize_exprs(node.target)
@@ -1851,7 +1814,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         2. Store them under a synthetic key
            ``<parent_ns>.<type_params>.<entity_name>`` so that the
            visitors can push them onto ``scope_stack`` for correct
-           lexical lookup (see ``_push_type_params_scope``).
+           lexical lookup (see ``_type_params_scope``).
         3. Process their children under the **parent** namespace, so
            the actual entity lands at the correct dotted name.
 
@@ -1917,27 +1880,80 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         self.logger.debug(f"Scopes now: {self.scopes}")
 
-    def _push_type_params_scope(self, entity_name):
-        """Push the PEP 695 type-parameter closure scope, if one exists.
+    @contextmanager
+    def _type_params_scope(self, entity_name):
+        """Context manager: push PEP 695 type-parameter closure scope.
 
-        Call this *before* entering the entity's own scope (class/function/alias).
-        Returns True if a scope was pushed; the caller must call
-        ``_pop_type_params_scope(True)`` after leaving the entity scope.
+        Pushes the type-parameter scope (if one exists for *entity_name*)
+        onto ``scope_stack`` on entry, pops it on exit.  Does **not**
+        touch ``name_stack`` — the type-parameter scope is a closure
+        that doesn't contribute to the dotted namespace path.
 
-        On Python < 3.12, or for non-generic entities, this is a no-op
-        that returns False.
+        On Python < 3.12, or for non-generic entities, this is a no-op.
         """
         ns = self.get_node_of_current_namespace().get_name()
         key = f"{ns}.<type_params>.{entity_name}"
-        if key in self.scopes:
-            self.scope_stack.append(self.scopes[key])
-            return True
-        return False
-
-    def _pop_type_params_scope(self, pushed):
-        """Pop the type-parameter scope if one was pushed."""
+        pushed = key in self.scopes
         if pushed:
+            self.scope_stack.append(self.scopes[key])
+        try:
+            yield
+        finally:
+            if pushed:
+                self.scope_stack.pop()
+
+    @contextmanager
+    def _module_scope(self, module_name):
+        """Context manager: enter/leave a module scope."""
+        self.name_stack.append(module_name)
+        self.scope_stack.append(self.scopes[module_name])
+        self.context_stack.append(f"Module {module_name}")
+        try:
+            yield
+        finally:
+            self.context_stack.pop()
             self.scope_stack.pop()
+            self.name_stack.pop()
+
+    @contextmanager
+    def _class_scope(self, node, class_node):
+        """Context manager: enter/leave a class scope.
+
+        Pushes ``class_stack``, ``name_stack``, ``scope_stack``, and
+        ``context_stack``.  Yields the fully qualified inner namespace
+        name (e.g. ``mod.MyClass``).
+        """
+        self.class_stack.append(class_node)
+        self.name_stack.append(node.name)
+        inner_ns = self.get_node_of_current_namespace().get_name()
+        self.scope_stack.append(self.scopes[inner_ns])
+        self.context_stack.append(f"ClassDef {node.name}")
+        try:
+            yield inner_ns
+        finally:
+            self.context_stack.pop()
+            self.scope_stack.pop()
+            self.name_stack.pop()
+            self.class_stack.pop()
+
+    @contextmanager
+    def _function_scope(self, node):
+        """Context manager: enter/leave a function scope.
+
+        Pushes ``name_stack``, ``scope_stack``, and ``context_stack``.
+        Yields the fully qualified inner namespace name
+        (e.g. ``mod.MyClass.my_method``).
+        """
+        self.name_stack.append(node.name)
+        inner_ns = self.get_node_of_current_namespace().get_name()
+        self.scope_stack.append(self.scopes[inner_ns])
+        self.context_stack.append(f"FunctionDef {node.name}")
+        try:
+            yield inner_ns
+        finally:
+            self.context_stack.pop()
+            self.scope_stack.pop()
+            self.name_stack.pop()
 
     def get_current_class(self):
         """Return the node representing the current class, or None if not inside a class definition."""
