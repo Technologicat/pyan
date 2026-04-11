@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.4.2 (in progress)
+
+*No user-visible changes yet.*
+
+
+---
+
 ## 2.4.1 (11 April 2026) — *Hotfix: Terra Generica*
 
 ### Bug fixes
