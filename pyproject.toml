@@ -51,6 +51,11 @@ dev = [
     "importmagic",
     "epc",
     "jedi>=0.19.2",
+    # For local pre-release sanity checks: `python -m build --sdist`
+    # exercises the same sdist path that CI runs on tag push.
+    "build",
+    # For validating .github/workflows/*.yml during local dev (not used at runtime).
+    "pyyaml>=6.0.3",
 ]
 
 test = [
