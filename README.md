@@ -453,29 +453,31 @@ DOT and plain-text output require no extra system dependencies.
 
 ## Development setup
 
-This repository uses [uv](https://github.com/astral-sh/uv) for development.
+This repository uses [PDM](https://pdm-project.org/en/latest/) for development.
 
 ```bash
-# install uv if needed (see https://docs.astral.sh/uv/getting-started/installation/)
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# install PDM if needed
+python -m pip install pdm
 
-# set up a development environment (editable install + test extras)
-uv sync --extra test
+# set up a development venv (creates .venv/, installs pyan3 and dev deps)
+pdm install
 
 # run tests
-uv run pytest tests/ -v
+pdm run pytest tests/ -v
 
 # run the CLI locally
-uv run pyan3 --help
+pdm run pyan3 --help
 
 # lint
-uv run ruff check .
+pdm run ruff check .
 
 # coverage report
-uv run pytest tests/ --cov=pyan --cov-branch --cov-report=term-missing
+pdm run pytest tests/ --cov-branch --cov-report=term-missing
 ```
 
-See [DEV-SETUP-UV.md](DEV-SETUP-UV.md) for a more detailed onboarding guide, and [open issues](https://github.com/Technologicat/pyan/issues) if you are looking for contribution ideas.
+Activate the venv with `$(pdm venv activate)`, or prefix commands with `pdm run`.
+
+See [open issues](https://github.com/Technologicat/pyan/issues) if you are looking for contribution ideas.
 
 
 # Features

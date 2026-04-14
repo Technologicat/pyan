@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
 
 [project]
 name = "pyan3"
-version = "2.4.2-dev"
+dynamic = ["version"]
 description = "Generate approximate call graphs for Python programs"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
@@ -41,31 +41,6 @@ sphinx = [
     "docutils",
 ]
 
-dev = [
-    "ruff>=0.14.0",
-    'twine>=6.0.0',
-    'urllib3>=2.6.3',       # transitive via twine → requests; floor for CVE fixes
-    'cryptography>=46.0.5', # transitive via twine → keyring; floor for CVE fixes
-    "flake8",
-    "autopep8",
-    "importmagic",
-    "epc",
-    "jedi>=0.19.2",
-    # For local pre-release sanity checks: `python -m build --sdist`
-    # exercises the same sdist path that CI runs on tag push.
-    "build",
-    # For validating .github/workflows/*.yml during local dev (not used at runtime).
-    "pyyaml>=6.0.3",
-]
-
-test = [
-    "coverage>=5.3",
-    "pytest>=6.1.2",
-    "pytest-cov>=2.10.1",
-    "sphinx",
-    "docutils",
-]
-
 [project.urls]
 Homepage = "https://github.com/Technologicat/pyan"
 Documentation = "https://github.com/Technologicat/pyan"
@@ -75,20 +50,57 @@ Repository = "https://github.com/Technologicat/pyan"
 [project.scripts]
 pyan3 = "pyan.main:main"
 
-
-[tool.hatch.build.targets.wheel]
-packages = ["pyan"]
-
-[tool.hatch.build.targets.sdist]
-include = [
-    "/pyan",
-    "/README.md",
-    "/LICENSE.md",
-    "/AUTHORS.md",
-    "/CHANGELOG.md",
-    "/pyproject.toml",
-    "/pytest.ini",
+[dependency-groups]
+dev = [
+    # Test
+    "pytest>=8.0",
+    "pytest-cov>=7.1.0",
+    # Needed to run `tests/test_sphinx.py`. Also exposed as the
+    # `[project.optional-dependencies].sphinx` user-facing extra.
+    "sphinx",
+    "docutils",
+    # Linters (for local checks — CI installs them separately)
+    "ruff>=0.14.0",
+    "flake8",
+    "autopep8",
+    # Editor tooling (jedi-based IDE features in Emacs)
+    "jedi>=0.19.2",
+    "epc",
+    "importmagic",
+    # Release tooling (manual fallback; CI publishes on tag push)
+    "twine>=6.0.0",
+    "urllib3>=2.6.3",       # transitive via twine → requests; floor for CVE fixes
+    "cryptography>=46.0.5", # transitive via twine → keyring; floor for CVE fixes
+    # For local pre-release sanity checks: `python -m build --sdist`
+    # exercises the same sdist path that CI runs on tag push.
+    "build",
+    # For validating .github/workflows/*.yml during local dev (not used at runtime).
+    "pyyaml>=6.0.3",
 ]
+
+[tool.pdm.version]
+# The `file` source tells pdm to look for a line in a file that matches the regex `__version__ = ".*"`.
+source = "file"
+path = "pyan/__init__.py"
+
+[tool.pdm.build]
+includes = ["pyan"]
+excludes = ["**/tests", "**/__pycache__"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/"]
+addopts = [
+    "-rsxX",
+    "-vv",
+    "--cov=pyan",
+    "--cov-report=html",
+    "--cov-report=term-missing:skip-covered",
+    "--no-cov-on-fail",
+]
+log_cli_level = "ERROR"
+log_format = "%(asctime)s %(levelname)s %(message)s"
+log_date_format = "%Y-%m-%d %H:%M:%S"
+cache_dir = ".cache"
 
 [tool.ruff]
 line-length = 120

@@ -6,7 +6,6 @@ __pycache__
 build
 dist
 MANIFEST
-pdm.lock
 .pdm-python
 .spyproject
 .venv
@@ -15,7 +14,6 @@ pdm.lock
 .python-version
 .coverage
 htmlcov/
-uv.lock
 00_tmp/
 *.zip
 .cache/

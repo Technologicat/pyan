@@ -14,25 +14,29 @@ Single dependency: `jinja2` (used only for HTML output). Optional: `sphinx`/`doc
 
 ## Build and Development
 
-Uses hatchling. Python 3.10–3.14. Linter is ruff.
+Uses PDM with `pdm-backend`. Python 3.10–3.14. Linter is ruff.
 
 ```bash
-uv sync --extra test   # editable install with test deps
+pdm install              # creates .venv/, installs pyan3 and dev deps
 ```
+
+Prefix commands with `pdm run` if the venv is not active.
+
+Version is defined in `pyan/__init__.py` (`__version__`), read by PDM via `[tool.pdm.version]` in `pyproject.toml`. Tag format: `vX.Y.Z`.
 
 Entry point: `pyan3` CLI.
 
 ### Running Tests
 
 ```bash
-uv run pytest tests/ -v   # runs all tests
+pytest                   # runs all tests (pytest.ini options are in `[tool.pytest.ini_options]`)
 ```
 
 Tests in `tests/`: `test_features.py` (syntax coverage), `test_modvis.py` (module graph), `test_writers.py` (output formats), `test_analyzer.py` (low-level), `test_regressions.py`, `test_sphinx.py`, `test_coverage.py` (coverage gap tests). Version-specific tests in `tests/test_code_312/` (3.12+ syntax).
 
 ### CI
 
-GitHub Actions: test matrix across 3.10–3.14 (`.github/workflows/tests.yml`), coverage on 3.14 via Codecov (`.github/workflows/coverage.yml`).
+GitHub Actions: test matrix across 3.10–3.14 (`.github/workflows/ci.yml`), coverage on 3.14 via Codecov (`.github/workflows/coverage.yml`).
 
 ### Linting
 
@@ -105,7 +109,6 @@ source files → CallGraphVisitor (analyzer.py) → Node graph → VisualGraph (
 
 - `DESIGN-NOTES.md` — Future directions: edge confidence scoring, wildcard improvements, type inference.
 - `TODO_DEFERRED.md` — Detailed descriptions of all deferred work items.
-- `DEV-SETUP-UV.md` — Development environment setup using `uv`.
 
 ## Code Conventions
 

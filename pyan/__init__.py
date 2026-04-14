@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 
-from importlib.metadata import PackageNotFoundError, version
-
-try:
-    __version__ = version("pyan3")
-except PackageNotFoundError:
-    __version__ = "unknown"
+__version__ = "2.4.2-dev"
 
 from .main import create_callgraph, main  # noqa: F401
 from .modvis import create_modulegraph  # noqa: F401
