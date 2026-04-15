@@ -1,5 +1,10 @@
 """Smoke tests for the Sphinx extension."""
 
+import shutil
+import subprocess
+import sys
+import textwrap
+
 import pytest
 
 sphinx = pytest.importorskip("sphinx")
@@ -115,6 +120,89 @@ class TestCallgraphDirectiveRun:
         directive = self._make_directive(["pyan"], {"zoomable": ""})
         result = directive.run()
         assert "zoomable-callgraph" in result[0].get("classes", [])
+
+
+class TestSphinxBuildIntegration:
+    def test_sphinx_build_renders_svg_output(self, tmp_path):
+        fake_dot = tmp_path / "fake-dot"
+        fake_dot.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env python3
+                import pathlib
+                import sys
+
+                args = sys.argv[1:]
+                out = next((arg[2:] for arg in args if arg.startswith("-o")), None)
+                fmt = next((arg[2:] for arg in args if arg.startswith("-T")), None)
+                if fmt != "svg" or out is None:
+                    raise SystemExit(f"unexpected args: {args!r}")
+
+                sys.stdin.read()
+                pathlib.Path(out).write_text(
+                    '<svg xmlns="http://www.w3.org/2000/svg"><text>fake graphviz render</text></svg>',
+                    encoding="utf-8",
+                )
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_dot.chmod(0o755)
+
+        srcdir = tmp_path / "src"
+        outdir = tmp_path / "build"
+        srcdir.mkdir()
+
+        (srcdir / "conf.py").write_text(
+            textwrap.dedent(
+                f"""\
+                extensions = [
+                    "sphinx.ext.graphviz",
+                    "pyan.sphinx",
+                ]
+                master_doc = "index"
+                project = "pyan-test"
+                graphviz_output_format = "svg"
+                graphviz_dot = r"{fake_dot}"
+                """
+            ),
+            encoding="utf-8",
+        )
+        (srcdir / "index.rst").write_text(
+            textwrap.dedent(
+                """\
+                Pyan Sphinx Test
+                ================
+
+                .. callgraph:: pyan.create_callgraph
+                   :zoomable:
+                   :direction: horizontal
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        sphinx_build = shutil.which("sphinx-build")
+        if sphinx_build is not None:
+            command = [sphinx_build, "-b", "html", str(srcdir), str(outdir)]
+        else:
+            command = [sys.executable, "-m", "sphinx", "-b", "html", str(srcdir), str(outdir)]
+
+        subprocess.run(command, check=True, capture_output=True, text=True)
+
+        html = (outdir / "index.html").read_text(encoding="utf-8")
+        assert "svg-pan-zoom" in html
+        assert "zoomable-callgraph" in html
+        assert '<object data="_images/graphviz-' in html
+        assert 'type="image/svg+xml"' in html
+        assert "rankdir=LR" in html
+
+        images = list((outdir / "_images").glob("graphviz-*.svg"))
+        assert len(images) == 1
+
+        svg = images[0].read_text(encoding="utf-8")
+        assert "fake graphviz render" in svg
+        assert "<svg" in svg
 
 
 class TestSphinxImports:
