@@ -1,8 +1,8 @@
 # Changelog
 
-## 2.4.2 (in progress)
+## 2.4.2 (16 April 2026) — *Benchmark*
 
-*No user-visible changes yet.*
+*No user-visible changes in this release; the Sphinx extension is now covered by an end-to-end test, so what was previously advertised is now verified.*
 
 ### Internal
 
