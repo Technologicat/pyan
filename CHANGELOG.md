@@ -4,6 +4,18 @@
 
 *No user-visible changes yet.*
 
+### Internal
+
+- **Sphinx extension: end-to-end integration test** — a new test
+  (`TestSphinxBuildIntegration`) runs a real `sphinx-build` on a
+  minimal project that uses the `.. callgraph::` directive, and
+  verifies that the rendered HTML wires up `svg-pan-zoom`, embeds
+  the generated SVG via `<object>`, and propagates directive options
+  (e.g. `:direction: horizontal` → `rankdir=LR`) through to the
+  Graphviz input.  A small in-test stub stands in for the `dot`
+  binary, so CI does not need a system Graphviz install.  Closes
+  #114.  (#124 — thanks @BlocksecPHD)
+
 
 ---
 

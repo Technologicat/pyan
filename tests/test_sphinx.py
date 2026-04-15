@@ -1,6 +1,5 @@
 """Smoke tests for the Sphinx extension."""
 
-import shutil
 import subprocess
 import sys
 import textwrap
@@ -182,13 +181,15 @@ class TestSphinxBuildIntegration:
             encoding="utf-8",
         )
 
-        sphinx_build = shutil.which("sphinx-build")
-        if sphinx_build is not None:
-            command = [sphinx_build, "-b", "html", str(srcdir), str(outdir)]
-        else:
-            command = [sys.executable, "-m", "sphinx", "-b", "html", str(srcdir), str(outdir)]
-
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        command = [sys.executable, "-m", "sphinx", "-b", "html", str(srcdir), str(outdir)]
+        try:
+            subprocess.run(command, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            pytest.fail(
+                f"sphinx-build failed (exit {e.returncode})\n"
+                f"--- stdout ---\n{e.stdout}\n"
+                f"--- stderr ---\n{e.stderr}"
+            )
 
         html = (outdir / "index.html").read_text(encoding="utf-8")
         assert "svg-pan-zoom" in html
