@@ -123,30 +123,47 @@ class TestCallgraphDirectiveRun:
 
 class TestSphinxBuildIntegration:
     def test_sphinx_build_renders_svg_output(self, tmp_path):
-        fake_dot = tmp_path / "fake-dot"
-        fake_dot.write_text(
-            textwrap.dedent(
-                """\
-                #!/usr/bin/env python3
-                import pathlib
-                import sys
+        # The body of a pretend `dot` executable: checks the invocation
+        # looks like what Sphinx's graphviz extension emits, then writes
+        # a minimal SVG to the output path.  Sphinx launches `graphviz_dot`
+        # via subprocess without a shell, so on every platform we need a
+        # real launchable file on disk.
+        fake_dot_body = textwrap.dedent(
+            """\
+            import pathlib
+            import sys
 
-                args = sys.argv[1:]
-                out = next((arg[2:] for arg in args if arg.startswith("-o")), None)
-                fmt = next((arg[2:] for arg in args if arg.startswith("-T")), None)
-                if fmt != "svg" or out is None:
-                    raise SystemExit(f"unexpected args: {args!r}")
+            args = sys.argv[1:]
+            out = next((arg[2:] for arg in args if arg.startswith("-o")), None)
+            fmt = next((arg[2:] for arg in args if arg.startswith("-T")), None)
+            if fmt != "svg" or out is None:
+                raise SystemExit(f"unexpected args: {args!r}")
 
-                sys.stdin.read()
-                pathlib.Path(out).write_text(
-                    '<svg xmlns="http://www.w3.org/2000/svg"><text>fake graphviz render</text></svg>',
-                    encoding="utf-8",
-                )
-                """
-            ),
-            encoding="utf-8",
+            sys.stdin.read()
+            pathlib.Path(out).write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg"><text>fake graphviz render</text></svg>',
+                encoding="utf-8",
+            )
+            """
         )
-        fake_dot.chmod(0o755)
+
+        if sys.platform == "win32":
+            # Windows honors neither `#!` shebangs nor the executable bit, so
+            # write the Python script separately and wrap it in a `.bat` that
+            # forwards all arguments to the current interpreter.
+            fake_dot_py = tmp_path / "fake_dot.py"
+            fake_dot_py.write_text(fake_dot_body, encoding="utf-8")
+            fake_dot = tmp_path / "fake-dot.bat"
+            fake_dot.write_text(
+                f'@echo off\r\n"{sys.executable}" "{fake_dot_py}" %*\r\n',
+                encoding="utf-8",
+            )
+        else:
+            # POSIX: single self-contained script with a shebang pointing at
+            # the interpreter pytest is running under.
+            fake_dot = tmp_path / "fake-dot"
+            fake_dot.write_text(f"#!{sys.executable}\n{fake_dot_body}", encoding="utf-8")
+            fake_dot.chmod(0o755)
 
         srcdir = tmp_path / "src"
         outdir = tmp_path / "build"

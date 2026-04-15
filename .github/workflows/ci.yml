@@ -10,15 +10,26 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        # Full Python matrix on Linux; newest Python only on macOS and Windows.
+        # Rationale: pyan3 is pure Python, so platform-specific bugs (path
+        # handling, subprocess launch, line endings, ...) are almost never
+        # Python-version-specific.  The extra 8 jobs to cover every Python
+        # version on every OS would just re-find the same bugs in parallel.
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          - os: macos-latest
+            python-version: "3.14"
+          - os: windows-latest
+            python-version: "3.14"
 
     steps:
     - uses: actions/checkout@v6
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python ${{ matrix.python-version }} on ${{ matrix.os }}
       uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
