@@ -6,15 +6,8 @@
 
 ### Internal
 
-- **Sphinx extension: end-to-end integration test** — a new test
-  (`TestSphinxBuildIntegration`) runs a real `sphinx-build` on a
-  minimal project that uses the `.. callgraph::` directive, and
-  verifies that the rendered HTML wires up `svg-pan-zoom`, embeds
-  the generated SVG via `<object>`, and propagates directive options
-  (e.g. `:direction: horizontal` → `rankdir=LR`) through to the
-  Graphviz input.  A small in-test stub stands in for the `dot`
-  binary, so CI does not need a system Graphviz install.  Closes
-  #114.  (#124 — thanks @BlocksecPHD)
+- **Build system migrated from hatchling+uv to PDM** (`pdm-backend`). No user-visible changes; `pip install pyan3` works as before.
+- **Sphinx extension: end-to-end integration test** covering `sphinx-build`, the `.. callgraph::` directive, pan/zoom HTML wiring, and directive option propagation. Uses an in-test `dot` stub, so CI needs no system Graphviz. Closes #114. (#124 — thanks @BlocksecPHD)
 
 
 ---
