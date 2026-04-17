@@ -33,3 +33,5 @@ Sphinx extension integration test by [BlocksecPHD](https://github.com/BlocksecPH
 Further contributions by Ioannis Filippidis, Jan Malek, José Eduardo Montenegro Cavalcanti de Oliveira, Mantas Zimnickas, Sam Basak, Brady Deetz, and GitHub user dmfreemon.
 
 2026 revival, modernization for Python 3.10–3.14, module-level dependency analysis, and comprehensive test suite by Juha Jeronen, with [Claude](https://claude.ai/) (Anthropic) as AI pair programmer.
+
+Subsequent build system migration to PDM, with fleet-wide alignment of `pyproject.toml`, lint, and CI conventions, by Juha Jeronen, with [Claude](https://claude.ai/) (Anthropic) as AI pair programmer.
