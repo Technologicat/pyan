@@ -134,6 +134,12 @@ class CallGraphVisitor(ast.NodeVisitor):
         """Shared initialization for both constructors."""
         self.logger = logger or logging.getLogger(__name__)
 
+        # Stack of sets; while non-empty, ``add_uses_edge`` records each edge's
+        # to_node into the top set. Used by visit_FunctionDef to capture uses
+        # coming from decorator arguments (#125) even when those edges already
+        # exist on the enclosing module's adjacency set.
+        self._decorator_use_recorders = []
+
         # data gathered from analysis
         self.module_to_filename = {}  # module name → filename (or module name itself in source mode)
         self.defines_edges = {}
@@ -638,6 +644,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         #
         # - Analyze decorators. They belong to the surrounding scope,
         #   so we must analyze them before entering the function scope.
+        #   Record every use target touched during that analysis (#125);
+        #   see the re-attribution below.
         #
         # - Determine whether this definition is for a function, an (instance)
         #   method, a static method or a class method.
@@ -646,7 +654,12 @@ class CallGraphVisitor(ast.NodeVisitor):
         #   method or a class method. (For a class method, it represents cls,
         #   but Pyan only cares about types, not instances.)
         #
-        self_name, flavor = self.analyze_functiondef(node)
+        decorator_uses = set()
+        self._decorator_use_recorders.append(decorator_uses)
+        try:
+            self_name, flavor = self.analyze_functiondef(node)
+        finally:
+            self._decorator_use_recorders.pop()
 
         # Now we can create the Node.
         #
@@ -702,6 +715,15 @@ class CallGraphVisitor(ast.NodeVisitor):
             # names referenced in its defaults — e.g. `def f(cb=some_func)` should
             # show `f → some_func`.
             self._record_default_uses_in_function(node.args)
+
+            # Same treatment for decorator arguments (#125). Decorators are
+            # visited in the enclosing scope (Python evaluates them there at
+            # definition time), but the decorated function is meaningfully tied
+            # to whatever names the decorator references — e.g.
+            # `@app.get("/x", dependencies=[Depends(Guard())])` should show
+            # the function using Depends and Guard, not just the module.
+            for tgt in decorator_uses:
+                self.add_uses_edge(to_node, tgt)
 
             # Visit type annotations to create uses edges for referenced types.
             #
@@ -2219,6 +2241,13 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     def add_uses_edge(self, from_node, to_node):
         """Add a uses edge in the graph between two nodes."""
+
+        # Record decorator-argument targets (#125) regardless of whether the
+        # underlying edge is new: if another function in the same module has
+        # already added ``module → foo``, the edge is deduplicated but we
+        # still need to see ``foo`` here to attribute it to the decorated fn.
+        for rec in self._decorator_use_recorders:
+            rec.add(to_node)
 
         if from_node not in self.uses_edges:
             self.uses_edges[from_node] = set()

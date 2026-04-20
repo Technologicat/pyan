@@ -216,3 +216,50 @@ def test_init_imports_toplevel_init_dot_import():
     mypkg_init = f"{INIT_IMPORTS_PREFIX}.mypkg"
     mypkg_uses = get_in_dict(v.uses_edges, mypkg_init)
     get_node(mypkg_uses, f"{INIT_IMPORTS_PREFIX}.mypkg.sub")
+
+
+# --- Issue #125: decorator arguments should be attributed to the decorated function ---
+#
+# Python evaluates decorator expressions at definition time in the enclosing scope,
+# so a decorator's argument uses naturally attach to the enclosing module. But for
+# call-graph purposes, the *decorated function* also "uses" those names — e.g. in
+# ``@app.get("/x", dependencies=[Depends(Guard())]) def fn(): ...`` the function
+# fn is meaningfully tied to Depends and Guard, not just the module. Mirrors the
+# treatment of default values.
+
+ISSUE125_FILE = os.path.join(TESTS_DIR, "test_code/issue125/fastapi_style.py")
+
+
+def test_issue125_decorator_args_attributed_to_function():
+    """Names inside a decorator's call arguments should appear as uses of the
+    decorated function, not only of the enclosing module."""
+    v = CallGraphVisitor([ISSUE125_FILE], logger=logging.getLogger())
+
+    secure_uses = get_in_dict(v.uses_edges, "fastapi_style.secure_route")
+    # From the decorator call ``@route("/secure", dependencies=[depends(Guard())])``.
+    get_node(secure_uses, "fastapi_style.depends")
+    get_node(secure_uses, "fastapi_style.Guard")
+    # The decorator function itself is also a use.
+    get_node(secure_uses, "fastapi_style.route")
+
+
+def test_issue125_bare_decorator_without_callable_args():
+    """A decorator with no callable arguments should still attribute the
+    decorator name to the function, but nothing spurious."""
+    v = CallGraphVisitor([ISSUE125_FILE], logger=logging.getLogger())
+
+    open_uses = get_in_dict(v.uses_edges, "fastapi_style.open_route")
+    get_node(open_uses, "fastapi_style.route")
+    target_names = {n.get_name() for n in open_uses}
+    assert "fastapi_style.depends" not in target_names
+    assert "fastapi_style.Guard" not in target_names
+
+
+def test_issue125_mixed_decorator_and_default():
+    """When a name appears in both a decorator argument and a default value,
+    the function should still have exactly one edge to it (edges deduplicate)."""
+    v = CallGraphVisitor([ISSUE125_FILE], logger=logging.getLogger())
+
+    mixed_uses = get_in_dict(v.uses_edges, "fastapi_style.mixed_route")
+    get_node(mixed_uses, "fastapi_style.depends")
+    get_node(mixed_uses, "fastapi_style.Guard")

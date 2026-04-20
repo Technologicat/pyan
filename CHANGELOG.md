@@ -2,7 +2,9 @@
 
 ## 2.4.3 (in progress)
 
-*No user-visible changes yet.*
+### Bug fixes
+
+- **Names referenced inside a decorator's arguments are now attributed to the decorated function**, not only to the enclosing module. Previously, a function decorated with e.g. `@app.get("/x", dependencies=[Depends(Guard())])` showed no uses of `Depends` or `Guard` — those edges landed on the module instead. The function now also gets a uses edge to each target referenced in its decorator arguments, mirroring the existing treatment of default values. (#125 — thanks @doctorgu)
 
 
 ---
