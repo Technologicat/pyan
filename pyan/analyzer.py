@@ -602,6 +602,17 @@ class CallGraphVisitor(ast.NodeVisitor):
     def visit_ClassDef(self, node):
         self.logger.debug(f"ClassDef {node.name}, {self.filename}:{node.lineno}")
 
+        # Visit decorators in the enclosing scope (Python evaluates them there
+        # at definition time), recording every use target touched. We replay
+        # those as uses of the decorated class below (#125).
+        decorator_uses = set()
+        self._decorator_use_recorders.append(decorator_uses)
+        try:
+            for deco in node.decorator_list:
+                self.visit(deco)
+        finally:
+            self._decorator_use_recorders.pop()
+
         from_node = self.get_node_of_current_namespace()
         ns = from_node.get_name()
         to_node = self.get_node(ns, node.name, node, flavor=Flavor.CLASS)
@@ -633,6 +644,11 @@ class CallGraphVisitor(ast.NodeVisitor):
                 self.class_base_ast_nodes[to_node].append(b)
                 # mark uses from a derived class to its bases (via names appearing in a load context).
                 self.visit(b)
+
+            # Re-emit decorator-argument uses from the class node (same
+            # rationale as in visit_FunctionDef).
+            for tgt in decorator_uses:
+                self.add_uses_edge(to_node, tgt)
 
             for stmt in node.body:
                 self.visit(stmt)

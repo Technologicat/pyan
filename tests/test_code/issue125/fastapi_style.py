@@ -32,3 +32,18 @@ def secure_route():
 @route("/mixed", dependencies=[depends(Guard())])
 def mixed_route(token=depends(Guard())):
     return token
+
+
+# Class decorators should receive the same treatment.
+
+
+@route("/api")
+class ApiHandler:
+    def handle(self):
+        return "ok"
+
+
+@route("/api/secure", dependencies=[depends(Guard())])
+class SecureApiHandler:
+    def handle(self):
+        return "ok"

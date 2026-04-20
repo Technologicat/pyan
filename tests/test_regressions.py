@@ -263,3 +263,23 @@ def test_issue125_mixed_decorator_and_default():
     mixed_uses = get_in_dict(v.uses_edges, "fastapi_style.mixed_route")
     get_node(mixed_uses, "fastapi_style.depends")
     get_node(mixed_uses, "fastapi_style.Guard")
+
+
+def test_issue125_class_decorator_bare():
+    """Class decorators were previously ignored entirely. The decorator name
+    should now appear as a use of the decorated class."""
+    v = CallGraphVisitor([ISSUE125_FILE], logger=logging.getLogger())
+
+    api_uses = get_in_dict(v.uses_edges, "fastapi_style.ApiHandler")
+    get_node(api_uses, "fastapi_style.route")
+
+
+def test_issue125_class_decorator_with_callable_args():
+    """Names inside a class decorator's arguments should be attributed to the
+    decorated class, mirroring the function-decorator behavior."""
+    v = CallGraphVisitor([ISSUE125_FILE], logger=logging.getLogger())
+
+    secure_uses = get_in_dict(v.uses_edges, "fastapi_style.SecureApiHandler")
+    get_node(secure_uses, "fastapi_style.route")
+    get_node(secure_uses, "fastapi_style.depends")
+    get_node(secure_uses, "fastapi_style.Guard")

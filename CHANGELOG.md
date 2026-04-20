@@ -5,6 +5,7 @@
 ### Bug fixes
 
 - **Names referenced inside a decorator's arguments are now attributed to the decorated function**, not only to the enclosing module. Previously, a function decorated with e.g. `@app.get("/x", dependencies=[Depends(Guard())])` showed no uses of `Depends` or `Guard` — those edges landed on the module instead. The function now also gets a uses edge to each target referenced in its decorator arguments, mirroring the existing treatment of default values. (#125 — thanks @doctorgu)
+- **Class decorators are now analyzed** — previously `visit_ClassDef` ignored `decorator_list` entirely, so `@dataclass` or `@register(kind="x")` on a class produced no uses edges anywhere. Class decorators now behave like function decorators: the decorator expression is visited at module scope, and referenced names are also attributed to the decorated class.
 
 
 ---
