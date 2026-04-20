@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.4.3 (in progress)
+## 2.4.3 (20 April 2026)
 
 ### Bug fixes
 
