@@ -283,3 +283,49 @@ def test_issue125_class_decorator_with_callable_args():
     get_node(secure_uses, "fastapi_style.route")
     get_node(secure_uses, "fastapi_style.depends")
     get_node(secure_uses, "fastapi_style.Guard")
+
+
+# --- Issue #126: name lookups through __init__.py re-exports and wildcard imports ---
+#
+# When a package's __init__.py re-exports names from submodules
+# (``from .file2 import fn2``) or a downstream module imports via wildcard
+# (``from pkg import *``), pyan should resolve the call back to the actual
+# defining submodule — ``pkg.file2.fn2``, not ``pkg.fn2`` or ``*.fn2``.
+
+ISSUE126_DIR = os.path.join(TESTS_DIR, "test_code/issue126")
+ISSUE126_PREFIX = "test_code.issue126"
+
+
+def _issue126_visitor():
+    from glob import glob as globfunc
+
+    filenames = sorted(globfunc(os.path.join(ISSUE126_DIR, "**/*.py"), recursive=True))
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
+
+
+def test_issue126_direct_submodule_import():
+    """Control: ``from common.file1 import fn1`` already works — the import path
+    itself carries the full dotted location."""
+    v = _issue126_visitor()
+    fn_parent = f"{ISSUE126_PREFIX}.test_sample.fn_parent"
+    uses = get_in_dict(v.uses_edges, fn_parent)
+    get_node(uses, f"{ISSUE126_PREFIX}.common.file1.fn1")
+
+
+def test_issue126_package_reexport_resolves_to_submodule():
+    """``from common import fn2`` where common/__init__.py does
+    ``from .file2 import fn2`` should resolve to ``common.file2.fn2``."""
+    v = _issue126_visitor()
+    fn_parent = f"{ISSUE126_PREFIX}.test_sample.fn_parent"
+    uses = get_in_dict(v.uses_edges, fn_parent)
+    get_node(uses, f"{ISSUE126_PREFIX}.common.file2.fn2")
+
+
+def test_issue126_wildcard_import_resolves_to_submodule():
+    """``from common import *`` plus a bare ``fn3()`` call should resolve to
+    ``common.file3.fn3`` — the wildcard brings in names re-exported by
+    common/__init__.py."""
+    v = _issue126_visitor()
+    fn_parent = f"{ISSUE126_PREFIX}.test_sample.fn_parent"
+    uses = get_in_dict(v.uses_edges, fn_parent)
+    get_node(uses, f"{ISSUE126_PREFIX}.common.file3.fn3")
