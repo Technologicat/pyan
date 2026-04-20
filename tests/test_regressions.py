@@ -329,3 +329,69 @@ def test_issue126_wildcard_import_resolves_to_submodule():
     fn_parent = f"{ISSUE126_PREFIX}.test_sample.fn_parent"
     uses = get_in_dict(v.uses_edges, fn_parent)
     get_node(uses, f"{ISSUE126_PREFIX}.common.file3.fn3")
+
+
+def test_issue126_no_spurious_wildcard_edge_at_module_level():
+    """After wildcard desugaring (v2.5), ``from common import *`` should not
+    leave a ``*.*`` residue edge at the importer's module level."""
+    v = _issue126_visitor()
+    mod_uses = get_in_dict(v.uses_edges, f"{ISSUE126_PREFIX}.test_sample")
+    targets = {n.get_name() for n in mod_uses}
+    assert "*.*" not in targets, f"unexpected wildcard residue: {sorted(targets)}"
+
+
+# --- Wildcard imports: __all__ vs. public-names rule ---
+
+DUNDER_ALL_DIR = os.path.join(TESTS_DIR, "test_code/dunder_all")
+DUNDER_ALL_PREFIX = "test_code.dunder_all"
+
+
+def _dunder_all_visitor():
+    from glob import glob as globfunc
+
+    filenames = sorted(globfunc(os.path.join(DUNDER_ALL_DIR, "**/*.py"), recursive=True))
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
+
+
+def test_dunder_all_literal_governs_wildcard():
+    """With literal ``__all__ = ["alpha", "_helper"]`` in the package, a
+    downstream ``from pkg_with_all import *; alpha(); _helper()`` should
+    resolve both — ``__all__`` is authoritative and overrides the default
+    underscore-is-private rule."""
+    v = _dunder_all_visitor()
+    use = f"{DUNDER_ALL_PREFIX}.consumer.use_with_all"
+    uses = get_in_dict(v.uses_edges, use)
+    get_node(uses, f"{DUNDER_ALL_PREFIX}.pkg_with_all.exports.alpha")
+    get_node(uses, f"{DUNDER_ALL_PREFIX}.pkg_with_all.exports._helper")
+
+
+def test_dunder_all_literal_excludes_unlisted_names():
+    """Names bound in the module but absent from ``__all__`` should not be
+    reachable through ``import *``. ``beta`` and ``gamma`` are imported into
+    pkg_with_all's namespace but not listed, so consumer's wildcard shouldn't
+    bind them — there should be no edge from use_with_all to beta/gamma."""
+    v = _dunder_all_visitor()
+    use = f"{DUNDER_ALL_PREFIX}.consumer.use_with_all"
+    uses = get_in_dict(v.uses_edges, use)
+    targets = {n.get_name() for n in uses}
+    assert f"{DUNDER_ALL_PREFIX}.pkg_with_all.exports.beta" not in targets
+    assert f"{DUNDER_ALL_PREFIX}.pkg_with_all.exports.gamma" not in targets
+
+
+def test_public_names_rule_without_dunder_all():
+    """When ``__all__`` is absent, wildcard brings in every non-underscore
+    name bound at module scope. ``pub`` should resolve; ``_priv`` should not
+    — it's leading-underscore and not whitelisted."""
+    v = _dunder_all_visitor()
+    use = f"{DUNDER_ALL_PREFIX}.consumer.use_private"
+    uses = get_in_dict(v.uses_edges, use)
+    get_node(uses, f"{DUNDER_ALL_PREFIX}.pkg_private.exports.pub")
+
+
+def test_dunder_all_recorded_only_when_literal():
+    """The extractor should record pkg_with_all's __all__ but leave
+    pkg_private absent (no __all__ statement at all)."""
+    v = _dunder_all_visitor()
+    assert f"{DUNDER_ALL_PREFIX}.pkg_with_all" in v.module_all
+    assert v.module_all[f"{DUNDER_ALL_PREFIX}.pkg_with_all"] == {"alpha", "_helper"}
+    assert f"{DUNDER_ALL_PREFIX}.pkg_private" not in v.module_all

@@ -1,8 +1,14 @@
 # Changelog
 
-## 2.4.4 (in progress)
+## 2.5.0 (in progress)
 
-*No user-visible changes yet.*
+### New features
+
+- **Wildcard imports now resolve to actual targets.** `from pkg import *` is desugared at analysis time against the target package's `__all__` when declared as a literal list/tuple of strings, and against the public-names rule (every module-scope name not starting with `_`) otherwise. Names reached via wildcard — including those re-exported through `__init__.py` — now appear as concrete edges in the call graph instead of as spurious `*.*` residue at the importer's module level. Non-literal `__all__` forms (augmented assignment, dynamic construction) fall back to the public-names rule with a debug log. (#126)
+
+### Internal
+
+- **Prescan phase added before the two visitor passes.** `CallGraphVisitor.process` now does a lightweight scope + `__all__` walk over every input file up front, so cross-module metadata is fully populated before pass 1. This makes wildcard desugaring order-independent — the consumer of a wildcard import no longer has to appear after the exporting package in the filename list.
 
 
 ---

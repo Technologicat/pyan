@@ -156,6 +156,13 @@ class CallGraphVisitor(ast.NodeVisitor):
         # Used by expand_unknowns to constrain wildcard expansion.
         self.namespace_imports = {}  # e.g. {"mymod.func": {"os", "foo.bar"}}
 
+        # module name → set of names exposed by `from module import *`.
+        # A value of None means __all__ was present but in a form we don't
+        # parse (augmented, dynamic, etc.) — callers should fall back to the
+        # public-names rule via ``_module_public_exports``.
+        # Populated by visit_Module when a literal __all__ assignment is seen.
+        self.module_all = {}  # e.g. {"pkg": {"fn1", "fn2"}}
+
         # current context for analysis
         self.module_name = None
         self.filename = None
@@ -167,6 +174,12 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     def process(self):
         """Analyze the set of files, twice so that any forward-references are picked up."""
+        # Prescan: populate self.scopes and self.module_all for every file
+        # before the main visitor passes. This lets cross-module lookups
+        # (wildcard desugaring, chiefly) succeed in pass 1 regardless of
+        # the order in which filenames were given.
+        for filename in self.filenames:
+            self._prescan_one(filename)
         for pas in range(2):
             for filename in self.filenames:
                 self.logger.info(f"========== pass {pas + 1}, file '{filename}' ==========")
@@ -174,6 +187,31 @@ class CallGraphVisitor(ast.NodeVisitor):
             if pas == 0:
                 self.resolve_base_classes()  # must be done only after all files seen
         self.postprocess()
+
+    def _prescan_one(self, filename):
+        """Populate self.scopes and self.module_all for a single file.
+
+        Reads content, runs symtable-based scope analysis, and extracts any
+        literal ``__all__``. Does **not** run the main AST visitor — this is
+        strictly metadata collection so that cross-module lookups during the
+        subsequent visitor passes find what they need.
+        """
+        if hasattr(self, "_source_texts"):
+            content = self._source_texts[filename]
+            display_name = filename.removesuffix(".__init__") if filename.endswith(".__init__") else filename
+        else:
+            with open(filename, encoding="utf-8") as f:
+                content = f.read()
+            display_name = get_module_name(filename, root=self.root)
+
+        saved_module_name = self.module_name
+        self.module_name = display_name
+        try:
+            self.analyze_scopes(content, filename)
+            tree = ast.parse(content, filename)
+            self._extract_dunder_all(tree.body)
+        finally:
+            self.module_name = saved_module_name
 
     def process_one(self, filename):
         """Analyze one source unit (file path, or module name in source mode).
@@ -593,11 +631,72 @@ class CallGraphVisitor(ast.NodeVisitor):
         module_node = self.get_node("", self.module_name, node, flavor=Flavor.MODULE)
         self.associate_node(module_node, node, filename=self.filename)
 
+        # Extract __all__ so that `from module import *` can desugar against it
+        # (or against the public-names rule when absent). Done at module entry,
+        # before visiting children, so the data is available if this module is
+        # itself visited later during the same pass — see visit_ImportFrom.
+        self._extract_dunder_all(node.body)
+
         with self._module_scope(self.module_name):
             self.generic_visit(node)  # visit the **children** of node
 
         if self.add_defines_edge(module_node, None):
             self.logger.info(f"Def Module {node}")
+
+    def _extract_dunder_all(self, module_body):
+        """Record the current module's ``__all__`` in ``self.module_all``.
+
+        Parses only the simple literal forms::
+
+            __all__ = ["a", "b"]
+            __all__ = ("a", "b")
+            __all__: list[str] = ["a", "b"]   # PEP 526 annotated assignment
+
+        Anything else — augmented assignment (``__all__ += [...]``), calls
+        (``__all__ = _compute()``), or non-string elements — is skipped with
+        a debug log, leaving callers to fall back to the public-names rule.
+
+        Multiple top-level ``__all__`` assignments: the last one wins, matching
+        Python's own binding semantics.
+        """
+        names = None
+        saw_unparseable = False
+        for stmt in module_body:
+            target_value = None
+            if isinstance(stmt, ast.Assign):
+                for tgt in stmt.targets:
+                    if isinstance(tgt, ast.Name) and tgt.id == "__all__":
+                        target_value = stmt.value
+                        break
+            elif isinstance(stmt, ast.AnnAssign):
+                if (isinstance(stmt.target, ast.Name)
+                        and stmt.target.id == "__all__"
+                        and stmt.value is not None):
+                    target_value = stmt.value
+            elif isinstance(stmt, ast.AugAssign):
+                if isinstance(stmt.target, ast.Name) and stmt.target.id == "__all__":
+                    saw_unparseable = True
+                    continue
+
+            if target_value is None:
+                continue
+
+            if isinstance(target_value, (ast.List, ast.Tuple)) and all(
+                isinstance(e, ast.Constant) and isinstance(e.value, str)
+                for e in target_value.elts
+            ):
+                names = {e.value for e in target_value.elts}
+            else:
+                saw_unparseable = True
+                names = None  # discard any prior literal — last assignment wins
+
+        if saw_unparseable and names is None:
+            self.logger.debug(
+                f"__all__ in module '{self.module_name}' uses a form pyan does not parse "
+                f"(augmented/dynamic); falling back to the public-names rule"
+            )
+        if names is not None:
+            self.module_all[self.module_name] = names
 
     def visit_ClassDef(self, node):
         self.logger.debug(f"ClassDef {node.name}, {self.filename}:{node.lineno}")
@@ -943,8 +1042,25 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         self._record_import(tgt_name)
 
+        # Desugar `from tgt_name import *` against the target module's public
+        # exports (__all__ if literal, otherwise the public-names rule). If the
+        # target wasn't analyzed — or hasn't been visited yet in this pass —
+        # we leave the wildcard alone; pass 2 (or expand_unknowns) will handle
+        # what it can. See _module_public_exports for the lookup rules.
+        names = node.names
+        if len(names) == 1 and names[0].name == "*":
+            exports = self._module_public_exports(tgt_name)
+            if exports is not None:
+                self.logger.debug(
+                    f"Desugaring 'from {tgt_name} import *' to {sorted(exports)}, "
+                    f"{self.filename}:{node.lineno}"
+                )
+                # Synthesize aliases for each exported name. asname=None because
+                # star-import can't rebind (there's no `as` clause on `*`).
+                names = [ast.alias(name=n, asname=None) for n in exports]
+
         # link each import separately
-        for alias in node.names:
+        for alias in names:
             # check if import is module
             if tgt_name + "." + alias.name in self.module_to_filename:
                 to_node = self.get_node("", tgt_name + "." + alias.name, node, flavor=Flavor.MODULE)
@@ -958,6 +1074,46 @@ class CallGraphVisitor(ast.NodeVisitor):
             self.logger.debug(f"Use from {from_node} to ImportFrom {to_node}")
             if self.add_uses_edge(from_node, to_node):
                 self.logger.info(f"New edge added for Use from {from_node} to ImportFrom {to_node}")
+
+    def _module_public_exports(self, module_name):
+        """Return the set of names exposed by ``from module_name import *``.
+
+        If the module declares a literal ``__all__`` (see ``_extract_dunder_all``),
+        that set is authoritative — even a leading-underscore name counts if listed.
+        Otherwise the public-names rule applies: every name bound at module scope
+        whose identifier does not start with an underscore.
+
+        *module_name* may be a short name from an import statement
+        (``"common"``) or a fully qualified one (``"pkg.sub.common"``); both are
+        resolved against the analyzer's known module set, mirroring what
+        ``_record_import`` does for ``namespace_imports``.
+
+        Returns ``None`` when no matching analyzed module is found.
+        Callers are expected to fall back to the current wildcard-IMPORTEDITEM
+        behavior in that case.
+        """
+        for candidate in self._module_name_candidates(module_name):
+            if candidate in self.module_all:
+                return self.module_all[candidate]
+            scope = self.scopes.get(candidate)
+            if scope is not None:
+                return {n for n in scope.defs if not n.startswith("_")}
+        return None
+
+    def _module_name_candidates(self, module_name):
+        """Yield fully qualified module names that could match *module_name*.
+
+        First yields *module_name* itself (handles the fully qualified case),
+        then any analyzed module whose FQ name ends in ``"." + module_name``
+        (handles short names from absolute imports where the project root adds
+        extra prefix components, e.g. ``from common import *`` matching
+        ``tests.fixtures.common``).
+        """
+        yield module_name
+        suffix = "." + module_name
+        for fq_name in self.module_to_filename:
+            if fq_name.endswith(suffix) and fq_name != module_name:
+                yield fq_name
 
     def analyze_module_import(self, import_item, ast_node):
         """Analyze a names AST node inside an Import or ImportFrom AST node.
