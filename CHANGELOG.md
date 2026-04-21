@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.5.1 (in progress)
+
+*No user-visible changes yet.*
+
+
+---
+
 ## 2.5.0 (22 April 2026) — *Legend*
 
 ### New features
