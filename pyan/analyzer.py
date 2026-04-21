@@ -673,7 +673,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                         and stmt.target.id == "__all__"
                         and stmt.value is not None):
                     target_value = stmt.value
-            elif isinstance(stmt, ast.AugAssign):
+            elif isinstance(stmt, ast.AugAssign):  # noqa: SIM102 -- outer dispatches on stmt type, inner checks target name
                 if isinstance(stmt.target, ast.Name) and stmt.target.id == "__all__":
                     saw_unparseable = True
                     continue
