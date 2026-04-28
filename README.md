@@ -155,6 +155,29 @@ pyan3 src/*.py --dot --colored --no-defines --concentrate --depth 1 --file overv
 ```
 
 
+### Choosing inputs and `--root`
+
+Pyan derives module names from file paths relative to a *package root*. By default the root is inferred by walking up from the input files while `__init__.py` files are present, stopping at the first directory that doesn't have one. That works for ordinary projects but not for two layouts:
+
+1. **Top-level PEP 420 namespace package.** Layout: `proj/pyproject.toml` and `proj/ns_pkg/sub/__init__.py` with no `__init__.py` at `ns_pkg/` itself. Inference stops one level too deep and module names lose the namespace-package prefix.
+2. **Namespace subpackage as input.** Running e.g. `pyan3 raven/visualizer/*.py` where `visualizer/` has no `__init__.py` but `raven/` does. Inference doesn't walk up at all (the input directory itself isn't a regular package), and the result is bare basenames like `app` instead of `raven.visualizer.app`. Any relative imports fail.
+
+Pyan emits a `WARNING` when it detects either situation. The fix is to pass `--root` explicitly, pointing at the *project* root (the directory above the top-level package, typically the directory containing `pyproject.toml`):
+
+```bash
+# Layout 1: top-level namespace package
+pyan3 --root . ns_pkg/sub/*.py --dot
+
+# Layout 2: bare-subpackage input — point at the project root, NOT at the package itself
+pyan3 --root . raven/visualizer/*.py --dot
+
+# Equivalent for layout 2: anchor with the parent's __init__.py instead of --root
+pyan3 raven/__init__.py raven/visualizer/*.py --dot
+```
+
+Pyan can't auto-walk past these stopping points: the same filesystem shape (a non-package directory whose parent is a package) also occurs benignly for `tests/`, `examples/`, and similar workspace dirs that sit alongside a package within a project, where escalating would land on the wrong root.
+
+
 ### Graph depth control
 
 Collapse the graph to a desired level of detail:
