@@ -104,33 +104,69 @@ class TestInferRoot:
             f"Did not expect any warnings; got: {caplog.messages}"
         )
 
-    def test_marker_at_parent_does_not_suppress(self, tmp_path, caplog):
-        """A project-root marker at the *parent* of where infer_root stops
-        does NOT suppress the warning — only the candidate root's own
-        markers count.  This is in fact the strongest namespace-package
-        signal: the real project root sits one level up, evidenced by its
-        pyproject.toml, and ``--root`` should point there.  Layout:
-
-            tmp_path/proj/pyproject.toml   <- real project root
-            tmp_path/proj/ns_pkg/sub/__init__.py
-            tmp_path/proj/ns_pkg/sub/mod.py
-
-        infer_root walks up sub/ → ns_pkg/, stops there (no __init__.py),
-        and ns_pkg/ has no marker of its own.  The pyproject.toml at proj/
-        is irrelevant to the stop test — and rightly so."""
+    def test_namespace_subpackage_input_warns(self, tmp_path, caplog):
+        """When the input files live inside a namespace subpackage
+        (a directory with no ``__init__.py`` whose parent is a regular
+        package), infer_root won't walk up — that would either change
+        module names for existing flat-fixture-style inputs or escalate
+        wrongly in workspace-like layouts.  But it should at least warn,
+        since the resulting module names are bare basenames and any
+        relative imports will fail.  Mirrors the bare-visualizer command
+        ``pyan3 raven/visualizer/*.py`` where ``visualizer/`` has no
+        ``__init__.py`` but ``raven/`` does."""
         proj = tmp_path / "proj"
-        sub = proj / "ns_pkg" / "sub"
+        pkg = proj / "pkg"
+        sub_ns = pkg / "sub_ns"
+        sub_ns.mkdir(parents=True)
+        (proj / "pyproject.toml").write_text("[project]\nname = 'proj'\n")
+        (pkg / "__init__.py").write_text("")
+        # sub_ns has NO __init__.py — namespace subpackage.
+        (sub_ns / "mod.py").write_text("")
+        with caplog.at_level(logging.WARNING, logger="pyan.anutils"):
+            root = infer_root([str(sub_ns / "mod.py")])
+        assert root == str(sub_ns)  # heuristic stops here
+        assert any(
+            "namespace subpackage" in rec.message and "--root" in rec.message
+            for rec in caplog.records
+        ), f"Expected namespace-subpackage advisory; got messages: {caplog.messages}"
+
+    def test_top_level_namespace_with_parent_marker_warns(self, tmp_path, caplog):
+        """Top-level namespace package whose immediate parent has a project
+        marker — infer_root does NOT auto-escalate even though the marker
+        is right there.  The same filesystem shape (a non-marker directory
+        whose parent has a marker) also occurs for benign workspace
+        directories like ``tests/`` or ``examples/`` sitting alongside the
+        package, and silently escalating would land on the wrong root in
+        those cases.  Issue a warning instead and let the user pass
+        ``--root`` explicitly."""
+        proj = tmp_path / "proj"
+        ns_pkg = proj / "ns_pkg"
+        sub = ns_pkg / "sub"
         sub.mkdir(parents=True)
+        (proj / "pyproject.toml").write_text("[project]\nname = 'proj'\n")
+        # ns_pkg has NO __init__.py — top-level namespace package.
         (sub / "__init__.py").write_text("")
         (sub / "mod.py").write_text("")
-        (proj / "pyproject.toml").write_text("[project]\nname = 'proj'\n")
         with caplog.at_level(logging.WARNING, logger="pyan.anutils"):
             root = infer_root([str(sub / "mod.py")])
-        assert root == str(proj / "ns_pkg")  # heuristic stops one level too deep
+        assert root == str(ns_pkg)  # heuristic stops at the namespace package
         assert any(
             "--root" in rec.message and "namespace package" in rec.message
             for rec in caplog.records
         ), f"Expected namespace-package advisory; got messages: {caplog.messages}"
+
+    def test_genuinely_standalone_does_not_walk(self, tmp_path, caplog):
+        """A file in a directory that's neither a package nor adjacent to
+        one should NOT walk up — we'd risk climbing into a parent that
+        happens to be a workspace full of unrelated repositories.  No
+        walking, no warning."""
+        scripts = tmp_path / "workspace" / "scripts"
+        scripts.mkdir(parents=True)
+        (scripts / "tool.py").write_text("")
+        with caplog.at_level(logging.WARNING, logger="pyan.anutils"):
+            root = infer_root([str(scripts / "tool.py")])
+        assert root == str(scripts)
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
     def test_setup_py_suppresses_warning(self, tmp_path, caplog):
         """setup.py also counts as a project-root marker."""

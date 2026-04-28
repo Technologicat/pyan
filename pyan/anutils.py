@@ -79,14 +79,26 @@ def infer_root(filenames):
 
     Falls back to cwd when *filenames* is empty.
 
-    When the inferred root looks ambiguous — we walked up at least one
-    package level and stopped at a directory that has neither
-    ``__init__.py`` nor a project-root marker (``pyproject.toml``,
-    ``setup.py``, ``setup.cfg``) — emit an advisory pointing the user at
-    ``--root``.  That layout is consistent with a top-level PEP 420
-    namespace package whose proper root is one level higher; auto-walking
-    further is unsafe (it could climb into a directory full of unrelated
-    repos), so the choice is left to the user.  See #128.
+    Two ambiguous situations get an advisory pointing at ``--root``:
+
+    1. **Walked up but stopped without a marker.** If we crossed at
+       least one package level and stopped at a directory that has
+       neither ``__init__.py`` nor a project-root marker
+       (``pyproject.toml``, ``setup.py``, ``setup.cfg``), this layout is
+       consistent with a top-level PEP 420 namespace package whose
+       proper root is one level higher.
+
+    2. **Started at a namespace subpackage.** If the walk never started
+       — the common ancestor itself has no ``__init__.py`` — but the
+       common ancestor's *parent* does, then the user has fed pyan a
+       namespace subpackage's contents (no ``__init__.py``) without
+       anchoring it to its containing package; the resulting module
+       names will be bare basenames and any relative imports will fail.
+
+    Auto-walking further (in either case) is unsafe — it could land on
+    workspace directories like ``tests/`` or ``examples/`` sitting
+    alongside a package within a project, or climb into a directory
+    full of unrelated repositories.  See #128.
     """
     abspaths = [os.path.abspath(f) for f in filenames]
     if not abspaths:
@@ -112,6 +124,18 @@ def infer_root(filenames):
             f"module names will be wrong; pass --root explicitly to point at "
             f"the namespace package's parent directory."
         )
+    elif not walked_up:
+        parent = os.path.dirname(common)
+        if parent != common and os.path.isfile(os.path.join(parent, "__init__.py")):
+            logger.warning(
+                f"infer_root stopped at {common!r} without walking up: this "
+                f"directory has no __init__.py, but its parent does. The "
+                f"inputs may be the contents of a namespace subpackage; the "
+                f"resulting module names will be bare basenames and relative "
+                f"imports will fail. Either include the parent's __init__.py "
+                f"in the input file list, or pass --root explicitly to point "
+                f"at the project root."
+            )
     return common
 
 
