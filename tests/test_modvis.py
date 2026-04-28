@@ -104,6 +104,34 @@ class TestInferRoot:
             f"Did not expect any warnings; got: {caplog.messages}"
         )
 
+    def test_marker_at_parent_does_not_suppress(self, tmp_path, caplog):
+        """A project-root marker at the *parent* of where infer_root stops
+        does NOT suppress the warning — only the candidate root's own
+        markers count.  This is in fact the strongest namespace-package
+        signal: the real project root sits one level up, evidenced by its
+        pyproject.toml, and ``--root`` should point there.  Layout:
+
+            tmp_path/proj/pyproject.toml   <- real project root
+            tmp_path/proj/ns_pkg/sub/__init__.py
+            tmp_path/proj/ns_pkg/sub/mod.py
+
+        infer_root walks up sub/ → ns_pkg/, stops there (no __init__.py),
+        and ns_pkg/ has no marker of its own.  The pyproject.toml at proj/
+        is irrelevant to the stop test — and rightly so."""
+        proj = tmp_path / "proj"
+        sub = proj / "ns_pkg" / "sub"
+        sub.mkdir(parents=True)
+        (sub / "__init__.py").write_text("")
+        (sub / "mod.py").write_text("")
+        (proj / "pyproject.toml").write_text("[project]\nname = 'proj'\n")
+        with caplog.at_level(logging.WARNING, logger="pyan.anutils"):
+            root = infer_root([str(sub / "mod.py")])
+        assert root == str(proj / "ns_pkg")  # heuristic stops one level too deep
+        assert any(
+            "--root" in rec.message and "namespace package" in rec.message
+            for rec in caplog.records
+        ), f"Expected namespace-package advisory; got messages: {caplog.messages}"
+
     def test_setup_py_suppresses_warning(self, tmp_path, caplog):
         """setup.py also counts as a project-root marker."""
         proj = tmp_path / "myproj"
