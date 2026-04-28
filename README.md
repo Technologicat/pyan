@@ -162,16 +162,19 @@ Pyan derives module names from file paths relative to a *package root*. By defau
 1. **Top-level PEP 420 namespace package.** Layout: `proj/pyproject.toml` and `proj/ns_pkg/sub/__init__.py` with no `__init__.py` at `ns_pkg/` itself. Inference stops one level too deep and module names lose the namespace-package prefix.
 2. **Namespace subpackage as input.** Running e.g. `pyan3 raven/visualizer/*.py` where `visualizer/` has no `__init__.py` but `raven/` does. Inference doesn't walk up at all (the input directory itself isn't a regular package), and the result is bare basenames like `app` instead of `raven.visualizer.app`. Any relative imports fail.
 
-Pyan emits a `WARNING` when it detects either situation. The fix is to pass `--root` explicitly, pointing at the *project* root (the directory above the top-level package, typically the directory containing `pyproject.toml`):
+Pyan emits a `WARNING` when it detects either situation. The fix is to pass `--root` explicitly, pointing at the *project* root — the directory above the top-level package, typically the one containing `pyproject.toml`. Note that this is **not** the package directory itself; pointing `--root` at the package strips the package's name from the inferred module names and breaks any relative imports that cross the package boundary.
 
 ```bash
 # Layout 1: top-level namespace package
 pyan3 --root . ns_pkg/sub/*.py --dot
 
-# Layout 2: bare-subpackage input — point at the project root, NOT at the package itself
+# Layout 2: bare-subpackage input
 pyan3 --root . raven/visualizer/*.py --dot
+```
 
-# Equivalent for layout 2: anchor with the parent's __init__.py instead of --root
+For layout 2, an alternative is to anchor with the parent's `__init__.py` instead of using `--root` — but only when the parent is a regular (non-namespace) package, since otherwise the file doesn't exist:
+
+```bash
 pyan3 raven/__init__.py raven/visualizer/*.py --dot
 ```
 
