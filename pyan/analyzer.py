@@ -1181,14 +1181,19 @@ class CallGraphVisitor(ast.NodeVisitor):
                 if self.add_uses_edge(from_node, attr_node):
                     self.logger.info(f"New edge added for Use from {from_node} to {attr_node}")
 
-                # If the resolved attr won't appear in the graph (not defined)
-                # and the object is a class, also connect to the class itself.
-                # This handles Enum members, class constants, and similar patterns
-                # where the attr resolves to a type-of-constant node (e.g. Color.RED
-                # resolves to Color.int) that is invisible in the output.
-                if not attr_node.defined and isinstance(obj_node, Node) and obj_node.flavor == Flavor.CLASS:  # noqa: SIM102
-                    if self.add_uses_edge(from_node, obj_node):
-                        self.logger.info(f"New edge added for Use from {from_node} to class {obj_node} (attr {node.attr} not defined)")
+                # If the resolved attr won't appear in the graph (not defined),
+                # also connect to the object itself or — if the object is also
+                # not defined — its immediate parent.  This handles Enum members
+                # and class constants (Color.RED → Color), as well as
+                # namespace-style modules (#127): a module that exports a
+                # runtime-built object whose attributes are accessed by callers
+                # remains invisible in the call graph if no fallback fires.
+                # Stepping up to the object's parent lands on the module Node,
+                # which surfaces the cross-module coupling.
+                if not attr_node.defined and isinstance(obj_node, Node):
+                    ancestor = self._defined_self_or_parent(obj_node)
+                    if ancestor is not None and self.add_uses_edge(from_node, ancestor):
+                        self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attr {node.attr} not defined)")
 
                 # remove resolved wildcard from current site to <Node *.attr>
                 if attr_node.namespace is not None:
@@ -1226,10 +1231,13 @@ class CallGraphVisitor(ast.NodeVisitor):
                         f"target attr {node.attr} not resolved; maybe fwd ref or unanalyzed import)"
                     )
 
-                # Same as above: if the object is a class, also connect to it.
-                if obj_node.flavor == Flavor.CLASS:  # noqa: SIM102
-                    if self.add_uses_edge(from_node, obj_node):
-                        self.logger.info(f"New edge added for Use from {from_node} to class {obj_node} (attr {node.attr} unresolved)")
+                # Same as above: also connect to the object itself (or its
+                # immediate parent if the object isn't defined either), so the
+                # cross-module coupling stays visible even when the attribute
+                # itself isn't statically resolvable.
+                ancestor = self._defined_self_or_parent(obj_node)
+                if ancestor is not None and self.add_uses_edge(from_node, ancestor):
+                    self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attr {node.attr} unresolved)")
 
                 # remove resolved wildcard from current site to <Node *.attr>
                 self.remove_wild(from_node, obj_node, node.attr)
@@ -1757,6 +1765,21 @@ class CallGraphVisitor(ast.NodeVisitor):
             try:
                 if self.set_attribute(target, value):
                     self.logger.info(f"setattr {get_ast_node_name(target.value)}.{target.attr} to {value}")
+                # Attribute-uses fallback for the Store case (#127): writing
+                # ``obj.attr = value`` is just as much coupling to *obj* as
+                # reading ``obj.attr`` is. Emit an edge to *obj* itself (or
+                # its immediate parent if *obj* isn't defined), mirroring what
+                # visit_Attribute does on the Load side. Fires regardless of
+                # whether set_attribute returned True — even when *value*
+                # isn't a tracked Node, the write itself is the coupling we
+                # want to record.
+                obj_node, _ = self.resolve_attribute(target)
+                if isinstance(obj_node, Node):
+                    ancestor = self._defined_self_or_parent(obj_node)
+                    if ancestor is not None:
+                        from_node = self.get_node_of_current_namespace()
+                        if self.add_uses_edge(from_node, ancestor):
+                            self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attribute-write fallback)")
             except UnresolvedSuperCallError:
                 pass
         elif isinstance(target, (ast.Tuple, ast.List)):
@@ -2373,6 +2396,39 @@ class CallGraphVisitor(ast.NodeVisitor):
         else:
             ns, name = "", graph_node.namespace
         return self.get_node(ns, name, None)
+
+    def _defined_self_or_parent(self, graph_node):
+        """Return *graph_node* itself if it is defined, or its immediate
+        parent (by dotted name) if that parent is defined.  Returns ``None``
+        otherwise.
+
+        Used by the attribute-uses fallback (#127): when an attribute access
+        like ``obj.attr`` can't be resolved to a defined Node, attribute the
+        coupling to the immediate container of *obj* — typically the module
+        that exports it.
+
+        Stepping up by one level only — never further — is intentional.  A name
+        imported from an unanalyzed package (e.g. ``gui_config`` imported from
+        ``raven.common.gui.fontsetup``) would otherwise walk through every
+        undefined intermediate and pin the edge on whatever top-level package
+        happened to be analyzed, drowning the real signal in noise.  Chained
+        accesses ``a.b.c`` are handled by ``visit_Attribute`` falling through
+        to its inner ``Attribute``, which performs its own one-level lookup
+        on a fresh ``obj_node``.
+
+        Does not create new Nodes (unlike :meth:`get_parent_node`).
+        """
+        if graph_node.defined:
+            return graph_node
+        full = graph_node.get_name()
+        if "." not in full:
+            return None
+        parent_full = full.rsplit(".", 1)[0]
+        return next(
+            (n for lst in self.nodes.values() for n in lst
+             if n.defined and n.get_name() == parent_full),
+            None,
+        )
 
     def associate_node(self, graph_node, ast_node, filename=None):
         """Change the AST node (and optionally filename) mapping of a graph node.

@@ -2,7 +2,9 @@
 
 ## 2.5.1 (in progress)
 
-*No user-visible changes yet.*
+### Bug fixes
+
+- **Cross-module attribute reads on namespace-style modules now produce uses edges.** A module whose public surface is a runtime-built object (`SimpleNamespace`, `unpythonic.env.env`, a small `class _NS: pass; store = _NS()` shim) used to appear as an isolated node even when it was central to the subsystem — every `store.dataset` access landed on a synthetic ATTRIBUTE node that visgraph dropped as undefined. The analyzer now also emits an edge to the immediate defined parent of the obj (typically the exporting module) when the attribute itself can't be resolved. Symmetric for attribute writes (`store.flag = value`). One-level only — does not climb through unanalyzed packages. Generalizes the existing class-fallback (Enum members, class constants) introduced in 2.4.0. (#127)
 
 
 ---

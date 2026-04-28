@@ -395,3 +395,64 @@ def test_dunder_all_recorded_only_when_literal():
     assert f"{DUNDER_ALL_PREFIX}.pkg_with_all" in v.module_all
     assert v.module_all[f"{DUNDER_ALL_PREFIX}.pkg_with_all"] == {"alpha", "_helper"}
     assert f"{DUNDER_ALL_PREFIX}.pkg_private" not in v.module_all
+
+
+# --- Issue #127: cross-module attribute access on namespace-style bindings ---
+
+ISSUE127_DIR = os.path.join(TESTS_DIR, "test_code/issue127")
+
+
+def _issue127_visitor(*basenames):
+    filenames = [os.path.join(ISSUE127_DIR, b) for b in basenames]
+    return CallGraphVisitor(filenames, logger=logging.getLogger())
+
+
+def test_issue127_attr_read_falls_back_to_module():
+    """Reading ``store.dataset`` where ``dataset`` isn't statically known
+    should produce a uses edge to the nearest defined ancestor of the
+    unresolved chain — here, the ``namespace_module`` module itself
+    (since ``store`` is an IMPORTEDITEM with ``defined=False``). Without
+    this fallback, namespace-style modules become invisible in the graph."""
+    v = _issue127_visitor("namespace_module.py", "consumer.py")
+    uses = get_in_dict(v.uses_edges, "consumer.use_attr")
+    get_node(uses, "namespace_module")
+
+
+def test_issue127_attr_write_falls_back_to_module():
+    """Writing ``store.flag = value`` should also count as coupling to
+    the namespace-style module — same fallback rule, applied through
+    ``set_attribute`` / the Attribute-in-Store path."""
+    v = _issue127_visitor("namespace_module.py", "consumer.py")
+    uses = get_in_dict(v.uses_edges, "consumer.write_attr")
+    get_node(uses, "namespace_module")
+
+
+def test_issue127_chained_access_climbs_to_defined_ancestor():
+    """``store.foo.bar`` — neither ``foo`` nor ``bar`` is statically known,
+    and ``store`` itself is an undefined IMPORTEDITEM. The fallback should
+    climb past every undefined intermediate and emit exactly one edge to
+    the nearest defined ancestor: the ``namespace_module`` module.
+    No edges should point at undefined synthetic ATTRIBUTE nodes — those
+    are invisible in the rendered graph and just noise in ``uses_edges``."""
+    v = _issue127_visitor("namespace_module.py", "chained_consumer.py")
+    uses = get_in_dict(v.uses_edges, "chained_consumer.use_chained")
+    get_node(uses, "namespace_module")
+    # No edges to undefined non-wildcard nodes (e.g. namespace_module.store.foo).
+    for n in uses:
+        assert n.defined or n.namespace is None, (
+            f"Unexpected edge to undefined non-wildcard node {n.get_name()}"
+        )
+
+
+def test_issue127_no_double_counting_on_resolved_call():
+    """``defines_func.myfunc()`` — the attr resolves to a real defined
+    function. There should be exactly one uses edge from ``calls_func.caller``
+    to ``defines_func.myfunc``, with no fallback edge to the module (since
+    the attr resolved cleanly). Locks in the no-double-counting invariant."""
+    v = _issue127_visitor("defines_func.py", "calls_func.py")
+    uses = get_in_dict(v.uses_edges, "calls_func.caller")
+    get_node(uses, "defines_func.myfunc")
+    targets = {n.get_name() for n in uses}
+    assert "defines_func" not in targets, (
+        "Unexpected fallback edge to module when attr resolved to a defined Node"
+    )
