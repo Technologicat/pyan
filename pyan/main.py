@@ -433,7 +433,13 @@ def main(cli_args=None):
         "--root",
         default=None,
         dest="root",
-        help="Package root directory. Inferred by default.",
+        help=(
+            "Package root directory. Inferred by default. "
+            "Pass explicitly when the top-level package is a PEP 420 namespace "
+            "package (no __init__.py at the package directory itself); "
+            "inference can't auto-detect that case and will produce wrong "
+            "module names."
+        ),
     )
 
     parser.add_argument(

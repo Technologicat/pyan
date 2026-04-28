@@ -5,10 +5,18 @@
 import ast
 from fnmatch import fnmatch
 from glob import glob
+import logging
 import os
 import os.path
 
 from .node import Flavor
+
+logger = logging.getLogger(__name__)
+
+# Files that, when present in a directory, mark it as a project root rather
+# than a PEP 420 namespace package.  Used by :func:`infer_root` to decide
+# whether to emit an ambiguity advisory.
+_PROJECT_ROOT_MARKERS = ("pyproject.toml", "setup.py", "setup.cfg")
 
 __all__ = [
     "ExecuteInInnerScope",
@@ -70,6 +78,15 @@ def infer_root(filenames):
     ``__init__.py`` is returned as the root.
 
     Falls back to cwd when *filenames* is empty.
+
+    When the inferred root looks ambiguous — we walked up at least one
+    package level and stopped at a directory that has neither
+    ``__init__.py`` nor a project-root marker (``pyproject.toml``,
+    ``setup.py``, ``setup.cfg``) — emit an advisory pointing the user at
+    ``--root``.  That layout is consistent with a top-level PEP 420
+    namespace package whose proper root is one level higher; auto-walking
+    further is unsafe (it could climb into a directory full of unrelated
+    repos), so the choice is left to the user.  See #128.
     """
     abspaths = [os.path.abspath(f) for f in filenames]
     if not abspaths:
@@ -80,12 +97,31 @@ def infer_root(filenames):
     if not os.path.isdir(common):
         common = os.path.dirname(common)
     # Walk up while directory is a package (contains __init__.py).
+    walked_up = False
     while os.path.isfile(os.path.join(common, "__init__.py")):
         parent = os.path.dirname(common)
         if parent == common:  # filesystem root
             break
         common = parent
+        walked_up = True
+    if walked_up and not _has_project_root_marker(common):
+        logger.warning(
+            f"infer_root stopped at {common!r}, which has neither __init__.py "
+            f"nor a project-root marker (pyproject.toml, setup.py, setup.cfg). "
+            f"If this is a top-level PEP 420 namespace package, the inferred "
+            f"module names will be wrong; pass --root explicitly to point at "
+            f"the namespace package's parent directory."
+        )
     return common
+
+
+def _has_project_root_marker(directory):
+    """Return True if *directory* contains any of the conventional
+    project-root marker files (see :data:`_PROJECT_ROOT_MARKERS`)."""
+    return any(
+        os.path.isfile(os.path.join(directory, marker))
+        for marker in _PROJECT_ROOT_MARKERS
+    )
 
 
 def head(lst):

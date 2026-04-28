@@ -68,6 +68,63 @@ class TestInferRoot:
         f.write_text("")
         assert infer_root([str(f)]) == str(tmp_path)
 
+    def test_namespace_package_emits_warning(self, tmp_path, caplog):
+        """When the candidate root has no ``__init__.py`` and no project-root
+        marker (pyproject.toml/setup.py/setup.cfg), the situation is
+        ambiguous: it might be a top-level PEP 420 namespace package whose
+        proper root is the parent directory.  Walking further would be
+        unsafe (it could climb into a directory full of unrelated repos),
+        so infer_root just emits an advisory pointing the user at --root.
+        """
+        # Layout: ns_pkg/sub/__init__.py + ns_pkg/sub/mod.py.
+        # ns_pkg has neither __init__.py nor a project marker.
+        sub = tmp_path / "ns_pkg" / "sub"
+        sub.mkdir(parents=True)
+        (sub / "__init__.py").write_text("")
+        (sub / "mod.py").write_text("")
+        with caplog.at_level(logging.WARNING, logger="pyan.anutils"):
+            infer_root([str(sub / "mod.py")])
+        assert any(
+            "--root" in rec.message and "namespace package" in rec.message
+            for rec in caplog.records
+        ), f"Expected namespace-package advisory; got messages: {caplog.messages}"
+
+    def test_project_marker_suppresses_warning(self, tmp_path, caplog):
+        """A pyproject.toml at the candidate root unambiguously marks it as
+        a project root — definitely not a namespace package.  No warning."""
+        proj = tmp_path / "myproj"
+        pkg = proj / "pkg"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (pkg / "mod.py").write_text("")
+        (proj / "pyproject.toml").write_text("[project]\nname = 'myproj'\n")
+        with caplog.at_level(logging.WARNING, logger="pyan.anutils"):
+            infer_root([str(pkg / "mod.py")])
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING], (
+            f"Did not expect any warnings; got: {caplog.messages}"
+        )
+
+    def test_setup_py_suppresses_warning(self, tmp_path, caplog):
+        """setup.py also counts as a project-root marker."""
+        proj = tmp_path / "myproj"
+        pkg = proj / "pkg"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("")
+        (pkg / "mod.py").write_text("")
+        (proj / "setup.py").write_text("from setuptools import setup\nsetup()\n")
+        with caplog.at_level(logging.WARNING, logger="pyan.anutils"):
+            infer_root([str(pkg / "mod.py")])
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+    def test_standalone_no_warning(self, tmp_path, caplog):
+        """A standalone .py file means infer_root never walked up at all,
+        so there's no namespace-package ambiguity to flag."""
+        f = tmp_path / "standalone.py"
+        f.write_text("")
+        with caplog.at_level(logging.WARNING, logger="pyan.anutils"):
+            infer_root([str(f)])
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
 
 class TestSplitModuleName:
     def test_dotted(self):
