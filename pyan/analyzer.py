@@ -1192,8 +1192,9 @@ class CallGraphVisitor(ast.NodeVisitor):
                 # which surfaces the cross-module coupling.
                 if not attr_node.defined and isinstance(obj_node, Node):
                     ancestor = self._defined_self_or_parent(obj_node)
-                    if ancestor is not None and self.add_uses_edge(from_node, ancestor):
-                        self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attr {node.attr} not defined)")
+                    if ancestor is not None and not self._within(from_node, ancestor):
+                        if self.add_uses_edge(from_node, ancestor):
+                            self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attr {node.attr} not defined)")
 
                 # remove resolved wildcard from current site to <Node *.attr>
                 if attr_node.namespace is not None:
@@ -1236,8 +1237,9 @@ class CallGraphVisitor(ast.NodeVisitor):
                 # cross-module coupling stays visible even when the attribute
                 # itself isn't statically resolvable.
                 ancestor = self._defined_self_or_parent(obj_node)
-                if ancestor is not None and self.add_uses_edge(from_node, ancestor):
-                    self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attr {node.attr} unresolved)")
+                if ancestor is not None and not self._within(from_node, ancestor):
+                    if self.add_uses_edge(from_node, ancestor):
+                        self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attr {node.attr} unresolved)")
 
                 # remove resolved wildcard from current site to <Node *.attr>
                 self.remove_wild(from_node, obj_node, node.attr)
@@ -1776,8 +1778,8 @@ class CallGraphVisitor(ast.NodeVisitor):
                 obj_node, _ = self.resolve_attribute(target)
                 if isinstance(obj_node, Node):
                     ancestor = self._defined_self_or_parent(obj_node)
-                    if ancestor is not None:
-                        from_node = self.get_node_of_current_namespace()
+                    from_node = self.get_node_of_current_namespace()
+                    if ancestor is not None and not self._within(from_node, ancestor):
                         if self.add_uses_edge(from_node, ancestor):
                             self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attribute-write fallback)")
             except UnresolvedSuperCallError:
@@ -2396,6 +2398,21 @@ class CallGraphVisitor(ast.NodeVisitor):
         else:
             ns, name = "", graph_node.namespace
         return self.get_node(ns, name, None)
+
+    @staticmethod
+    def _within(inner, outer):
+        """Return ``True`` if *inner* lies inside (or equals) *outer*'s
+        namespace subtree, judged by dotted full names.
+
+        Used by the attribute-uses fallback (#127) to suppress trivial
+        within-scope self-references: a function reading module-level state
+        in its own module, or a method reading a class attribute on its own
+        class, is just normal scoping — emitting a fallback edge only adds
+        noise.
+        """
+        outer_full = outer.get_name()
+        inner_full = inner.get_name()
+        return inner_full == outer_full or inner_full.startswith(outer_full + ".")
 
     def _defined_self_or_parent(self, graph_node):
         """Return *graph_node* itself if it is defined, or its immediate

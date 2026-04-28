@@ -456,3 +456,29 @@ def test_issue127_no_double_counting_on_resolved_call():
     assert "defines_func" not in targets, (
         "Unexpected fallback edge to module when attr resolved to a defined Node"
     )
+
+
+def test_issue127_within_class_self_reference_suppressed():
+    """A method reading an undefined attribute on its own class should
+    NOT produce a fallback edge to the class — that's just normal scoping
+    inside the class, not a coupling worth surfacing.  Same for writes."""
+    v = _issue127_visitor("within_scope.py")
+    read_uses = get_in_dict(v.uses_edges, "within_scope.Holder.reads_self")
+    targets = {n.get_name() for n in read_uses}
+    assert "within_scope.Holder" not in targets, (
+        "Within-class self-read should not emit fallback edge to its own class"
+    )
+    write_uses = get_in_dict(v.uses_edges, "within_scope.Holder.writes_self")
+    targets = {n.get_name() for n in write_uses}
+    assert "within_scope.Holder" not in targets, (
+        "Within-class self-write should not emit fallback edge to its own class"
+    )
+
+
+def test_issue127_cross_class_reference_still_emits():
+    """A method reading an undefined attribute on a *different* class in
+    the same module SHOULD still emit the fallback edge — the suppression
+    only kicks in for within-scope references, not for sibling coupling."""
+    v = _issue127_visitor("within_scope.py")
+    uses = get_in_dict(v.uses_edges, "within_scope.Sibling.reads_holder")
+    get_node(uses, "within_scope.Holder")
