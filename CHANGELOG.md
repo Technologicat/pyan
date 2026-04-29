@@ -5,6 +5,8 @@
 ### New features
 
 - **Module-level name bindings now produce graph Nodes.** Every module-level assignment (e.g. `CONSTANT = 42`, `LOGGER = logging.getLogger(__name__)`, `store = _NS()`) creates a defined `Flavor.NAME` Node at the bound dotted path. `from mymod import x` now resolves to the actual binding instead of contracting to a wildcard, and the #127 attribute-fallback lands on the specific binding rather than climbing all the way to the enclosing module. Function-locals are unchanged — they stay as scope-only bindings to keep the graph readable. Edgeless NAME Nodes (module constants nobody imports) are suppressed from the rendered output by default; they remain in the analyzer's graph for cross-module resolution.
+- **Namespace-style modules now resolve attribute access to the kwarg's target.** When the rhs of a binding is `Call(func=...)` whose resolved import origin is in the built-in registry (`unpythonic.env.env`, top-level re-export `unpythonic.env`, `types.SimpleNamespace`, `argparse.Namespace`), the LHS is upgraded to `Flavor.NAMESPACE_OBJECT` and its scope is populated with the call's keyword arguments. External `config.thingy` resolves directly to whatever was passed as `thingy=`, bypassing the #127 module-level fallback. Recognised at all four binding sites: `config = env(...)`, `config: Env = env(...)`, walrus `(config := env(...))`, and `with env(...) as config:`. Staged form `config = env(); config.a = baa` is also covered (later attribute writes populate the namespace's scope through the existing `set_attribute` machinery). `setattr(config, name, value)` writes are recognised when *name* is a string literal, a name bound to a string literal in any scope reachable from the call site, or an imported name resolving to a string literal in another module. (#129)
+- **`--namespace-constructor FQN`** registers an extra namespace-constructor beyond the built-in registry (e.g. `--namespace-constructor mylib.MyNamespace`). Repeatable, or comma-separated. Threaded through to the `create_callgraph` API as `namespace_constructors=[...]`. Supplying the option emits a one-shot stderr nudge inviting the user to file an issue if their constructor is reasonably common, so the built-in registry can grow from observed real-world use. (#129)
 
 ### Bug fixes
 
@@ -13,7 +15,7 @@
 
 ### Internal
 
-- **Flavor rename:** `Flavor.NAMESPACE` (synthetic structural marker for module/class/function scope bookkeeping) is now `Flavor.SCOPE`. The previous name is being freed up for an upcoming `Flavor.NAMESPACE_OBJECT` representing a runtime namespace value (env, SimpleNamespace, …). The Node represents the scope; the `Scope` class implements one — same concept at two layers.
+- **Flavor rename:** `Flavor.NAMESPACE` (synthetic structural marker for module/class/function scope bookkeeping) is now `Flavor.SCOPE`. The new `Flavor.NAMESPACE_OBJECT` represents a runtime namespace value (an `env` instance, a `SimpleNamespace` instance) — a `NAME` with a populated scope listing its statically-visible attributes. The Node represents the scope; the `Scope` class implements one — same concept at two layers.
 
 
 ---

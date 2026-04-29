@@ -208,6 +208,30 @@ class TestPyanCLI:
         captured = capsys.readouterr()
         assert "digraph G" in captured.out
 
+    def test_namespace_constructor_flag_emits_nudge(self, capsys):
+        """Supplying ``--namespace-constructor`` emits the one-shot stderr
+        nudge inviting the user to file an issue if their constructor is
+        common enough to be added to the built-in registry."""
+        pyan_main([FIXTURE, "--dot", "--namespace-constructor", "mylib.MyNS"])
+        captured = capsys.readouterr()
+        assert "namespace constructor" in captured.err
+        assert "github.com/Technologicat/pyan/issues" in captured.err
+
+    def test_namespace_constructor_flag_accepts_comma_separated(self, capsys):
+        """``--namespace-constructor a.b,c.d`` splits to two entries; a
+        single occurrence still triggers the nudge once."""
+        pyan_main([FIXTURE, "--dot", "--namespace-constructor", "a.b,c.d"])
+        captured = capsys.readouterr()
+        # Only one nudge regardless of how many comma-separated entries.
+        assert captured.err.count("github.com/Technologicat/pyan/issues") == 1
+
+    def test_namespace_constructor_flag_no_nudge_without_option(self, capsys):
+        """The nudge should not fire when ``--namespace-constructor`` is
+        not used."""
+        pyan_main([FIXTURE, "--dot"])
+        captured = capsys.readouterr()
+        assert "namespace constructor" not in captured.err
+
 
 # ---------------------------------------------------------------------------
 # __init__.py coverage

@@ -18,8 +18,32 @@ logger = logging.getLogger(__name__)
 # whether to emit an ambiguity advisory.
 _PROJECT_ROOT_MARKERS = ("pyproject.toml", "setup.py", "setup.cfg")
 
+# Built-in registry of namespace-constructor fully-qualified names.  When a
+# binding's RHS is ``Call(func=...)`` whose resolved import-origin matches one
+# of these, the LHS Node is upgraded to :data:`Flavor.NAMESPACE_OBJECT` and
+# its scope is populated with the call's keyword arguments.  See ``#129``.
+#
+# The registry is user-extensible via the CLI flag
+# ``--namespace-constructor FQN`` (and via the ``namespace_constructors``
+# kwarg on ``CallGraphVisitor`` / ``create_callgraph``).  If a constructor is
+# common enough to be worth bundling, please file an issue at
+# https://github.com/Technologicat/pyan/issues so it can be added here.
+#
+# ``unpythonic.env.env`` (canonical) and ``unpythonic.env`` (top-level
+# re-export — same name as the submodule, due to historical naming) are
+# both listed: pyan can only collapse them onto a single Node if
+# ``unpythonic``'s source tree is part of the analyzed set, which it isn't
+# for any application *using* unpythonic.
+NAMESPACE_CONSTRUCTORS = frozenset({
+    "unpythonic.env.env",
+    "unpythonic.env",
+    "types.SimpleNamespace",
+    "argparse.Namespace",
+})
+
 __all__ = [
     "ExecuteInInnerScope",
+    "NAMESPACE_CONSTRUCTORS",
     "Scope",
     "UnresolvedSuperCallError",
     "canonize_exprs",

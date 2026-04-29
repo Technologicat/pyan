@@ -205,6 +205,18 @@ pyan3 src/ --dot --function pkg.mod.func --direction down   # callees only (what
 pyan3 src/ --dot --function pkg.mod.func --direction up     # callers only (what calls this function?)
 ```
 
+### Namespace-style modules
+
+Some libraries expose a runtime-built namespace value as their public surface — typically `unpythonic.env.env`, `types.SimpleNamespace`, or `argparse.Namespace`. For these, pyan recognises the constructor call and treats its kwargs as attribute bindings, so that an external `config.thingy` access resolves to the kwarg's target. The built-in registry covers four FQNs: `unpythonic.env.env`, the top-level re-export `unpythonic.env`, `types.SimpleNamespace`, and `argparse.Namespace`. To extend it for a project-specific constructor:
+
+```bash
+pyan3 src/ --dot --namespace-constructor mylib.MyNamespace
+```
+
+Repeatable, or comma-separated (`--namespace-constructor a.b,c.d`). The option also recognises `setattr(config, "k", v)` writes against a registered namespace value.
+
+For ad-hoc shims like `class _NS: pass; store = _NS()` — i.e. instances of project-local classes used as namespaces — pyan can't follow the construction statically (the class is local, not a known constructor), but cross-module `store.attr` access still surfaces the coupling: the edge lands on the binding's Node (the `store = ...` itself) rather than degrading to a wildcard. Add the class to `--namespace-constructor` if you want full attribute resolution.
+
 ### Excluding files
 
 Use `-x` / `--exclude` to filter out files before analysis. Patterns without a path separator match against the basename; patterns with a separator match against the full path. The option can be repeated. **Quote the pattern** to prevent the shell from expanding glob characters.

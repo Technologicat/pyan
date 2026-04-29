@@ -30,7 +30,7 @@ __all__ = [
 
 def _build_graph(filenames=None, root=None, sources=None, function=None, namespace=None,
                  max_iter=1000, direction="both", depth=None,
-                 logger=None, graph_options=None):
+                 logger=None, graph_options=None, namespace_constructors=None):
     """Analyze source files, optionally filter, and build a VisualGraph.
 
     If `sources` is given (source mode / sans-IO mode), it overrides `filenames` and `root`.
@@ -38,9 +38,11 @@ def _build_graph(filenames=None, root=None, sources=None, function=None, namespa
     Shared core of ``create_callgraph()`` and ``main()``.
     """
     if sources is not None:
-        v = CallGraphVisitor.from_sources(sources, logger=logger)
+        v = CallGraphVisitor.from_sources(sources, logger=logger,
+                                          namespace_constructors=namespace_constructors)
     else:
-        v = CallGraphVisitor(filenames, root=root, logger=logger)
+        v = CallGraphVisitor(filenames, root=root, logger=logger,
+                             namespace_constructors=namespace_constructors)
     if function or namespace:
         if function:
             function_name = function.split(".")[-1]
@@ -76,6 +78,7 @@ def create_callgraph(
     concentrate: bool = False,
     depth: int | None = None,
     exclude: list[str] | None = None,
+    namespace_constructors: list[str] | None = None,
     logger=None,
 ) -> str:
     """Create a call graph based on static code analysis.
@@ -145,6 +148,12 @@ def create_callgraph(
             separator match against the basename (e.g. ``"test_*.py"``);
             patterns with a separator match against the full path
             (e.g. ``"*/tests/*"``).
+        namespace_constructors: extra fully-qualified constructor names
+            to recognize as producing ``Flavor.NAMESPACE_OBJECT`` Nodes,
+            beyond the built-in registry (``unpythonic.env.env``,
+            ``types.SimpleNamespace``, ``argparse.Namespace``, …).  Each
+            entry is the canonical dotted import path
+            (e.g. ``"my.lib.MyNamespace"``).  See #129.
         logger: optional ``logging.Logger`` instance.
 
     Returns:
@@ -174,7 +183,8 @@ def create_callgraph(
     graph = _build_graph(filenames=filenames, root=root, sources=sources,
                          function=function, namespace=namespace,
                          max_iter=max_iter, direction=direction, depth=depth,
-                         logger=logger, graph_options=graph_options)
+                         logger=logger, graph_options=graph_options,
+                         namespace_constructors=namespace_constructors)
 
     stream = io.StringIO()
     dot_options = ["rankdir=" + rankdir, "ranksep=" + ranksep, "layout=" + layout]
@@ -459,6 +469,24 @@ def main(cli_args=None):
     )
 
     parser.add_argument(
+        "--namespace-constructor",
+        action="append",
+        default=[],
+        dest="namespace_constructors",
+        metavar="FQN",
+        help=(
+            "register an extra namespace-constructor FQN (e.g. "
+            "'mylib.MyNamespace'). When the rhs of an assignment is a call "
+            "to a registered constructor, the LHS is treated as a runtime "
+            "namespace value and its kwargs become attribute bindings, so "
+            "that external 'config.attr' access resolves to the kwarg's "
+            "target. Built-in: unpythonic.env.env, types.SimpleNamespace, "
+            "argparse.Namespace. Can be repeated, or comma-separated "
+            "(e.g. --namespace-constructor a.b,c.d). See #129."
+        ),
+    )
+
+    parser.add_argument(
         "--module-level",
         action="store_true",
         default=False,
@@ -536,10 +564,29 @@ def main(cli_args=None):
         except ValueError:
             parser.error(f"--depth must be an integer or 'max', got {known_args.depth!r}")
 
+    # Normalize --namespace-constructor: each occurrence may itself be
+    # comma-separated.  Empty list means "no extras"; only emit the nudge
+    # when the user actually supplied at least one entry.
+    extra_constructors = []
+    for raw in known_args.namespace_constructors:
+        for part in raw.split(","):
+            part = part.strip()
+            if part:
+                extra_constructors.append(part)
+    if extra_constructors:
+        sys.stderr.write(
+            "note: pyan recognises namespace constructors from a built-in "
+            "registry. If your constructor is reasonably common and not "
+            "yet recognised, please file an issue at "
+            "https://github.com/Technologicat/pyan/issues so it can be "
+            "added.\n"
+        )
+
     graph = _build_graph(filenames, root=root, function=known_args.function,
                          namespace=known_args.namespace,
                          direction=known_args.direction, depth=depth,
-                         logger=logger, graph_options=graph_options)
+                         logger=logger, graph_options=graph_options,
+                         namespace_constructors=extra_constructors)
 
     writer = None
     dot_options = [

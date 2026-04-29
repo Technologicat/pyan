@@ -3,12 +3,15 @@
 """The AST visitor."""
 
 import ast
+import builtins as _builtins_module
 from collections import defaultdict
+from collections.abc import Iterable
 from contextlib import contextmanager
 import logging
 import symtable
 
 from .anutils import (
+    NAMESPACE_CONSTRUCTORS,
     ExecuteInInnerScope,
     Scope,
     UnresolvedSuperCallError,
@@ -69,8 +72,26 @@ class CallGraphVisitor(ast.NodeVisitor):
     all files.  This way use information between objects in different files
     can be gathered."""
 
-    def __init__(self, filenames, root: str = None, logger=None):
-        self._init_common(logger)
+    def __init__(self, filenames, root: str = None, logger=None,
+                 namespace_constructors: Iterable[str] | None = None):
+        """Construct a CallGraphVisitor and analyze *filenames*.
+
+        Args:
+            filenames: list of ``.py`` file paths to analyze.
+            root: project root directory.  When ``None``, inferred from
+                *filenames* via :func:`infer_root`.
+            logger: optional ``logging.Logger`` instance.
+            namespace_constructors: extra fully-qualified constructor names
+                to recognize beyond the built-in
+                :data:`~pyan.anutils.NAMESPACE_CONSTRUCTORS`.  When the rhs
+                of a binding is ``Call(func=...)`` whose resolved import
+                origin matches one of these (built-in ∪ user), the LHS is
+                upgraded to ``Flavor.NAMESPACE_OBJECT`` and its scope is
+                populated with the call's keyword arguments (#129).  Each
+                entry should be the canonical dotted import path
+                (e.g. ``"my.lib.MyNamespace"``).
+        """
+        self._init_common(logger, namespace_constructors)
 
         # Infer root from filenames when not explicitly given.
         # This ensures namespace packages (directories without __init__.py)
@@ -89,7 +110,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.process()
 
     @classmethod
-    def from_sources(cls, sources, logger=None):
+    def from_sources(cls, sources, logger=None,
+                     namespace_constructors: Iterable[str] | None = None):
         """Create a CallGraphVisitor from in-memory sources (no file I/O).
 
         Args:
@@ -104,12 +126,13 @@ class CallGraphVisitor(ast.NodeVisitor):
                 (e.g. ``"pkg.sub.__init__"``) so that relative imports
                 resolve correctly.
             logger: optional ``logging.Logger`` instance.
+            namespace_constructors: see ``CallGraphVisitor.__init__``.
 
         Returns:
             A fully analyzed ``CallGraphVisitor``.
         """
         self = cls.__new__(cls)
-        self._init_common(logger)
+        self._init_common(logger, namespace_constructors)
         self.root = ""
 
         # Normalize sources: unparse ASTs, store source text.
@@ -130,9 +153,28 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.process()
         return self
 
-    def _init_common(self, logger):
-        """Shared initialization for both constructors."""
+    def _init_common(self, logger, namespace_constructors: Iterable[str] | None = None):
+        """Shared initialization for both constructors.
+
+        *namespace_constructors* — see ``CallGraphVisitor.__init__``.  The
+        merged set (built-in registry ∪ user-supplied) is stored on
+        ``self.namespace_constructors`` for the recognition path to read.
+        """
         self.logger = logger or logging.getLogger(__name__)
+
+        # Merged set of namespace-constructor FQNs (built-in + user-supplied).
+        # Read by `_maybe_register_namespace_object` to upgrade the LHS of a
+        # recognized binding from `Flavor.NAME` to `Flavor.NAMESPACE_OBJECT`.
+        self.namespace_constructors: set[str] = NAMESPACE_CONSTRUCTORS | set(namespace_constructors or ())
+
+        # Per-namespace map of names bound to string-literal constants.
+        # Populated by `_bind_target` whenever the rhs is a string `Constant`.
+        # Read by `_resolve_name_to_string_literal` for `setattr` recognition
+        # when the second argument is a `Name` that has to trace back to a
+        # literal. Cross-module lookups follow the same module_to_filename
+        # path that import resolution uses.
+        # Structure: {namespace: {name: literal_string}}
+        self.name_literals = {}
 
         # Stack of sets; while non-empty, ``add_uses_edge`` records each edge's
         # to_node into the top set. Used by visit_FunctionDef to capture uses
@@ -1536,6 +1578,13 @@ class CallGraphVisitor(ast.NodeVisitor):
         for kw in node.keywords:
             self.visit(kw.value)
 
+        # Recognize ``setattr(target, name, value)`` against a
+        # NAMESPACE_OBJECT target — symmetric counterpart to ``e.k = v``
+        # for the dynamic form.  No-op for any non-matching call.  See
+        # ``_maybe_register_setattr_call`` for the three name-resolution
+        # levels (literal / scope-local / cross-module).
+        self._maybe_register_setattr_call(node)
+
         # see if we can predict the result
         try:
             result_node = self.resolve_builtins(node)
@@ -1753,17 +1802,27 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         return None, flavor
 
-    def _bind_target(self, target, value):
+    def _bind_target(self, target, value, rhs_ast=None):
         """Bind an AST target node to a resolved value (a graph Node or None).
 
         Dispatches on target type: Name and Attribute perform scalar binding,
         Tuple/List recurse (all sub-targets get the same value), Starred
         unwraps to its inner target, and ast.arg handles function parameter
         defaults.
+
+        *rhs_ast* — when known — is the AST node of the rhs expression,
+        passed through so recognizers that need to inspect the rhs (e.g.
+        the namespace-constructor and string-literal recognizers) can
+        avoid having to re-derive it.  ``None`` for cases where the rhs
+        isn't a single expression (e.g. cartesian fallback in
+        ``analyze_binding``).
         """
         if isinstance(target, ast.Name):
             self.set_value(target.id, value)
             self._maybe_define_name_node(target)
+            if rhs_ast is not None:
+                self._maybe_register_name_literal(target, rhs_ast)
+                self._maybe_register_namespace_object(target, rhs_ast)
         elif isinstance(target, ast.Attribute):
             try:
                 if self.set_attribute(target, value):
@@ -1826,6 +1885,270 @@ class CallGraphVisitor(ast.NodeVisitor):
             self.logger.info(f"Def from {from_node} to NAME {to_node}")
         self.associate_node(to_node, name_target, self.filename)
 
+    def _maybe_register_name_literal(self, name_target, rhs_ast):
+        """If a ``Name`` binding's rhs is a string ``Constant``, record the
+        bound value in ``self.name_literals[ns][name]``.
+
+        Used by the ``setattr`` recognizer to trace ``setattr(obj, k, v)``
+        when ``k`` is a ``Name`` bound to a string literal (level 2:
+        scope-local, level 3: cross-module via import resolution).
+
+        Only literal strings are tracked — runtime-computed strings are
+        beyond static analysis by design.
+        """
+        if not isinstance(rhs_ast, ast.Constant):
+            return
+        if not isinstance(rhs_ast.value, str):
+            return
+        if not self.scope_stack:
+            return
+        # Track at module/class scope only (mirrors `_maybe_define_name_node`):
+        # function-local literal bindings aren't externally addressable, and
+        # cross-module lookups require the binding to live in a module's namespace.
+        if self.scope_stack[-1].type not in ("module", "class"):
+            return
+        from_node = self.get_node_of_current_namespace()
+        ns = from_node.get_name()
+        self.name_literals.setdefault(ns, {})[name_target.id] = rhs_ast.value
+
+    def _maybe_register_namespace_object(self, name_target, rhs_ast):
+        """Pattern: ``LHS = constructor(**kwargs)`` where *constructor*'s
+        fully-qualified import origin is in ``self.namespace_constructors``.
+
+        Recognizes:
+
+        - ``config = env(thingy=baa)`` (canonical)
+        - ``config: Env = env(thingy=baa)`` (annotated)
+        - ``(config := env(thingy=baa))`` (walrus)
+        - ``with env(thingy=baa) as config:`` (context manager — same path
+          via `_visit_with` → `analyze_binding`)
+
+        On a hit, the LHS Node (already created as ``Flavor.NAME`` by
+        ``_maybe_define_name_node``) gets its flavor upgraded to
+        ``Flavor.NAMESPACE_OBJECT``, and a scope is created for it whose
+        ``defs`` dict is populated with the call's keyword arguments.
+        Subsequent attribute reads (``config.thingy``) and writes
+        (``config.flag = value``) then resolve through the existing
+        ``get_attribute`` / ``set_attribute`` machinery.
+
+        No-op when the rhs isn't a recognized constructor call, or when
+        the binding is in a function scope (where no NAME Node exists).
+        """
+        if not isinstance(rhs_ast, ast.Call):
+            return
+        # Cheap gates first — most assignments aren't to module/class scope,
+        # and FQN resolution is comparatively expensive (scope-chain lookup
+        # and/or attribute resolution).
+        if not self.scope_stack or self.scope_stack[-1].type not in ("module", "class"):
+            return
+        fqn = self._resolve_constructor_fqn(rhs_ast.func)
+        if fqn is None or fqn not in self.namespace_constructors:
+            return
+        from_node = self.get_node_of_current_namespace()
+        ns = from_node.get_name()
+        # Locate the LHS Node (already created by `_maybe_define_name_node`)
+        # and upgrade its flavor.  Direct assignment bypasses
+        # `Flavor.specificity`'s upgrade gate, which is intentional —
+        # we have additional information (the rhs is a known constructor)
+        # that the gate doesn't know about.
+        obj_node = self.get_node(ns, name_target.id, name_target)
+        obj_node.flavor = Flavor.NAMESPACE_OBJECT
+        obj_node.defined = True
+        if self.add_defines_edge(from_node, obj_node):
+            self.logger.info(f"Def from {from_node} to NAMESPACE_OBJECT {obj_node}")
+        # Repoint the scope binding from the constructor (e.g. the env
+        # IMPORTEDITEM) to the new NAMESPACE_OBJECT Node, so that later
+        # ``config.attr`` lookups walk into ``mymod.config``'s scope rather
+        # than into the constructor's namespace.  Plain NAME Nodes don't do
+        # this — the binding is kept at the rhs value so e.g. ``pd =
+        # pandas; pd.DataFrame`` still resolves into pandas' namespace.
+        # NAMESPACE_OBJECT is the case where attribute resolution should
+        # stay on the LHS itself.
+        self.set_value(name_target.id, obj_node)
+        # Ensure the scope exists at construction time, even when no
+        # kwargs were passed.  Otherwise the staged form ``config = env();
+        # config.a = baa`` breaks: the later attribute write goes through
+        # ``set_attribute``, which writes into an *existing* scope but
+        # doesn't create one (writes to non-NAMESPACE_OBJECT obj.attr
+        # paths shouldn't materialize scopes either).
+        obj_ns = obj_node.get_name()
+        if obj_ns not in self.scopes:
+            self.scopes[obj_ns] = Scope.from_names(obj_ns, [])
+        for kw in rhs_ast.keywords:
+            if kw.arg is None:  # **kwargs splat — not statically visible
+                continue
+            self._register_namespace_object_attr(obj_node, kw.arg, self.visit(kw.value))
+
+    def _register_namespace_object_attr(self, obj_node, attr_name, attr_value):
+        """Write ``attr_name → attr_value`` into *obj_node*'s scope.
+
+        Used by both the constructor recognizer (for ``env(k=v)`` kwargs)
+        and the ``setattr`` recognizer (for literal-named
+        ``setattr(obj, "k", v)`` writes).  Idempotently creates the scope
+        first — needed for the staged form ``config = env(); config.a = v``,
+        where no kwargs at the construction site means no scope yet exists.
+
+        Plain ``obj.attr = v`` writes go through ``set_attribute`` instead;
+        that path skips when the scope is missing rather than creating it,
+        because writes to attribute paths on non-NAMESPACE_OBJECT objects
+        shouldn't materialize scopes for arbitrary objects.
+        """
+        obj_ns = obj_node.get_name()
+        if obj_ns not in self.scopes:
+            self.scopes[obj_ns] = Scope.from_names(obj_ns, [])
+        self.scopes[obj_ns].defs[attr_name] = attr_value
+        self.logger.info(f"Registered {attr_name} -> {attr_value} in NAMESPACE_OBJECT {obj_node}")
+
+    def _resolve_constructor_fqn(self, func_ast):
+        """Resolve a ``Call.func`` AST to its fully-qualified import origin
+        as a dotted string, or ``None`` if not statically determinable.
+
+        Three cases:
+
+        - ``Name('env')`` where ``env`` is a user-bound name — looks up via
+          ``get_value``, returns ``namespace + "." + name`` of the
+          resolved Node.  Handles ``from unpythonic.env import env``
+          (FQN ``"unpythonic.env.env"``) and ``from unpythonic import env``
+          (FQN ``"unpythonic.env"``).
+        - ``Name('setattr')`` where the name isn't user-bound but matches a
+          Python builtin — returns ``"builtins.<name>"``.  Lets the
+          ``setattr`` recognizer match the unaliased call.  Aliased
+          builtins (``from builtins import setattr as sa``) take the first
+          path automatically, since the import binds the name.
+        - ``Attribute(Name('types'), 'SimpleNamespace')`` — first tries to
+          look up the resolved attr Node (analyzed-source case).  Failing
+          that, reconstructs the FQN from the dotted AST path
+          (unanalyzed-module case: ``import types; types.SimpleNamespace``).
+        """
+        if isinstance(func_ast, ast.Name):
+            node = self.get_value(func_ast.id)
+            if isinstance(node, Node) and node.namespace is not None:
+                return self._fqn_of_node(node)
+            # Builtin fallback — only fires when the name isn't user-bound.
+            if hasattr(_builtins_module, func_ast.id):
+                return f"builtins.{func_ast.id}"
+            return None
+        if isinstance(func_ast, ast.Attribute):
+            try:
+                obj_node, attr_name = self.resolve_attribute(func_ast)
+            except UnresolvedSuperCallError:
+                return None
+            if not isinstance(obj_node, Node) or obj_node.namespace is None:
+                return None
+            ns = obj_node.get_name()
+            if ns in self.scopes and attr_name in self.scopes[ns].defs:
+                resolved = self.scopes[ns].defs[attr_name]
+                if isinstance(resolved, Node):
+                    return self._fqn_of_node(resolved)
+            # Unanalyzed-module case: reconstruct from the dotted path.
+            return f"{ns}.{attr_name}"
+        return None
+
+    @staticmethod
+    def _fqn_of_node(node):
+        if not node.namespace:
+            return node.name
+        return f"{node.namespace}.{node.name}"
+
+    def _resolve_setattr_name(self, name_arg_ast):
+        """Resolve the second argument of ``setattr(obj, name, value)`` to a
+        string, following three concentric levels of static knowability.
+
+        - **Level 1 — literal string.** ``ast.Constant(value=str)``.  Use
+          the value directly.
+        - **Level 2 — name-bound literal.** ``ast.Name(id=k)`` where ``k``
+          is bound to a string literal in a scope reachable from here
+          (current scope chain).
+        - **Level 3 — cross-module name-bound literal.** ``ast.Name(id=k)``
+          where ``k`` resolves through an import to a string literal in
+          another analyzed module.
+
+        Returns the resolved string, or ``None`` if not statically
+        knowable (loop variables, function-returned strings, dynamic
+        construction — out of scope by design for a static analyzer).
+        """
+        if isinstance(name_arg_ast, ast.Constant) and isinstance(name_arg_ast.value, str):
+            return name_arg_ast.value
+        if isinstance(name_arg_ast, ast.Name):
+            # Level 2: walk the current namespace chain (current ns and all
+            # enclosing ones) looking for a tracked literal.  `name_literals`
+            # is keyed by the fully-qualified namespace where the literal was
+            # bound, so we have to traverse by namespace string rather than
+            # by `Scope` object (whose `.name` is "" for the module).
+            ns = self.get_node_of_current_namespace().get_name()
+            while True:
+                bucket = self.name_literals.get(ns, {})
+                if name_arg_ast.id in bucket:
+                    return bucket[name_arg_ast.id]
+                if "." not in ns:
+                    break
+                ns = ns.rsplit(".", 1)[0]
+            # Level 3: the Name might resolve to an imported binding.
+            # `get_value` returns the resolved Node (after import resolution
+            # within the visitor pass).  Look up its FQN's namespace in
+            # `name_literals`.
+            resolved = self.get_value(name_arg_ast.id)
+            if isinstance(resolved, Node) and resolved.namespace is not None:
+                bucket = self.name_literals.get(resolved.namespace, {})
+                if resolved.name in bucket:
+                    return bucket[resolved.name]
+        return None
+
+    def _maybe_register_setattr_call(self, call_ast):
+        """Recognize ``setattr(target, name, value)`` calls on
+        ``NAMESPACE_OBJECT``-flavored Nodes and register the implied
+        binding in *target*'s scope, mirroring ``e.k = v``.
+
+        Three structural preconditions:
+
+        1. ``call_ast.func`` resolves to FQN ``"builtins.setattr"`` (handles
+           aliased imports for free via scope-chain resolution).
+        2. ``target`` (first positional arg) resolves to a Node with
+           ``flavor=NAMESPACE_OBJECT`` (so a scope exists for it).
+        3. ``name`` (second positional arg) resolves to a string via the
+           three-level resolution in ``_resolve_setattr_name``.
+
+        On match: ``self.scopes[target_node.get_name()].defs[name] = visit(value)``.
+        On miss: no-op — same floor as the #127 module-level fallback.
+
+        Symmetric ``delattr`` is intentionally not handled: pyan is
+        flow-insensitive, and clearing bindings from a branch that doesn't
+        always execute would be wrong as often as right (see
+        ``visit_Delete`` for the analogous reasoning on ``del obj.attr``).
+        """
+        # Cheap structural gates first.  We're called from visit_Call on
+        # every Call in the analyzed source, so the gate ordering matters
+        # for analyzer cost: AST-shape checks are O(1), but FQN resolution
+        # involves scope-chain lookup and/or attribute resolution.
+        if len(call_ast.args) != 3 or call_ast.keywords:
+            return
+        if any(isinstance(a, ast.Starred) for a in call_ast.args):
+            return
+        target_arg, name_arg, value_arg = call_ast.args
+        # Precondition: target is a `Name` (the recognizer doesn't handle
+        # nested forms like ``setattr(get_obj(), ...)``).  Skip before
+        # attempting any expensive resolution.
+        if not isinstance(target_arg, ast.Name):
+            return
+        if not isinstance(call_ast.func, (ast.Name, ast.Attribute)):
+            return
+        # Precondition 1: func is builtins.setattr.
+        fqn = self._resolve_constructor_fqn(call_ast.func)
+        if fqn != "builtins.setattr":
+            return
+        # Precondition 2: target resolves to a NAMESPACE_OBJECT Node.
+        target_node = self.get_value(target_arg.id)
+        if not isinstance(target_node, Node) or target_node.flavor != Flavor.NAMESPACE_OBJECT:
+            return
+        # Precondition 3: name resolves to a string literal.
+        attr_name = self._resolve_setattr_name(name_arg)
+        if attr_name is None:
+            return
+        # Register the binding into target's scope.  set_attribute can't
+        # be used here — its API takes an Attribute AST node, which we
+        # don't have (the LHS *is* a Call, not an Attribute).
+        self._register_namespace_object_attr(target_node, attr_name, self.visit(value_arg))
+
     @staticmethod
     def _collect_target_names(target, names):
         """Collect all Name identifiers from an assignment target AST node."""
@@ -1841,8 +2164,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         """Generic handler for binding forms. Inputs must be canonize_exprs()d."""
         captured = [self.visit(value) for value in values]
         if len(targets) == len(captured):
-            for tgt, val in zip(targets, captured, strict=False):
-                self._bind_target(tgt, val)
+            for tgt, val, val_ast in zip(targets, captured, values, strict=False):
+                self._bind_target(tgt, val, rhs_ast=val_ast)
         else:
             # Check for positional starred unpacking on LHS (e.g. a, b, *c = x, y, z, w).
             star_idx = None

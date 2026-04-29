@@ -33,6 +33,7 @@ class Flavor(Enum):
     STATICMETHOD = "staticmethod"
     CLASSMETHOD = "classmethod"
     NAME = "name"  # Python name (e.g. "x" in "x = 42")
+    NAMESPACE_OBJECT = "namespace-object"  # runtime namespace value (env, SimpleNamespace, ...): a NAME with a populated scope listing its statically-visible attributes. Distinct from SCOPE (the structural bookkeeping marker for module/class/function scopes).
 
     # Flavors have a partial ordering in specificness of the information.
     #
