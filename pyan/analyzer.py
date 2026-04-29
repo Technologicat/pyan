@@ -1192,7 +1192,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                 # which surfaces the cross-module coupling.
                 if not attr_node.defined and isinstance(obj_node, Node):
                     ancestor = self._defined_self_or_parent(obj_node)
-                    if ancestor is not None and not self._within(from_node, ancestor):
+                    if ancestor is not None and not self._within(from_node, ancestor):  # noqa: SIM102 -- guard + log-on-success: outer asks "should we add?", inner asks "did we add (vs. already present)?"
                         if self.add_uses_edge(from_node, ancestor):
                             self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attr {node.attr} not defined)")
 
@@ -1237,7 +1237,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                 # cross-module coupling stays visible even when the attribute
                 # itself isn't statically resolvable.
                 ancestor = self._defined_self_or_parent(obj_node)
-                if ancestor is not None and not self._within(from_node, ancestor):
+                if ancestor is not None and not self._within(from_node, ancestor):  # noqa: SIM102 -- guard + log-on-success: outer asks "should we add?", inner asks "did we add (vs. already present)?"
                     if self.add_uses_edge(from_node, ancestor):
                         self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attr {node.attr} unresolved)")
 
@@ -1779,7 +1779,7 @@ class CallGraphVisitor(ast.NodeVisitor):
                 if isinstance(obj_node, Node):
                     ancestor = self._defined_self_or_parent(obj_node)
                     from_node = self.get_node_of_current_namespace()
-                    if ancestor is not None and not self._within(from_node, ancestor):
+                    if ancestor is not None and not self._within(from_node, ancestor):  # noqa: SIM102 -- guard + log-on-success: outer asks "should we add?", inner asks "did we add (vs. already present)?"
                         if self.add_uses_edge(from_node, ancestor):
                             self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attribute-write fallback)")
             except UnresolvedSuperCallError:
