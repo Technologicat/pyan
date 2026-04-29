@@ -48,7 +48,7 @@ Two related concerns: (1) tests are spread across few modules (`test_features.py
 
 ## Analyzer module split
 
-`analyzer.py` is ~2700 lines. Consider splitting into submodules (e.g. visitors, postprocessing, scope handling, NAMESPACE_OBJECT recognition) without changing the public API. Possible cuts: the postprocessing pipeline (`resolve_imports`, `contract_nonexistents`, `expand_unknowns`, `cull_inherited`, `collapse_inner`) is largely standalone and could move to its own module; the recognizers added for #129 (`_maybe_register_namespace_object`, `_maybe_register_setattr_call`, friends) could go to a `recognizers` submodule.
+`analyzer.py` is ~3100 lines. Consider splitting into submodules (e.g. visitors, postprocessing, scope handling, NAMESPACE_OBJECT recognition) without changing the public API. Possible cuts: the postprocessing pipeline (`resolve_imports`, `contract_nonexistents`, `expand_unknowns`, `cull_inherited`, `collapse_inner`) is largely standalone and could move to its own module; the recognizers added for #129 (`_maybe_register_namespace_object`, `_maybe_register_setattr_call`, friends) could go to a `recognizers` submodule.
 
 ## Type annotations for pyan's own code
 
