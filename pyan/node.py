@@ -21,7 +21,7 @@ class Flavor(Enum):
     UNSPECIFIED = "---"  # as it says on the tin
     UNKNOWN = "???"  # not determined by analysis (wildcard)
 
-    NAMESPACE = "namespace"  # node representing a namespace
+    SCOPE = "scope"  # synthetic structural marker: this dotted prefix represents a scope (module / class / function bookkeeping). Distinct from a runtime namespace value.
     ATTRIBUTE = "attribute"  # attr of something, but not known if class or func.
 
     IMPORTEDITEM = "import"  # imported item of unanalyzed type
@@ -44,7 +44,7 @@ class Flavor(Enum):
     def specificity(flavor):
         if flavor in (Flavor.UNSPECIFIED, Flavor.UNKNOWN):
             return 0
-        elif flavor in (Flavor.NAMESPACE, Flavor.ATTRIBUTE):
+        elif flavor in (Flavor.SCOPE, Flavor.ATTRIBUTE):
             return 1
         elif flavor == Flavor.IMPORTEDITEM:
             return 2

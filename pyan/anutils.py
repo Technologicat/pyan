@@ -515,11 +515,11 @@ class ExecuteInInnerScope:
         #
         # All inner scopes of the same scopename (lambda, listcomp, ...) in the
         # current ns will be grouped into a single node, as they have no name.
-        # We create a namespace-like node that has no associated AST node,
+        # We create a scope marker node that has no associated AST node,
         # as it does not represent any unique AST node.
         from_node = analyzer.get_node_of_current_namespace()
         ns = from_node.get_name()
-        to_node = analyzer.get_node(ns, scopename, None, flavor=Flavor.NAMESPACE)
+        to_node = analyzer.get_node(ns, scopename, None, flavor=Flavor.SCOPE)
         if analyzer.add_defines_edge(from_node, to_node):
             analyzer.logger.info(f"Def from {from_node} to {scopename} {to_node}")
         self.inner_scope_node = to_node  # Available to callers via `with ... as scope_ctx:`.

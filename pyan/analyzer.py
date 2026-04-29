@@ -2192,7 +2192,7 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         namespace = ".".join(self.name_stack[0:-1])
         name = self.name_stack[-1]
-        return self.get_node(namespace, name, None, flavor=Flavor.NAMESPACE)
+        return self.get_node(namespace, name, None, flavor=Flavor.SCOPE)
 
     ###########################################################################
     # Value getter and setter
