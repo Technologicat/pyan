@@ -1,11 +1,19 @@
 # Changelog
 
-## 2.5.1 (in progress)
+## 2.6.0 (in progress)
+
+### New features
+
+- **Module-level name bindings now produce graph Nodes.** Every module-level assignment (e.g. `CONSTANT = 42`, `LOGGER = logging.getLogger(__name__)`, `store = _NS()`) creates a defined `Flavor.NAME` Node at the bound dotted path. `from mymod import x` now resolves to the actual binding instead of contracting to a wildcard, and the #127 attribute-fallback lands on the specific binding rather than climbing all the way to the enclosing module. Function-locals are unchanged — they stay as scope-only bindings to keep the graph readable. Edgeless NAME Nodes (module constants nobody imports) are suppressed from the rendered output by default; they remain in the analyzer's graph for cross-module resolution.
 
 ### Bug fixes
 
 - **Cross-module attribute reads on namespace-style modules now produce uses edges.** A module whose public surface is a runtime-built object (`SimpleNamespace`, `unpythonic.env.env`, a small `class _NS: pass; store = _NS()` shim) used to appear as an isolated node even when it was central to the subsystem — every `store.dataset` access landed on a synthetic ATTRIBUTE node that visgraph dropped as undefined. The analyzer now also emits an edge to the immediate defined parent of the obj (typically the exporting module) when the attribute itself can't be resolved. Symmetric for attribute writes (`store.flag = value`). One-level only — does not climb through unanalyzed packages, and within-scope self-references are suppressed (a method reading an undefined attribute on its own class, or a function reading module-level state in its own module, is just normal scoping). Generalizes the existing class-fallback (Enum members, class constants) introduced in 2.4.0. (#127)
 - **Advisory when `infer_root` may have misidentified the package root.** Two ambiguous situations now emit a warning suggesting `--root`: (1) inference walked up at least one package level and stopped at a directory that has neither `__init__.py` nor a project-root marker (`pyproject.toml`, `setup.py`, `setup.cfg`) — consistent with a top-level PEP 420 namespace package; (2) inference didn't walk up at all but the input directory's parent has `__init__.py` — consistent with the user feeding pyan the contents of a namespace subpackage (e.g. `pyan3 pkg/sub_ns/*.py` where `sub_ns/` has no `__init__.py`), which would otherwise silently produce bare module names and broken relative imports. Auto-walking further is unsafe — the same filesystem shapes also occur for workspace directories like `tests/` or `examples/` — so the choice is left to the user. The `--root` help text now also mentions the namespace-package case explicitly. (#128)
+
+### Internal
+
+- **Flavor rename:** `Flavor.NAMESPACE` (synthetic structural marker for module/class/function scope bookkeeping) is now `Flavor.SCOPE`. The previous name is being freed up for an upcoming `Flavor.NAMESPACE_OBJECT` representing a runtime namespace value (env, SimpleNamespace, …). The Node represents the scope; the `Scope` class implements one — same concept at two layers.
 
 
 ---

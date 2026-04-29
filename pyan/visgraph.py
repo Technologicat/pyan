@@ -173,11 +173,31 @@ class VisualGraph:
         logger = logger or logging.getLogger(__name__)
 
         # collect and sort defined nodes
+        #
+        # NAME-flavored Nodes with no incoming or outgoing uses edges are
+        # suppressed by default. Module-level bindings (e.g. ``__version__``,
+        # ``LOGGER``) become defined NAME Nodes during analysis to make them
+        # addressable for cross-module imports, but if nothing actually
+        # imports or uses them, they only add visual noise. Their defines
+        # edge from the enclosing module is *always* present by construction
+        # and so cannot indicate use; we look at uses_edges only.
+        from .node import Flavor  # noqa: PLC0415 -- avoid circular import at module level
+        named_with_uses = set()
+        for from_node, to_nodes in visitor.uses_edges.items():
+            if from_node.flavor == Flavor.NAME:
+                named_with_uses.add(from_node)
+            for to_node in to_nodes:
+                if to_node.flavor == Flavor.NAME:
+                    named_with_uses.add(to_node)
+
         visited_nodes = []
         for name in visitor.nodes:
             for node in visitor.nodes[name]:
-                if node.defined:
-                    visited_nodes.append(node)
+                if not node.defined:
+                    continue
+                if node.flavor == Flavor.NAME and node not in named_with_uses:
+                    continue
+                visited_nodes.append(node)
         visited_nodes.sort(key=lambda x: (x.namespace, x.name))
 
         def find_filenames():
@@ -254,17 +274,21 @@ class VisualGraph:
             #
             color = "#838b8b" if draw_defines else "#ffffff00"
             for n in visitor.defines_edges:
-                if n.defined:
-                    for n2 in visitor.defines_edges[n]:
-                        if n2.defined:
-                            root_graph.edges.append(VisualEdge(nodes_dict[n], nodes_dict[n2], "defines", color))
+                if n not in nodes_dict:
+                    continue
+                for n2 in visitor.defines_edges[n]:
+                    if n2 not in nodes_dict:
+                        continue
+                    root_graph.edges.append(VisualEdge(nodes_dict[n], nodes_dict[n2], "defines", color))
 
         if draw_uses:
             color = "#000000"
             for n in visitor.uses_edges:
-                if n.defined:
-                    for n2 in visitor.uses_edges[n]:
-                        if n2.defined:
-                            root_graph.edges.append(VisualEdge(nodes_dict[n], nodes_dict[n2], "uses", color))
+                if n not in nodes_dict:
+                    continue
+                for n2 in visitor.uses_edges[n]:
+                    if n2 not in nodes_dict:
+                        continue
+                    root_graph.edges.append(VisualEdge(nodes_dict[n], nodes_dict[n2], "uses", color))
 
         return root_graph

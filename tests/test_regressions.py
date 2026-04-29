@@ -407,36 +407,39 @@ def _issue127_visitor(*basenames):
     return CallGraphVisitor(filenames, logger=logging.getLogger())
 
 
-def test_issue127_attr_read_falls_back_to_module():
+def test_issue127_unresolved_attr_read_emits_edge_to_binding():
     """Reading ``store.dataset`` where ``dataset`` isn't statically known
-    should produce a uses edge to the nearest defined ancestor of the
-    unresolved chain — here, the ``namespace_module`` module itself
-    (since ``store`` is an IMPORTEDITEM with ``defined=False``). Without
-    this fallback, namespace-style modules become invisible in the graph."""
+    should still produce a uses edge to ``namespace_module.store`` (the
+    binding), so the cross-module coupling stays visible. The binding is
+    a defined ``Flavor.NAME`` Node, so the edge lands on it directly —
+    no climb needed. (Pre-#129-prequisite, the binding wasn't a Node and
+    the edge had to fall back to the enclosing module.)"""
     v = _issue127_visitor("namespace_module.py", "consumer.py")
     uses = get_in_dict(v.uses_edges, "consumer.use_attr")
-    get_node(uses, "namespace_module")
+    get_node(uses, "namespace_module.store")
 
 
-def test_issue127_attr_write_falls_back_to_module():
-    """Writing ``store.flag = value`` should also count as coupling to
-    the namespace-style module — same fallback rule, applied through
+def test_issue127_unresolved_attr_write_emits_edge_to_binding():
+    """Writing ``store.flag = value`` should also produce the
+    binding-level edge — same mechanism, applied through
     ``set_attribute`` / the Attribute-in-Store path."""
     v = _issue127_visitor("namespace_module.py", "consumer.py")
     uses = get_in_dict(v.uses_edges, "consumer.write_attr")
-    get_node(uses, "namespace_module")
+    get_node(uses, "namespace_module.store")
 
 
 def test_issue127_chained_access_climbs_to_defined_ancestor():
-    """``store.foo.bar`` — neither ``foo`` nor ``bar`` is statically known,
-    and ``store`` itself is an undefined IMPORTEDITEM. The fallback should
-    climb past every undefined intermediate and emit exactly one edge to
-    the nearest defined ancestor: the ``namespace_module`` module.
-    No edges should point at undefined synthetic ATTRIBUTE nodes — those
-    are invisible in the rendered graph and just noise in ``uses_edges``."""
+    """``store.foo.bar`` — neither ``foo`` nor ``bar`` is statically known.
+    The intermediate access ``store.foo`` produces an undefined synthetic
+    ATTRIBUTE Node, and the outer ``.bar`` access has to climb past it to
+    reach a defined ancestor. After the prequisite to #129, the climb
+    terminates at ``namespace_module.store`` (the binding's NAME Node)
+    rather than at the enclosing module. No edges should point at the
+    undefined ATTRIBUTE intermediates — those are invisible in the
+    rendered graph and just noise in ``uses_edges``."""
     v = _issue127_visitor("namespace_module.py", "chained_consumer.py")
     uses = get_in_dict(v.uses_edges, "chained_consumer.use_chained")
-    get_node(uses, "namespace_module")
+    get_node(uses, "namespace_module.store")
     # No edges to undefined non-wildcard nodes (e.g. namespace_module.store.foo).
     for n in uses:
         assert n.defined or n.namespace is None, (

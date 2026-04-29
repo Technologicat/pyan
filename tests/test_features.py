@@ -820,3 +820,79 @@ def test_depth_no_self_edges():
 
     for n, edges in v.uses_edges.items():
         assert n not in edges, f"Self-edge on {n.get_name()}"
+
+
+# --- Module-level NAME Node-ification ---
+#
+# Every named entity reachable from outside its definition site is a Node.
+# Module-level and class-level bindings are reachable; function-locals are not.
+
+def _name_nodes_at(visitor, namespace):
+    """Return defined NAME-flavored Nodes at *namespace*."""
+    from pyan.node import Flavor
+    return [
+        n for ns in visitor.nodes.values() for n in ns
+        if n.defined and n.flavor == Flavor.NAME and n.namespace == namespace
+    ]
+
+
+def test_module_level_assignment_creates_defined_name_node():
+    """``mymod.x = ...`` at module level produces a defined ``Flavor.NAME``
+    Node at ``mymod.x``, with a defines edge from the module Node."""
+    v = CallGraphVisitor.from_sources([
+        ("CONSTANT = 42\nLOGGER = object()\n", "mymod"),
+    ])
+    name_nodes = {n.name for n in _name_nodes_at(v, "mymod")}
+    assert "CONSTANT" in name_nodes
+    assert "LOGGER" in name_nodes
+
+
+def test_function_local_does_not_create_name_node():
+    """Function-local bindings stay as scope-only ``set_value`` and do not
+    produce graph Nodes — they aren't externally addressable and would
+    only clutter the graph."""
+    v = CallGraphVisitor.from_sources([
+        ("def f():\n    local = 1\n    return local\n", "mymod"),
+    ])
+    name_nodes = {n.name for n in _name_nodes_at(v, "mymod.f")}
+    assert "local" not in name_nodes
+
+
+def test_cross_module_constant_import_resolves_to_name_node():
+    """``from mymod import CONSTANT`` should bind to the actual NAME Node
+    at ``mymod.CONSTANT``, not contract to a wildcard. This is the
+    precision win from making module-level bindings addressable Nodes."""
+    v = CallGraphVisitor.from_sources([
+        ("CONSTANT = 42\n", "constants"),
+        ("from constants import CONSTANT\n\ndef use():\n    return CONSTANT\n", "consumer"),
+    ])
+    use_uses = {n.get_name() for n in v.uses_edges.get(
+        v.get_node("consumer", "use"), set()
+    )}
+    assert "constants.CONSTANT" in use_uses
+
+
+def test_visgraph_suppresses_edgeless_name_nodes():
+    """NAME Nodes with no incoming or outgoing uses edges should not appear
+    in the visgraph output (visual-density default). The Node still exists
+    in the analyzer's graph for cross-module resolution; only the rendered
+    output filters it."""
+    from pyan.visgraph import VisualGraph
+    v = CallGraphVisitor.from_sources([
+        # UNUSED has no uses edges anywhere; USED is imported by consumer.
+        ("UNUSED = 1\nUSED = 2\n", "constants"),
+        ("from constants import USED\n\ndef f():\n    return USED\n", "consumer"),
+    ])
+    vg = VisualGraph.from_visitor(v, options={"draw_defines": True, "draw_uses": True})
+
+    def collect(graph, out):
+        for n in graph.nodes:
+            out.add(n.label)
+        for sg in graph.subgraphs:
+            collect(sg, out)
+    labels = set()
+    collect(vg, labels)
+    assert any("USED" in lab for lab in labels), f"USED should appear; saw {labels}"
+    assert not any("UNUSED" in lab for lab in labels), (
+        f"UNUSED has no uses edges and should be suppressed; saw {labels}"
+    )

@@ -1763,6 +1763,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         """
         if isinstance(target, ast.Name):
             self.set_value(target.id, value)
+            self._maybe_define_name_node(target)
         elif isinstance(target, ast.Attribute):
             try:
                 if self.set_attribute(target, value):
@@ -1791,6 +1792,39 @@ class CallGraphVisitor(ast.NodeVisitor):
             self._bind_target(target.value, value)
         elif isinstance(target, ast.arg):
             self.set_value(target.arg, value)
+
+    def _maybe_define_name_node(self, name_target):
+        """Create a defined ``Flavor.NAME`` Node for an ``ast.Name`` binding
+        target if currently in a module or class scope.
+
+        The graph's notion of "defined Node" tracks named entities reachable
+        from outside their definition site. Module-level and class-level
+        bindings are reachable (via ``from mymod import x`` or ``Class.x``)
+        and so deserve a Node so that cross-module imports and attribute
+        accesses can resolve to the actual binding rather than degrading to
+        a wildcard or to #127's coarser module-level fallback.
+
+        Function-locals (and synthetic anonymous scopes — comprehensions,
+        lambdas — which symtable reports as ``"function"``) are not
+        externally addressable; promoting every loop variable to a Node
+        would only clutter the graph. They stay scope-only, set via
+        ``set_value``.
+
+        Method/function/class definitions are flavored separately by their
+        own visitors (``visit_FunctionDef``, ``visit_ClassDef``) and don't
+        come through this path.
+        """
+        if not self.scope_stack:
+            return
+        scope = self.scope_stack[-1]
+        if scope.type not in ("module", "class"):
+            return
+        from_node = self.get_node_of_current_namespace()
+        ns = from_node.get_name()
+        to_node = self.get_node(ns, name_target.id, name_target, flavor=Flavor.NAME)
+        if self.add_defines_edge(from_node, to_node):
+            self.logger.info(f"Def from {from_node} to NAME {to_node}")
+        self.associate_node(to_node, name_target, self.filename)
 
     @staticmethod
     def _collect_target_names(target, names):
