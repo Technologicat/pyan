@@ -63,17 +63,20 @@ source files → CallGraphVisitor (analyzer.py) → Node graph → VisualGraph (
 
 ### Modules
 
-- **`analyzer.py`** (~2650 lines) — The core: `CallGraphVisitor`, an `ast.NodeVisitor` subclass. Two-pass analysis:
+- **`analyzer.py`** (~2390 lines) — The core: `CallGraphVisitor`, an `ast.NodeVisitor` subclass. Two-pass analysis:
   - Pass 1: visit all files, collect definitions, uses, scopes, class bases.
   - Between passes: resolve base classes → compute MRO.
   - Pass 2: visit all files again, resolving forward references using pass-1 knowledge.
   - Postprocess: thin orchestrator method delegating to `pyan.postprocessor.postprocess`.
   - State: `self.graph` is a `CallGraph` (see `callgraph.py`); `self.nodes`, `self.defines_edges`, `self.uses_edges`, `self.module_to_filename` are properties read/written through the graph.
   - Query API: `filter()`, `filter_by_depth()`, `find_paths()`, `format_paths()`, `get_related_nodes()` are thin shims that delegate to `self.graph`.
+  - Pattern recognizers (#129) live in `pyan.recognizers`; the visitor calls them from `visit_Call` and `_bind_target`.
 
 - **`callgraph.py`** (~340 lines) — `CallGraph` class: graph state container (`nodes`, `defines_edges`, `uses_edges`, `module_to_filename`) plus the post-analysis query API (`filter`, `filter_by_depth`, `get_related_nodes`, `find_paths`, `format_paths`) and the canonical `get_node` get-or-create primitive. The visitor mutates a CallGraph in place during analysis; callers query it afterwards.
 
 - **`postprocessor.py`** (~270 lines) — Postprocessing pipeline that runs after the two visitor passes. `postprocess(visitor)` is the orchestrator (fixed pipeline order: `resolve_imports` → `contract_nonexistents` → `expand_unknowns` → `cull_inherited` → `collapse_inner`). Each stage is a free function taking the visitor: `resolve_imports` (remap IMPORTEDITEM → real targets), `contract_nonexistents` (unresolved → `*.name` wildcards), `expand_unknowns` (wildcards → real targets, import-aware per #88), `cull_inherited` (drop edges already represented by the inheritance chain), `collapse_inner` (fold lambdas / comprehensions back into their parent Node).
+
+- **`recognizers.py`** (~310 lines) — Pattern recognizers for the NAMESPACE_OBJECT overlay (#129). Three public entry points called from the visitor: `maybe_register_name_literal` (track string-literal name bindings — input for `setattr` recognition), `maybe_register_namespace_object` (recognize `LHS = constructor(**kwargs)` against the namespace-constructor registry, upgrade the LHS Node's flavor and populate its scope), `maybe_register_setattr_call` (recognize `setattr(obj, "name", value)` on a NAMESPACE_OBJECT target). All take the visitor as the first positional argument.
 
 - **`anutils.py`** (~560 lines) — Analyzer utilities:
   - `Scope` — Tracks names, bindings, and scope type (module/class/function/comprehension). Built from `symtable` analysis. Has `defs` dict mapping names to `Node` or `None`.

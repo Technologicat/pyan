@@ -42,10 +42,6 @@ Global IMPORTEDITEM remapping can leak function-level imports to siblings. Parti
 
 `VisualGraph.from_visitor` expects an implicit protocol (`nodes`, `uses_edges`, `defines_edges`). Mostly resolved by the `CallGraph` extraction — the visitor exposes those as properties on `self.graph`. Could now accept a `CallGraph` directly instead of the visitor; minor follow-up.
 
-## Analyzer module split
-
-`analyzer.py` is ~2650 lines. Postprocessing extracted to `pyan/postprocessor.py`; query API + state container extracted to `pyan/callgraph.py`. Remaining cut to consider: the recognizers added for #129 (`_maybe_register_namespace_object`, `_maybe_register_setattr_call`, friends) could go to a `recognizers` submodule.
-
 ## Type annotations for pyan's own code
 
 Add type annotations to pyan's modules. The analyzer is the largest target. Would improve IDE support and catch bugs.
