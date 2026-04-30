@@ -40,11 +40,11 @@ Global IMPORTEDITEM remapping can leak function-level imports to siblings. Parti
 
 ## Document the visitor-to-visgraph protocol
 
-`VisualGraph.from_visitor` expects an implicit protocol (`nodes`, `uses_edges`, `defines_edges`). Should be documented or formalized.
+`VisualGraph.from_visitor` expects an implicit protocol (`nodes`, `uses_edges`, `defines_edges`). Mostly resolved by the `CallGraph` extraction — the visitor exposes those as properties on `self.graph`. Could now accept a `CallGraph` directly instead of the visitor; minor follow-up.
 
 ## Analyzer module split
 
-`analyzer.py` is ~2900 lines. The postprocessing pipeline has already been extracted to `pyan/postprocessor.py`. Remaining cuts to consider: the public query API (`filter`, `filter_by_depth`, `get_related_nodes`, `find_paths`, `format_paths`) belongs in a `CallGraph` result type (would also formalize the `VisualGraph.from_visitor` protocol — see "Document the visitor-to-visgraph protocol"); the recognizers added for #129 (`_maybe_register_namespace_object`, `_maybe_register_setattr_call`, friends) could go to a `recognizers` submodule.
+`analyzer.py` is ~2650 lines. Postprocessing extracted to `pyan/postprocessor.py`; query API + state container extracted to `pyan/callgraph.py`. Remaining cut to consider: the recognizers added for #129 (`_maybe_register_namespace_object`, `_maybe_register_setattr_call`, friends) could go to a `recognizers` submodule.
 
 ## Type annotations for pyan's own code
 
