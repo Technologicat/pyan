@@ -11,6 +11,7 @@ import logging
 import symtable
 
 from .anutils import (
+    ANON_SCOPE_NAMES,
     NAMESPACE_CONSTRUCTORS,
     ExecuteInInnerScope,
     Scope,
@@ -25,10 +26,7 @@ from .anutils import (
     tail,
 )
 from .node import Flavor, Node
-
-# Anonymous scope type names — lambdas, comprehensions, generator expressions.
-# These get numbered per parent scope to isolate each instance's bindings.
-_ANON_SCOPE_NAMES = frozenset({"lambda", "listcomp", "setcomp", "dictcomp", "genexpr"})
+from .postprocessor import postprocess
 
 # PEP 695 (Python 3.12+) type-parameter scope type identifiers.
 # On 3.12, symtable.get_type() returns the raw string 'type parameter';
@@ -327,25 +325,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.logger.debug(f"Method resolution order (MRO) for all analyzed classes: {self.mro}")
 
     def postprocess(self):
-        """Finalize the analysis."""
-
-        # First resolve imports (remap IMPORTEDITEM nodes to their targets),
-        # then contract unresolved references to wildcards (*.name), then
-        # expand wildcards — but only to targets whose module is actually
-        # imported by the source (#88).
-        #
-        # Historical note: the original Pyan used contract-then-expand, which
-        # produced spurious edges because expansion was unconstrained. A later
-        # change switched to expand-then-contract to limit the blast radius.
-        # Now that expand_unknowns checks import relationships, we can safely
-        # return to contract-then-expand, which is the correct order: we need
-        # wildcards to exist before expansion can act on them.
-
-        self.resolve_imports()
-        self.contract_nonexistents()
-        self.expand_unknowns()
-        self.cull_inherited()
-        self.collapse_inner()
+        """Finalize the analysis. Pipeline lives in :mod:`pyan.postprocessor`."""
+        postprocess(self)
 
     ###########################################################################
     # visitor methods
@@ -354,71 +335,6 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     # Python docs:
     # https://docs.python.org/3/library/ast.html#abstract-grammar
-
-    def resolve_imports(self):
-        """
-        resolve relative imports and remap nodes
-        """
-        # first find all imports and map to themselves. we will then remap those that are currently pointing
-        # to duplicates or into the void
-        imports_to_resolve = {n for items in self.nodes.values() for n in items if n.flavor == Flavor.IMPORTEDITEM}
-        # map real definitions
-        import_mapping = {}
-        while len(imports_to_resolve) > 0:
-            from_node = imports_to_resolve.pop()
-            if from_node in import_mapping:
-                continue
-            to_uses = self.uses_edges.get(from_node, {from_node})
-            assert len(to_uses) == 1
-            to_node = to_uses.pop()  # resolve alias
-            # resolve namespace and get module
-            if to_node.namespace == "":
-                module_node = to_node
-            else:
-                assert from_node.name == to_node.name
-                module_node = self.get_node("", to_node.namespace)
-            module_uses = self.uses_edges.get(module_node)
-            if module_uses is not None:
-                # check if in module item exists and if yes, map to it
-                for candidate_to_node in module_uses:
-                    if candidate_to_node.name == from_node.name:
-                        to_node = candidate_to_node
-                        import_mapping[from_node] = to_node
-                        if to_node.flavor == Flavor.IMPORTEDITEM and from_node is not to_node:  # avoid self-recursion
-                            imports_to_resolve.add(to_node)
-                        break
-
-        # set previously undefined nodes to defined
-        # go through undefined attributes
-        attribute_import_mapping = {}
-        for nodes in self.nodes.values():
-            for node in nodes:
-                if not node.defined and node.flavor == Flavor.ATTRIBUTE:
-                    # try to resolve namespace and find imported item mapping
-                    for from_node, to_node in import_mapping.items():
-                        if (
-                            f"{from_node.namespace}.{from_node.name}" == node.namespace and
-                            from_node.flavor == Flavor.IMPORTEDITEM
-                        ):
-                            # use define edges as potential candidates
-                            for candidate_to_node in self.defines_edges.get(to_node, []):
-                                if candidate_to_node.name == node.name:
-                                    attribute_import_mapping[node] = candidate_to_node
-                                    break
-        import_mapping.update(attribute_import_mapping)
-
-        # remap nodes based on import mapping
-        self.nodes = {name: [import_mapping.get(n, n) for n in items] for name, items in self.nodes.items()}
-        self.uses_edges = {
-            import_mapping.get(from_node, from_node): {import_mapping.get(to_node, to_node) for to_node in to_nodes}
-            for from_node, to_nodes in self.uses_edges.items()
-            if len(to_nodes) > 0
-        }
-        self.defines_edges = {
-            import_mapping.get(from_node, from_node): {import_mapping.get(to_node, to_node) for to_node in to_nodes}
-            for from_node, to_nodes in self.defines_edges.items()
-            if len(to_nodes) > 0
-        }
 
     def filter(self, node: None | Node = None, namespace: str | None = None,
                max_iter: int = 1000, direction: str = "both"):
@@ -2419,7 +2335,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             anon_counts = {}  # number duplicate anonymous scope children
             for t in table.get_children():
                 child_name = t.get_name()
-                if child_name in _ANON_SCOPE_NAMES:
+                if child_name in ANON_SCOPE_NAMES:
                     idx = anon_counts.get(child_name, 0)
                     anon_counts[child_name] = idx + 1
                     child_sc = Scope(t)
@@ -2962,169 +2878,3 @@ class CallGraphVisitor(ast.NodeVisitor):
             wild_node = matching_wilds[0]
             self.logger.info(f"Use from {from_node} to {to_node} resolves {wild_node}; removing wildcard")
             self.remove_uses_edge(from_node, wild_node)
-
-    ###########################################################################
-    # Postprocessing
-
-    def contract_nonexistents(self):
-        """For all use edges to non-existent (i.e. not defined nodes) X.name, replace with edge to *.name."""
-
-        new_uses_edges = []
-        removed_uses_edges = []
-        for n in self.uses_edges:
-            for n2 in self.uses_edges[n]:
-                if n2.namespace is not None and not n2.defined:
-                    n3 = self.get_node(None, n2.name, n2.ast_node)
-                    n3.defined = False
-                    new_uses_edges.append((n, n3))
-                    removed_uses_edges.append((n, n2))
-                    self.logger.info(f"Contracting non-existent from {n} to {n2} as {n3}")
-
-        for from_node, to_node in new_uses_edges:
-            self.add_uses_edge(from_node, to_node)
-
-        for from_node, to_node in removed_uses_edges:
-            self.remove_uses_edge(from_node, to_node)
-
-    def _has_import_to(self, from_node, target_ns):
-        """Check whether `from_node`'s namespace (or any ancestor) imports a module
-        that is `target_ns` or a parent of it.
-
-        Walks up the namespace chain from `from_node`, checking
-        ``self.namespace_imports`` at each level. This means a module-level
-        import is visible to all children, while a function-level import is
-        only visible in that function.
-
-        Returns True if an import relationship exists, or if `from_node` and
-        the target are in the same module (intra-module references are always
-        allowed).
-
-        Examples::
-
-            # from_node = pkg.mod.func, target_ns = pkg.mod.MyClass
-            #   → True (same module pkg.mod)
-            #
-            # from_node = pkg.mod_a.func, target_ns = pkg.mod_b
-            #   → True only if pkg.mod_a (or func) imports pkg.mod_b
-            #
-            # from_node = pkg.mod.caller (has `from other import foo`),
-            # from_node = pkg.mod.non_caller (no import)
-            #   → caller: True; non_caller: False
-        """
-        # Intra-module: always allowed.
-        # Find from_node's module by matching against module_to_filename.
-        from_ns = from_node.get_name()
-        from_module = from_ns
-        for mod in self.module_to_filename:
-            if from_ns == mod or from_ns.startswith(mod + "."):
-                from_module = mod
-                break
-        if target_ns == from_module or target_ns.startswith(from_module + "."):
-            return True
-
-        # Build the set of ancestor namespaces of target_ns.
-        # For "foo.bar.baz", this is {"foo", "foo.bar", "foo.bar.baz"}.
-        target_parts = target_ns.split(".")
-        target_ancestors = {".".join(target_parts[:i + 1]) for i in range(len(target_parts))}
-
-        # Walk up from from_node's namespace.
-        ns = from_node.get_name()
-        while True:
-            imports = self.namespace_imports.get(ns, set())
-            if imports & target_ancestors:
-                return True
-            if "." not in ns:
-                break
-            ns = ns.rsplit(".", 1)[0]
-
-        # Also check the module-level namespace (which may be the module name itself,
-        # with no dots if it's a top-level module).
-        imports = self.namespace_imports.get(ns, set())
-        return bool(imports & target_ancestors)
-
-    def expand_unknowns(self):
-        """For each unknown node *.name, replace all its incoming edges with edges to X.name for all possible Xs.
-
-        Only expands to targets whose module is imported by (or is the same as)
-        the source node's module, to avoid spurious cross-module edges (#88).
-
-        Also mark all unknown nodes as not defined (so that they won't be visualized)."""
-
-        new_defines_edges = []
-        for n in self.defines_edges:
-            for n2 in self.defines_edges[n]:
-                if n2.namespace is None:
-                    for n3 in self.nodes[n2.name]:
-                        if n3.namespace is not None and n3.defined and self._has_import_to(n, n3.namespace):
-                            new_defines_edges.append((n, n3))
-
-        for from_node, to_node in new_defines_edges:
-            self.add_defines_edge(from_node, to_node)
-            self.logger.info(f"Expanding unknowns: new defines edge from {from_node} to {to_node}")
-
-        new_uses_edges = []
-        for n in self.uses_edges:
-            for n2 in self.uses_edges[n]:
-                if n2.namespace is None:
-                    for n3 in self.nodes[n2.name]:
-                        if n3.namespace is not None and n3.defined and self._has_import_to(n, n3.namespace):
-                            new_uses_edges.append((n, n3))
-
-        for from_node, to_node in new_uses_edges:
-            self.add_uses_edge(from_node, to_node)
-            self.logger.info(f"Expanding unknowns: new uses edge from {from_node} to {to_node}")
-
-        for name in self.nodes:
-            for n in self.nodes[name]:
-                if n.namespace is None:
-                    n.defined = False
-
-    def cull_inherited(self):
-        """
-        For each use edge from W to X.name, if it also has an edge to W to Y.name where
-        Y is used by X, then remove the first edge.
-        """
-
-        removed_uses_edges = []
-        for n in self.uses_edges:
-            for n2 in self.uses_edges[n]:
-                inherited = False
-                for n3 in self.uses_edges[n]:
-                    if (
-                        n3.name == n2.name and
-                        n2.namespace is not None and
-                        n3.namespace is not None and
-                        n3.namespace != n2.namespace
-                    ):
-                        pn2 = self.get_parent_node(n2)
-                        pn3 = self.get_parent_node(n3)
-                        # if pn3 in self.uses_edges and pn2 in self.uses_edges[pn3]:
-                        # remove the second edge W to Y.name (TODO: add an option to choose this)
-                        if pn2 in self.uses_edges and pn3 in self.uses_edges[pn2]:  # remove the first edge W to X.name
-                            inherited = True
-
-                if inherited and n in self.uses_edges:
-                    removed_uses_edges.append((n, n2))
-                    self.logger.info(f"Removing inherited edge from {n} to {n2}")
-
-        for from_node, to_node in removed_uses_edges:
-            self.remove_uses_edge(from_node, to_node)
-
-    def collapse_inner(self):
-        """Combine lambda and comprehension Nodes with their parent Nodes to reduce visual noise.
-        Also mark those original nodes as undefined, so that they won't be visualized."""
-
-        # Lambdas and comprehensions do not define any names in the enclosing
-        # scope, so we only need to treat the uses edges.
-
-        # BUG: resolve relative imports causes (RuntimeError: dictionary changed size during iteration)
-        # temporary solution is adding list to force a copy of 'self.nodes'
-        for name in list(self.nodes):
-            if name.partition(".")[0] in _ANON_SCOPE_NAMES:
-                for n in self.nodes[name]:
-                    pn = self.get_parent_node(n)
-                    if n in self.uses_edges:
-                        for n2 in self.uses_edges[n]:  # outgoing uses edges
-                            self.logger.info(f"Collapsing inner from {n} to {pn}, uses {n2}")
-                            self.add_uses_edge(pn, n2)
-                    n.defined = False

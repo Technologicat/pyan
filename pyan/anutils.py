@@ -41,7 +41,16 @@ NAMESPACE_CONSTRUCTORS = frozenset({
     "argparse.Namespace",
 })
 
+# Name prefixes used for the synthetic Nodes that represent anonymous
+# scopes (lambdas and comprehensions). The analyzer tags each one with a
+# ``.<kind>.<index>`` suffix; the prefix alone identifies the kind.
+# Used by analyze_scopes to decide what counts as an anonymous child
+# scope, and by the postprocess collapse_inner pass to fold those Nodes
+# back into their parent.
+ANON_SCOPE_NAMES = frozenset({"lambda", "listcomp", "setcomp", "dictcomp", "genexpr"})
+
 __all__ = [
+    "ANON_SCOPE_NAMES",
     "ExecuteInInnerScope",
     "NAMESPACE_CONSTRUCTORS",
     "Scope",

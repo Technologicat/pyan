@@ -44,11 +44,11 @@ Global IMPORTEDITEM remapping can leak function-level imports to siblings. Parti
 
 ## Analyzer module split
 
-`analyzer.py` is ~3100 lines. Consider splitting into submodules (e.g. visitors, postprocessing, scope handling, NAMESPACE_OBJECT recognition) without changing the public API. Possible cuts: the postprocessing pipeline (`resolve_imports`, `contract_nonexistents`, `expand_unknowns`, `cull_inherited`, `collapse_inner`) is largely standalone and could move to its own module; the recognizers added for #129 (`_maybe_register_namespace_object`, `_maybe_register_setattr_call`, friends) could go to a `recognizers` submodule.
+`analyzer.py` is ~2900 lines. The postprocessing pipeline has already been extracted to `pyan/postprocessor.py`. Remaining cuts to consider: the public query API (`filter`, `filter_by_depth`, `get_related_nodes`, `find_paths`, `format_paths`) belongs in a `CallGraph` result type (would also formalize the `VisualGraph.from_visitor` protocol — see "Document the visitor-to-visgraph protocol"); the recognizers added for #129 (`_maybe_register_namespace_object`, `_maybe_register_setattr_call`, friends) could go to a `recognizers` submodule.
 
 ## Type annotations for pyan's own code
 
-Add type annotations to pyan's modules. The analyzer is the largest target (~2200 lines). Would improve IDE support and catch bugs.
+Add type annotations to pyan's modules. The analyzer is the largest target. Would improve IDE support and catch bugs.
 
 ## NAMESPACE_OBJECT in a same-named module renders confusingly
 

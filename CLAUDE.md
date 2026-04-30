@@ -63,14 +63,16 @@ source files → CallGraphVisitor (analyzer.py) → Node graph → VisualGraph (
 
 ### Modules
 
-- **`analyzer.py`** (~2200 lines) — The core: `CallGraphVisitor`, an `ast.NodeVisitor` subclass. Two-pass analysis:
+- **`analyzer.py`** (~2900 lines) — The core: `CallGraphVisitor`, an `ast.NodeVisitor` subclass. Two-pass analysis:
   - Pass 1: visit all files, collect definitions, uses, scopes, class bases.
   - Between passes: resolve base classes → compute MRO.
   - Pass 2: visit all files again, resolving forward references using pass-1 knowledge.
-  - Postprocess: resolve imports, contract nonexistent refs to wildcards, expand wildcards (import-aware), cull inherited edges, collapse inner scopes.
+  - Postprocess: thin orchestrator method delegating to `pyan.postprocessor.postprocess` (see below).
   - Querying: `filter()` (by function/namespace, with directional traversal), `filter_by_depth()` (collapse to module/class level), `find_paths()` / `format_paths()` (call path listing).
 
-- **`anutils.py`** (~330 lines) — Analyzer utilities:
+- **`postprocessor.py`** (~270 lines) — Postprocessing pipeline that runs after the two visitor passes. `postprocess(visitor)` is the orchestrator (fixed pipeline order: `resolve_imports` → `contract_nonexistents` → `expand_unknowns` → `cull_inherited` → `collapse_inner`). Each stage is a free function taking the visitor: `resolve_imports` (remap IMPORTEDITEM → real targets), `contract_nonexistents` (unresolved → `*.name` wildcards), `expand_unknowns` (wildcards → real targets, import-aware per #88), `cull_inherited` (drop edges already represented by the inheritance chain), `collapse_inner` (fold lambdas / comprehensions back into their parent Node).
+
+- **`anutils.py`** (~560 lines) — Analyzer utilities:
   - `Scope` — Tracks names, bindings, and scope type (module/class/function/comprehension). Built from `symtable` analysis. Has `defs` dict mapping names to `Node` or `None`.
   - `ExecuteInInnerScope` — Context manager for entering/leaving scopes during analysis.
   - `get_module_name`, `format_alias`, `get_ast_node_name`, `canonize_exprs` — AST helpers.
