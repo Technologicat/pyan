@@ -42,10 +42,6 @@ Global IMPORTEDITEM remapping can leak function-level imports to siblings. Parti
 
 `VisualGraph.from_visitor` expects an implicit protocol (`nodes`, `uses_edges`, `defines_edges`). Should be documented or formalized.
 
-## Test suite organization
-
-Two related concerns: (1) tests are spread across few modules (`test_features.py`, `test_regressions.py`, `test_modvis.py`, `test_writers.py`, `test_analyzer.py`, `test_sphinx.py`, `test_coverage.py`) — consider reorganizing by concern (separate CLI tests from unit tests, group by module under test). (2) `test_features.py` specifically is now over 1000 lines and covers many distinct features — splitting into coherent subfeature files (e.g. `test_features_decorators.py`, `test_features_inheritance.py`, `test_features_namespace_objects.py`) would help readability without changing what's tested.
-
 ## Analyzer module split
 
 `analyzer.py` is ~3100 lines. Consider splitting into submodules (e.g. visitors, postprocessing, scope handling, NAMESPACE_OBJECT recognition) without changing the public API. Possible cuts: the postprocessing pipeline (`resolve_imports`, `contract_nonexistents`, `expand_unknowns`, `cull_inherited`, `collapse_inner`) is largely standalone and could move to its own module; the recognizers added for #129 (`_maybe_register_namespace_object`, `_maybe_register_setattr_call`, friends) could go to a `recognizers` submodule.

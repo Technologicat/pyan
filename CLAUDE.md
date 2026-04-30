@@ -32,7 +32,13 @@ Entry point: `pyan3` CLI.
 pytest                   # runs all tests (pytest.ini options are in `[tool.pytest.ini_options]`)
 ```
 
-Tests in `tests/`: `test_features.py` (syntax coverage), `test_modvis.py` (module graph), `test_writers.py` (output formats), `test_analyzer.py` (low-level), `test_regressions.py`, `test_sphinx.py`, `test_coverage.py` (coverage gap tests). Version-specific tests in `tests/test_code_312/` (3.12+ syntax).
+Tests in `tests/` are organized by concern:
+
+- **Syntax/feature coverage**, one file per cluster: `test_classes.py` (decorators, inheritance, super, class constants), `test_functions.py` (lambdas, closures, defaults, signature annotations), `test_iteration.py` (for, async-for, comprehensions, iter protocol), `test_async_context.py`, `test_match.py`, `test_assignments.py` (walrus, chained assign, star unpacking, AnnAssign), `test_imports.py`, `test_type_params.py` (PEP 695: type aliases + generics), `test_misc.py` (del, nested attr, builtins).
+- **Feature-specific concerns**: `test_namespace_objects.py` (NAME-Node-ification + NAMESPACE_OBJECT overlay, #129), `test_query_api.py` (direction / find_paths / filter_by_depth).
+- **Other**: `test_modvis.py` (module graph), `test_writers.py` (output formats), `test_analyzer.py` (low-level helpers), `test_regressions.py`, `test_sphinx.py`, `test_coverage.py` (coverage gap tests), `test_exclude.py`, `test_from_sources.py`.
+
+Version-specific source fixtures live in `tests/test_code_312/` (3.12+ syntax).
 
 ### CI
 
