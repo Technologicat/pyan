@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.7.0 (in progress)
+
+*No user-visible changes yet.*
+
+
+---
+
 ## 2.6.0 (30 April 2026) — *Cadastre*
 
 ### New features
