@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.6.0 (in progress)
+## 2.6.0 (in progress) — *Cadastre*
 
 ### New features
 
@@ -15,6 +15,8 @@
 
 ### Internal
 
+- **`analyzer.py` decomposed.** Graph state and post-analysis query API extracted to `pyan.callgraph`; postprocessing pipeline to `pyan.postprocessor`; NAMESPACE_OBJECT pattern recognizers to `pyan.recognizers`. Public API (`create_callgraph`, `create_modulegraph`, `main`) unchanged.
+- **Test suite reorganised.** `test_features.py` split into per-concern files (`test_classes.py`, `test_functions.py`, `test_iteration.py`, `test_async_context.py`, `test_match.py`, `test_assignments.py`, `test_imports.py`, `test_type_params.py`, `test_misc.py`).
 - **Flavor rename:** `Flavor.NAMESPACE` (synthetic structural marker for module/class/function scope bookkeeping) is now `Flavor.SCOPE`. The new `Flavor.NAMESPACE_OBJECT` represents a runtime namespace value (an `env` instance, a `SimpleNamespace` instance) — a `NAME` with a populated scope listing its statically-visible attributes. The Node represents the scope; the `Scope` class implements one — same concept at two layers.
 
 
