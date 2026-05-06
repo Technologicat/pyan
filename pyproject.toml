@@ -102,6 +102,16 @@ log_format = "%(asctime)s %(levelname)s %(message)s"
 log_date_format = "%Y-%m-%d %H:%M:%S"
 cache_dir = ".cache"
 
+[tool.coverage.run]
+# Coverage signal is about which lines of *production code* run.
+# pytest already reports pass/fail/error per test, so coverage of
+# the test files themselves would just add rows to the report
+# without insight. Excluded via the omit glob below.
+source = ["pyan"]
+omit = [
+    "*/tests/*",
+]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"

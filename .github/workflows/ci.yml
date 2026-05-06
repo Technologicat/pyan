@@ -36,14 +36,14 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install ruff pytest pytest-cov sphinx docutils
-        pip install -e .
+        pip install pdm
+        pdm install
     - name: Lint with ruff
       run: |
-        ruff check .
+        pdm run ruff check .
     - name: Test with pytest
       run: |
-        pytest tests/ -v
+        pdm run pytest tests/ -v
 
   build:
     needs: test
