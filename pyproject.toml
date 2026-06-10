@@ -8,7 +8,8 @@ dynamic = ["version"]
 description = "Generate approximate call graphs for Python programs"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
-license = {text = "GPL-2.0-or-later"}
+license = "GPL-2.0-or-later"
+license-files = ["LICENSE.md"]
 authors = [
     {name = "Juha Jeronen", email = "juha.m.jeronen@gmail.com"}
 ]
@@ -17,7 +18,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
