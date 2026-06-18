@@ -485,3 +485,27 @@ def test_issue127_cross_class_reference_still_emits():
     v = _issue127_visitor("within_scope.py")
     uses = get_in_dict(v.uses_edges, "within_scope.Sibling.reads_holder")
     get_node(uses, "within_scope.Holder")
+
+
+# --- Issue #134: Wildcard expansion creates false uses edges to unrelated functions in the same module ---
+
+
+WILDCARD_DIR = os.path.join(TESTS_DIR, "test_code/issue_wildcard")
+
+def _wildcard_visitor():
+    filenames = [os.path.join(WILDCARD_DIR, "test_module.py")]
+    return CallGraphVisitor(filenames, logger=logging.getLogger())
+
+def test_wildcard_expansion_does_not_create_false_edges():
+    """Regression test: wildcard should not expand to unrelated functions.
+
+    This tests the fix for the ``expand_unknowns`` over-expansion bug, where
+    a wildcard created by an attribute access (e.g. ``app.state.cache``) was
+    incorrectly expanded to a function with the same name, even though the
+    name wasn't used in that scope.
+    """
+    v = _wildcard_visitor()
+    func_a_uses = get_in_dict(v.uses_edges, "test_module.func_a")
+    targets = {n.get_name() for n in func_a_uses}
+    # The wildcard *.cache should NOT expand to the function cache().
+    assert "test_module.cache" not in targets

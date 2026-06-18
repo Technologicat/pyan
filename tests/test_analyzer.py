@@ -62,3 +62,72 @@ def test_resolve_package_with_known_root():
     # Root directory itself is not part of the module name (like sys.path).
     defines = get_in_dict(callgraph.defines_edges, "test_code.subpackage2.submodule_hidden1")
     get_node(defines, "test_code.subpackage2.submodule_hidden1.test_func1")
+
+
+def test_expand_unknowns_defines_edge(tmp_path):
+    """Unit test: expand_unknowns expands wildcard in defines edge when name is in scope."""
+    from pyan.analyzer import CallGraphVisitor
+    from pyan.postprocessor import expand_unknowns
+    from pyan.node import Flavor, Node
+    from pyan.anutils import Scope
+
+    visitor = CallGraphVisitor([], root="")
+    mod_node = Node("", "mymod", None, "mymod.py", Flavor.MODULE)
+    mod_node.defined = True
+    visitor.nodes["mymod"] = [mod_node]
+
+    wild_node = Node(None, "SomeName", None, None, Flavor.UNKNOWN)
+    wild_node.defined = False
+    visitor.nodes["SomeName"] = [wild_node]
+
+    real_node = Node("mymod", "SomeName", None, "mymod.py", Flavor.CLASS)
+    real_node.defined = True
+    visitor.nodes["SomeName"].append(real_node)
+
+    visitor.defines_edges = {mod_node: {wild_node}}
+
+    # Name is in scope → expansion should happen
+    sc = Scope.from_names("mymod", {"SomeName"})
+    visitor.scopes = {"mymod": sc}
+
+    expand_unknowns(visitor)
+
+    assert mod_node in visitor.defines_edges
+    assert real_node in visitor.defines_edges[mod_node]
+    assert not wild_node.defined
+    # The wildcard edge remains (expand_unknowns doesn't remove it)
+    assert wild_node in visitor.defines_edges[mod_node]
+
+
+def test_expand_unknowns_defines_edge_skip():
+    """Unit test: expand_unknowns skips expansion if name not in scope."""
+    from pyan.analyzer import CallGraphVisitor
+    from pyan.postprocessor import expand_unknowns
+    from pyan.node import Flavor, Node
+    from pyan.anutils import Scope
+
+    visitor = CallGraphVisitor([], root="")
+    mod_node = Node("", "mymod", None, "mymod.py", Flavor.MODULE)
+    mod_node.defined = True
+    visitor.nodes["mymod"] = [mod_node]
+
+    wild_node = Node(None, "SomeName", None, None, Flavor.UNKNOWN)
+    wild_node.defined = False
+    visitor.nodes["SomeName"] = [wild_node]
+
+    real_node = Node("mymod", "SomeName", None, "mymod.py", Flavor.CLASS)
+    real_node.defined = True
+    visitor.nodes["SomeName"].append(real_node)
+
+    visitor.defines_edges = {mod_node: {wild_node}}
+
+    # Name is NOT in scope → expansion should be skipped
+    sc = Scope.from_names("mymod", {"OtherName"})
+    visitor.scopes = {"mymod": sc}
+
+    expand_unknowns(visitor)
+
+    assert mod_node in visitor.defines_edges
+    assert real_node not in visitor.defines_edges[mod_node]
+    assert wild_node in visitor.defines_edges[mod_node]
+    assert not wild_node.defined

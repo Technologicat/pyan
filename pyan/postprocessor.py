@@ -199,8 +199,13 @@ def expand_unknowns(visitor):
         for n2 in visitor.defines_edges[n]:
             if n2.namespace is None:
                 for n3 in visitor.nodes[n2.name]:
-                    if n3.namespace is not None and n3.defined and _has_import_to(visitor, n, n3.namespace):
-                        new_defines_edges.append((n, n3))
+                    if n3.namespace is not None and n3.defined:
+                        # Only expand if the name is actually used in the source scope
+                        src_scope = visitor.scopes.get(n.get_name())
+                        if src_scope and n2.name not in src_scope.defs:
+                            continue
+                        if _has_import_to(visitor, n, n3.namespace):
+                            new_defines_edges.append((n, n3))
 
     for from_node, to_node in new_defines_edges:
         visitor.add_defines_edge(from_node, to_node)
@@ -211,8 +216,13 @@ def expand_unknowns(visitor):
         for n2 in visitor.uses_edges[n]:
             if n2.namespace is None:
                 for n3 in visitor.nodes[n2.name]:
-                    if n3.namespace is not None and n3.defined and _has_import_to(visitor, n, n3.namespace):
-                        new_uses_edges.append((n, n3))
+                    if n3.namespace is not None and n3.defined:
+                        # Only expand if the name is actually used in the source scope
+                        src_scope = visitor.scopes.get(n.get_name())
+                        if src_scope and n2.name not in src_scope.defs:
+                            continue
+                        if _has_import_to(visitor, n, n3.namespace):
+                            new_uses_edges.append((n, n3))
 
     for from_node, to_node in new_uses_edges:
         visitor.add_uses_edge(from_node, to_node)
