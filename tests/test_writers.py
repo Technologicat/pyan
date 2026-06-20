@@ -21,7 +21,7 @@ has_dot = shutil.which("dot") is not None
 def graph():
     """Build a VisualGraph from the standard test_code fixtures."""
     filenames = glob(os.path.join(os.path.dirname(__file__), "test_code/**/*.py"), recursive=True)
-    visitor = CallGraphVisitor(filenames, logger=logging.getLogger())
+    visitor = CallGraphVisitor(filenames, root=os.path.dirname(__file__), logger=logging.getLogger())
     options = {
         "draw_defines": True,
         "draw_uses": True,

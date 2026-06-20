@@ -20,7 +20,7 @@ PREFIX = "test_code.features"
 @pytest.fixture
 def v():
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
-    return CallGraphVisitor(filenames, logger=logging.getLogger())
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
 
 
 # --- For-loop call ---

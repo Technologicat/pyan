@@ -19,7 +19,7 @@ PREFIX = "test_code.features"
 @pytest.fixture
 def v():
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
-    return CallGraphVisitor(filenames, logger=logging.getLogger())
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
 
 
 # --- Decorators ---
@@ -88,6 +88,6 @@ def test_class_constant_creates_uses_edge_to_class(v):
 def test_class_constant_with_enum():
     """Enum member access should create a uses edge to the Enum class."""
     filenames = [os.path.join(TESTS_DIR, "test_code/enum_example.py")]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
     uses = get_in_dict(v.uses_edges, "test_code.enum_example.use_color")
     get_node(uses, "test_code.enum_example.Color")

@@ -21,7 +21,7 @@ IMPORTS_PREFIX = "test_code.imports"
 @pytest.fixture
 def v_imports():
     filenames = glob(os.path.join(IMPORTS_DIR, "**/*.py"), recursive=True)
-    return CallGraphVisitor(filenames, logger=logging.getLogger())
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
 
 
 def test_chained_import_resolution(v_imports):

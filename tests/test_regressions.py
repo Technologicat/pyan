@@ -24,7 +24,7 @@ def test_standalone_file_bare_module_name():
 def test_issue2_annotated_assignment():
     """Issue #2: `a: int = 3` crashed visit_AnnAssign."""
     filenames = [os.path.join(TESTS_DIR, "test_code/issue2/pyan_err.py")]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=os.path.join(TESTS_DIR, "test_code/issue2"), logger=logging.getLogger())
 
     # Module-level uses: `print(a + b)` and `int` from the annotation.
     uses = get_in_dict(v.uses_edges, "pyan_err")
@@ -34,7 +34,7 @@ def test_issue2_annotated_assignment():
 def test_issue3_nested_comprehensions():
     """Issue #3: nested list/dict/generator comprehensions."""
     filenames = [os.path.join(TESTS_DIR, "test_code/issue3/testi.py")]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=os.path.join(TESTS_DIR, "test_code/issue3"), logger=logging.getLogger())
 
     # All three functions are defined under the module.
     defines = get_in_dict(v.defines_edges, "testi")
@@ -88,7 +88,7 @@ def test_issue88_no_import_no_edge():
     """Issue #88: calling myfunc() without importing it should NOT create
     a cross-module edge to defines_myfunc.myfunc."""
     filenames = [os.path.join(ISSUE88_DIR, "no_import.py"), ISSUE88_DEFINES]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=ISSUE88_DIR, logger=logging.getLogger())
 
     all_targets = {n2.get_name() for n1 in v.uses_edges for n2 in v.uses_edges[n1]}
     assert "defines_myfunc.myfunc" not in all_targets
@@ -97,7 +97,7 @@ def test_issue88_no_import_no_edge():
 def test_issue88_with_import_has_edge():
     """Issue #88: calling myfunc() after importing it SHOULD create the edge."""
     filenames = [os.path.join(ISSUE88_DIR, "has_import.py"), ISSUE88_DEFINES]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=ISSUE88_DIR, logger=logging.getLogger())
 
     uses = get_in_dict(v.uses_edges, "has_import")
     get_node(uses, "defines_myfunc.myfunc")
@@ -107,7 +107,7 @@ def test_issue88_function_level_import():
     """Issue #88: a function-level import should create the edge for caller()
     but NOT for non_caller()."""
     filenames = [os.path.join(ISSUE88_DIR, "func_import.py"), ISSUE88_DEFINES]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=ISSUE88_DIR, logger=logging.getLogger())
 
     # caller() imports myfunc and calls it — should have the edge.
     caller_uses = get_in_dict(v.uses_edges, "func_import.caller")
@@ -124,7 +124,7 @@ def test_issue88_function_level_import():
 def test_issue88_module_level_import_visible_to_all():
     """A module-level import should be visible to all functions in that module."""
     filenames = [os.path.join(ISSUE88_DIR, "module_import.py"), ISSUE88_DEFINES]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=ISSUE88_DIR, logger=logging.getLogger())
 
     a_uses = get_in_dict(v.uses_edges, "module_import.caller_a")
     get_node(a_uses, "defines_myfunc.myfunc")
@@ -150,7 +150,7 @@ def test_issue117_namespace_package_edge():
         os.path.join(ISSUE117_DIR, "dir2", "file2.py"),
         os.path.join(ISSUE117_DIR, "dir2", "file3.py"),
     ]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=ISSUE117_DIR, logger=logging.getLogger())
 
     # func1 uses func2
     func1_uses = get_in_dict(v.uses_edges, "dir1.file1.func1")
@@ -233,7 +233,7 @@ ISSUE125_FILE = os.path.join(TESTS_DIR, "test_code/issue125/fastapi_style.py")
 def test_issue125_decorator_args_attributed_to_function():
     """Names inside a decorator's call arguments should appear as uses of the
     decorated function, not only of the enclosing module."""
-    v = CallGraphVisitor([ISSUE125_FILE], logger=logging.getLogger())
+    v = CallGraphVisitor([ISSUE125_FILE], root=os.path.dirname(ISSUE125_FILE), logger=logging.getLogger())
 
     secure_uses = get_in_dict(v.uses_edges, "fastapi_style.secure_route")
     # From the decorator call ``@route("/secure", dependencies=[depends(Guard())])``.
@@ -246,7 +246,7 @@ def test_issue125_decorator_args_attributed_to_function():
 def test_issue125_bare_decorator_without_callable_args():
     """A decorator with no callable arguments should still attribute the
     decorator name to the function, but nothing spurious."""
-    v = CallGraphVisitor([ISSUE125_FILE], logger=logging.getLogger())
+    v = CallGraphVisitor([ISSUE125_FILE], root=os.path.dirname(ISSUE125_FILE), logger=logging.getLogger())
 
     open_uses = get_in_dict(v.uses_edges, "fastapi_style.open_route")
     get_node(open_uses, "fastapi_style.route")
@@ -258,7 +258,7 @@ def test_issue125_bare_decorator_without_callable_args():
 def test_issue125_mixed_decorator_and_default():
     """When a name appears in both a decorator argument and a default value,
     the function should still have exactly one edge to it (edges deduplicate)."""
-    v = CallGraphVisitor([ISSUE125_FILE], logger=logging.getLogger())
+    v = CallGraphVisitor([ISSUE125_FILE], root=os.path.dirname(ISSUE125_FILE), logger=logging.getLogger())
 
     mixed_uses = get_in_dict(v.uses_edges, "fastapi_style.mixed_route")
     get_node(mixed_uses, "fastapi_style.depends")
@@ -268,7 +268,7 @@ def test_issue125_mixed_decorator_and_default():
 def test_issue125_class_decorator_bare():
     """Class decorators were previously ignored entirely. The decorator name
     should now appear as a use of the decorated class."""
-    v = CallGraphVisitor([ISSUE125_FILE], logger=logging.getLogger())
+    v = CallGraphVisitor([ISSUE125_FILE], root=os.path.dirname(ISSUE125_FILE), logger=logging.getLogger())
 
     api_uses = get_in_dict(v.uses_edges, "fastapi_style.ApiHandler")
     get_node(api_uses, "fastapi_style.route")
@@ -277,7 +277,7 @@ def test_issue125_class_decorator_bare():
 def test_issue125_class_decorator_with_callable_args():
     """Names inside a class decorator's arguments should be attributed to the
     decorated class, mirroring the function-decorator behavior."""
-    v = CallGraphVisitor([ISSUE125_FILE], logger=logging.getLogger())
+    v = CallGraphVisitor([ISSUE125_FILE], root=os.path.dirname(ISSUE125_FILE), logger=logging.getLogger())
 
     secure_uses = get_in_dict(v.uses_edges, "fastapi_style.SecureApiHandler")
     get_node(secure_uses, "fastapi_style.route")
@@ -404,7 +404,7 @@ ISSUE127_DIR = os.path.join(TESTS_DIR, "test_code/issue127")
 
 def _issue127_visitor(*basenames):
     filenames = [os.path.join(ISSUE127_DIR, b) for b in basenames]
-    return CallGraphVisitor(filenames, logger=logging.getLogger())
+    return CallGraphVisitor(filenames, root=ISSUE127_DIR, logger=logging.getLogger())
 
 
 def test_issue127_unresolved_attr_read_emits_edge_to_binding():

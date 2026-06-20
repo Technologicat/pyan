@@ -28,7 +28,7 @@ TESTS_DIR = os.path.dirname(__file__)
 def v_multi():
     """Analyzer over the full test_code package (cross-module calls)."""
     filenames = glob(os.path.join(TESTS_DIR, "test_code/**/*.py"), recursive=True)
-    return CallGraphVisitor(filenames, logger=logging.getLogger())
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
 
 
 # --- Directional filtering (#95) ---
@@ -91,7 +91,7 @@ def test_find_paths_direct(v_multi):
 def test_find_paths_multi_hop():
     """find_paths should find a two-hop path: Derived.baz -> Base.bar -> Base.foo."""
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
     from_node = v.get_node("test_code.features.Derived", "baz")
     to_node = v.get_node("test_code.features.Base", "foo")
     paths = v.find_paths(from_node, to_node)
@@ -134,7 +134,7 @@ def test_format_paths(v_multi):
 def test_depth_class_level_collapses_methods():
     """depth=1 should collapse methods into their class."""
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
     v.filter_by_depth(1)
 
     # Methods should be gone
@@ -149,7 +149,7 @@ def test_depth_class_level_collapses_methods():
 def test_depth_class_level_collapses_edges():
     """depth=1 should collapse method→method edges to class→class edges."""
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
     v.filter_by_depth(1)
 
     # Derived.baz → Base.bar should become Derived → Base
@@ -171,7 +171,7 @@ def test_depth_class_level_collapses_edges():
 def test_depth_module_level():
     """depth=0 should show only modules, collapsing everything deeper."""
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
     v.filter_by_depth(0)
 
     # Only the module itself should remain as a defined node
@@ -211,7 +211,7 @@ def test_depth_dotted_module_uses_edges():
         os.path.join(TESTS_DIR, "test_code/depth_pkg/mod_a.py"),
         os.path.join(TESTS_DIR, "test_code/depth_pkg/mod_b.py"),
     ]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
 
     # Depth 1: methods collapse into classes; classes and modules remain
     v.filter_by_depth(1)
@@ -234,7 +234,7 @@ def test_depth_dotted_module_depth_zero():
         os.path.join(TESTS_DIR, "test_code/depth_pkg/mod_a.py"),
         os.path.join(TESTS_DIR, "test_code/depth_pkg/mod_b.py"),
     ]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
     v.filter_by_depth(0)
 
     names = {n.get_name() for nodes in v.nodes.values() for n in nodes if n.defined}
@@ -251,7 +251,7 @@ def test_depth_dotted_module_depth_zero():
 def test_depth_no_self_edges():
     """Collapsing should not create self-edges (e.g. Base.bar → Base.foo → Base)."""
     filenames = [os.path.join(TESTS_DIR, "test_code/features.py")]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
     v.filter_by_depth(1)
 
     for n, edges in v.uses_edges.items():

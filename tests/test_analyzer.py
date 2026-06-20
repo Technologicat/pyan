@@ -10,7 +10,7 @@ from pyan.analyzer import CallGraphVisitor
 @pytest.fixture
 def callgraph():
     filenames = glob(os.path.join(os.path.dirname(__file__), "test_code/**/*.py"), recursive=True)
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=os.path.dirname(__file__), logger=logging.getLogger())
     return v
 
 

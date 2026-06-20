@@ -65,6 +65,7 @@ class TestCLIExclude:
         # (submodule1.py and submodule2.py remain).
         callgraph_main([
             os.path.join(TEST_CODE_DIR, "*.py"),
+            "--root", TESTS_DIR,
             "--exclude", "features.py",
             "--exclude", "__init__.py",
             "--text",
@@ -77,6 +78,7 @@ class TestCLIExclude:
         """--module-level --exclude filters files before analysis."""
         modvis_main([
             os.path.join(TEST_CODE_DIR, "*.py"),
+            "--root", TESTS_DIR,
             "--exclude", "features.py",
             "--text",
         ])
@@ -93,6 +95,7 @@ class TestAPIExclude:
     def test_create_callgraph_exclude(self):
         result = create_callgraph(
             filenames=os.path.join(TEST_CODE_DIR, "*.py"),
+            root=TESTS_DIR,
             exclude=["features.py", "__init__.py"],
             format="text",
         )
@@ -101,6 +104,7 @@ class TestAPIExclude:
     def test_create_modulegraph_exclude(self):
         result = create_modulegraph(
             filenames=os.path.join(TEST_CODE_DIR, "*.py"),
+            root=TESTS_DIR,
             exclude=["features.py"],
             format="text",
         )

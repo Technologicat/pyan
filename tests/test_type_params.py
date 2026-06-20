@@ -24,7 +24,7 @@ PREFIX_312 = "test_code_312.type_aliases"
 @pytest.fixture
 def v312():
     filenames = [os.path.join(TESTS_DIR, "test_code_312/type_aliases.py")]
-    return CallGraphVisitor(filenames, logger=logging.getLogger())
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="type statement requires Python 3.12+")
@@ -63,7 +63,7 @@ PREFIX_GEN = "test_code_312.generics"
 @pytest.fixture
 def v_generics():
     filenames = [os.path.join(TESTS_DIR, "test_code_312/generics.py")]
-    return CallGraphVisitor(filenames, logger=logging.getLogger())
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="PEP 695 requires Python 3.12+")

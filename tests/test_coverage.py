@@ -144,28 +144,28 @@ class TestPyanCLI:
         assert exc_info.value.code != 0
 
     def test_dot_output(self, capsys):
-        pyan_main([FIXTURE, "--dot"])
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--dot"])
         captured = capsys.readouterr()
         assert "digraph G" in captured.out
 
     def test_tgf_output(self, capsys):
-        pyan_main([FIXTURE, "--tgf"])
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--tgf"])
         captured = capsys.readouterr()
         assert "#" in captured.out
 
     def test_yed_output(self, capsys):
-        pyan_main([FIXTURE, "--yed"])
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--yed"])
         captured = capsys.readouterr()
         assert "graphml" in captured.out.lower()
 
     def test_text_output(self, capsys):
-        pyan_main([FIXTURE, "--text"])
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--text"])
         captured = capsys.readouterr()
         assert "[U]" in captured.out or "[D]" in captured.out
 
     def test_paths_from_to(self, capsys):
         pyan_main([
-            FIXTURE, "--paths-from", "test_code.features.Derived.baz",
+            FIXTURE, "--root", TESTS_DIR, "--paths-from", "test_code.features.Derived.baz",
             "--paths-to", "test_code.features.Base.foo",
         ])
         captured = capsys.readouterr()
@@ -174,7 +174,7 @@ class TestPyanCLI:
 
     def test_paths_no_result(self, capsys):
         pyan_main([
-            FIXTURE, "--paths-from", "test_code.features.Base.foo",
+            FIXTURE, "--root", TESTS_DIR, "--paths-from", "test_code.features.Base.foo",
             "--paths-to", "test_code.features.Derived.baz",
         ])
         captured = capsys.readouterr()
@@ -182,27 +182,27 @@ class TestPyanCLI:
 
     def test_paths_from_without_to_errors(self):
         with pytest.raises(SystemExit) as exc_info:
-            pyan_main([FIXTURE, "--paths-from", "test_code.features.Base.foo"])
+            pyan_main([FIXTURE, "--root", TESTS_DIR, "--paths-from", "test_code.features.Base.foo"])
         assert exc_info.value.code != 0
 
     def test_depth_flag(self, capsys):
-        pyan_main([FIXTURE, "--dot", "--depth", "2"])
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--dot", "--depth", "2"])
         captured = capsys.readouterr()
         assert "digraph G" in captured.out
 
     def test_depth_max(self, capsys):
-        pyan_main([FIXTURE, "--dot", "--depth", "max"])
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--dot", "--depth", "max"])
         captured = capsys.readouterr()
         assert "digraph G" in captured.out
 
     def test_concentrate_flag(self, capsys):
-        pyan_main([FIXTURE, "--dot", "--concentrate"])
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--dot", "--concentrate"])
         captured = capsys.readouterr()
         assert "concentrate=true" in captured.out
 
     def test_direction_flag(self, capsys):
         pyan_main([
-            FIXTURE, "--dot", "--function", "test_code.features.Base.bar",
+            FIXTURE, "--root", TESTS_DIR, "--dot", "--function", "test_code.features.Base.bar",
             "--direction", "down",
         ])
         captured = capsys.readouterr()
@@ -212,7 +212,7 @@ class TestPyanCLI:
         """Supplying ``--namespace-constructor`` emits the one-shot stderr
         nudge inviting the user to file an issue if their constructor is
         common enough to be added to the built-in registry."""
-        pyan_main([FIXTURE, "--dot", "--namespace-constructor", "mylib.MyNS"])
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--dot", "--namespace-constructor", "mylib.MyNS"])
         captured = capsys.readouterr()
         assert "namespace constructor" in captured.err
         assert "github.com/Technologicat/pyan/issues" in captured.err
@@ -220,7 +220,7 @@ class TestPyanCLI:
     def test_namespace_constructor_flag_accepts_comma_separated(self, capsys):
         """``--namespace-constructor a.b,c.d`` splits to two entries; a
         single occurrence still triggers the nudge once."""
-        pyan_main([FIXTURE, "--dot", "--namespace-constructor", "a.b,c.d"])
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--dot", "--namespace-constructor", "a.b,c.d"])
         captured = capsys.readouterr()
         # Only one nudge regardless of how many comma-separated entries.
         assert captured.err.count("github.com/Technologicat/pyan/issues") == 1
@@ -228,7 +228,7 @@ class TestPyanCLI:
     def test_namespace_constructor_flag_no_nudge_without_option(self, capsys):
         """The nudge should not fire when ``--namespace-constructor`` is
         not used."""
-        pyan_main([FIXTURE, "--dot"])
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--dot"])
         captured = capsys.readouterr()
         assert "namespace constructor" not in captured.err
 
@@ -247,34 +247,34 @@ class TestCreateCallgraphFormats:
     @pytest.mark.skipif(not has_dot, reason="graphviz dot not installed")
     def test_html_format(self):
         from pyan import create_callgraph
-        result = create_callgraph(FIXTURE, format="html")
+        result = create_callgraph(FIXTURE, root=TESTS_DIR, format="html")
         assert "<html" in result.lower() or "<svg" in result.lower()
 
     @pytest.mark.skipif(not has_dot, reason="graphviz dot not installed")
     def test_svg_format(self):
         from pyan import create_callgraph
-        result = create_callgraph(FIXTURE, format="svg")
+        result = create_callgraph(FIXTURE, root=TESTS_DIR, format="svg")
         assert "<svg" in result.lower()
 
     def test_tgf_format(self):
         from pyan import create_callgraph
-        result = create_callgraph(FIXTURE, format="tgf")
+        result = create_callgraph(FIXTURE, root=TESTS_DIR, format="tgf")
         assert "#" in result
 
     def test_yed_format(self):
         from pyan import create_callgraph
-        result = create_callgraph(FIXTURE, format="yed")
+        result = create_callgraph(FIXTURE, root=TESTS_DIR, format="yed")
         assert "graphml" in result.lower()
 
     def test_text_format(self):
         from pyan import create_callgraph
-        result = create_callgraph(FIXTURE, format="text")
+        result = create_callgraph(FIXTURE, root=TESTS_DIR, format="text")
         assert "[U]" in result or "[D]" in result
 
     def test_unknown_format_raises(self):
         from pyan import create_callgraph
         with pytest.raises(ValueError, match="Unknown format"):
-            create_callgraph(FIXTURE, format="bogus")
+            create_callgraph(FIXTURE, root=TESTS_DIR, format="bogus")
 
 
 # ---------------------------------------------------------------------------
@@ -300,27 +300,27 @@ class TestVisgraphAnnotated:
     def test_annotated_grouped(self):
         """Annotated + grouped uses get_annotated_name for labels."""
         from pyan import create_callgraph
-        result = create_callgraph(FIXTURE, format="dot", annotated=True, grouped=True)
+        result = create_callgraph(FIXTURE, root=TESTS_DIR, format="dot", annotated=True, grouped=True)
         assert "digraph G" in result
 
     def test_annotated_ungrouped(self):
         """Annotated + ungrouped uses get_long_annotated_name for labels."""
         from pyan import create_callgraph
-        result = create_callgraph(FIXTURE, format="dot", annotated=True, grouped=False)
+        result = create_callgraph(FIXTURE, root=TESTS_DIR, format="dot", annotated=True, grouped=False)
         assert "digraph G" in result
 
     def test_ungrouped_class_prefixed_methods(self):
         """Ungrouped + not annotated uses class-prefixed labels for methods.
         Also verifies that grouped=False overrides nested_groups default."""
         from pyan import create_callgraph
-        result = create_callgraph(FIXTURE, format="dot", grouped=False, annotated=False)
+        result = create_callgraph(FIXTURE, root=TESTS_DIR, format="dot", grouped=False, annotated=False)
         # features.py defines Decorated with methods — labels should be class-prefixed
         assert "Decorated.regular" in result
 
     def test_grouped_short_names(self):
         """Grouped + not annotated uses short (unprefixed) labels."""
         from pyan import create_callgraph
-        result = create_callgraph(FIXTURE, format="dot", grouped=True, annotated=False)
+        result = create_callgraph(FIXTURE, root=TESTS_DIR, format="dot", grouped=True, annotated=False)
         # When grouped, the group title shows the class — labels should be just the method name.
         # Check that 'regular' appears as a label (not prefixed with 'Decorated.').
         # In DOT, labels look like: label="regular"
@@ -329,6 +329,6 @@ class TestVisgraphAnnotated:
     def test_nested_groups(self):
         """Nested groups creates nested subgraph clusters."""
         from pyan import create_callgraph
-        result = create_callgraph(FIXTURE, format="dot", nested_groups=True)
+        result = create_callgraph(FIXTURE, root=TESTS_DIR, format="dot", nested_groups=True)
         assert "digraph G" in result
         assert 'subgraph "cluster_' in result
