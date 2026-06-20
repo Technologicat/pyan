@@ -57,3 +57,9 @@ Discovered while smoke-testing #129 against Raven Visualizer (2026-04-29).
 Parameters should use abstract types from `collections.abc` (`Mapping`, `Sequence`, `Iterable`) for widest-possible-accepted semantics. Return types should use concrete lowercase builtins (`tuple[int, int]`, `list[int]`, `dict[str, int]`) — PEP 585, Python 3.9+. The capitalized `typing` forms (`Dict`, `List`, `Tuple`) are deprecated aliases for the builtins and offer no extra width — avoid them. Audit existing type hints across the codebase for consistency.
 
 Discovered during raven-cherrypick compare mode planning (2026-03-30).
+
+## expand_unknowns leaves dangling wildcard edges instead of removing them
+
+`expand_unknowns` adds the resolved edges but never removes the originating `*.name` wildcard edge; the wildcard Node is merely flagged `defined = False` at the end of the pass, and visgraph filters undefined Nodes at render time. So the uses/defines dicts carry edges to soon-to-be-suppressed phantom Nodes, and correctness depends on every consumer honouring the `defined` flag. The query API (`find_paths`, `get_related_nodes`) walks the edge dicts directly — worth confirming it filters undefined targets, and worth considering whether expansion should rewrite the edge (drop the wildcard, add the real target) rather than overlay-and-suppress. Off-key architecture, not a live bug.
+
+Noticed while reviewing PR #135 / issue #134 (2026-06-20).
