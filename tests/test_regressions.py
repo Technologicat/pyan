@@ -487,25 +487,29 @@ def test_issue127_cross_class_reference_still_emits():
     get_node(uses, "within_scope.Holder")
 
 
-# --- Issue #134: Wildcard expansion creates false uses edges to unrelated functions in the same module ---
+# --- Issue #134: wildcard over-expansion creates false edges to same-named, same-module defs ---
 
 
-WILDCARD_DIR = os.path.join(TESTS_DIR, "test_code/issue_wildcard")
+ISSUE134_DIR = os.path.join(TESTS_DIR, "test_code/issue134")
 
-def _wildcard_visitor():
-    filenames = [os.path.join(WILDCARD_DIR, "test_module.py")]
-    return CallGraphVisitor(filenames, logger=logging.getLogger())
 
-def test_wildcard_expansion_does_not_create_false_edges():
-    """Regression test: wildcard should not expand to unrelated functions.
+def test_issue134_attribute_call_does_not_bind_to_same_module_def():
+    """Issue #134: ``imported_module.cache()`` must not bind to a local ``cache()``.
 
-    This tests the fix for the ``expand_unknowns`` over-expansion bug, where
-    a wildcard created by an attribute access (e.g. ``app.state.cache``) was
-    incorrectly expanded to a function with the same name, even though the
-    name wasn't used in that scope.
+    ``othermod`` is imported but not part of the analyzed source set, so
+    ``othermod.cache()`` falls back to the wildcard ``*.cache``. ``expand_unknowns``
+    used to expand that wildcard to every same-named def whose module is imported,
+    and since intra-module is always "imported", it bound to the local ``cache()`` —
+    a false edge. The leaf ``cache`` is an attribute, never a bare name in
+    ``func_a``'s scope, so the wildcard must be left unexpanded.
     """
-    v = _wildcard_visitor()
-    func_a_uses = get_in_dict(v.uses_edges, "test_module.func_a")
+    filenames = [os.path.join(ISSUE134_DIR, "mod_a.py")]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+
+    func_a_uses = get_in_dict(v.uses_edges, "mod_a.func_a")
     targets = {n.get_name() for n in func_a_uses}
-    # The wildcard *.cache should NOT expand to the function cache().
-    assert "test_module.cache" not in targets
+    assert "mod_a.cache" not in targets, "attribute call wrongly bound to same-module def"
+
+    # Positive control: a genuine intra-module call is still detected.
+    caller_uses = get_in_dict(v.uses_edges, "mod_a.caller")
+    get_node(caller_uses, "mod_a.helper")

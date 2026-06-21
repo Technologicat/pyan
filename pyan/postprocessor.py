@@ -187,6 +187,20 @@ def _has_import_to(visitor, from_node, target_ns):
     return bool(imports & target_ancestors)
 
 
+def _name_referenced_in_scope(visitor, from_node, name):
+    """Whether `name` occurs as a bare name in from_node's own scope.
+
+    symtable records bare-name references — including globals/frees such as an
+    imported `foo` used as `foo()` — but never attribute leaves: `othermod.cache()`
+    never puts `cache` in the scope's identifiers. So this distinguishes a genuine
+    name reference (may legitimately resolve to a module-level `name`) from an
+    attribute access on something else (must not). No scope entry → default True,
+    keeping the previous expand behaviour.
+    """
+    src_scope = visitor.scopes.get(from_node.get_name())
+    return src_scope is None or name in src_scope.defs
+
+
 def expand_unknowns(visitor):
     """For each unknown node *.name, replace all its incoming edges with edges to X.name for all possible Xs.
 
@@ -199,13 +213,10 @@ def expand_unknowns(visitor):
         for n2 in visitor.defines_edges[n]:
             if n2.namespace is None:
                 for n3 in visitor.nodes[n2.name]:
-                    if n3.namespace is not None and n3.defined:
-                        # Only expand if the name is actually used in the source scope
-                        src_scope = visitor.scopes.get(n.get_name())
-                        if src_scope and n2.name not in src_scope.defs:
-                            continue
-                        if _has_import_to(visitor, n, n3.namespace):
-                            new_defines_edges.append((n, n3))
+                    if (n3.namespace is not None and n3.defined and
+                        _name_referenced_in_scope(visitor, n, n2.name) and
+                        _has_import_to(visitor, n, n3.namespace)):
+                        new_defines_edges.append((n, n3))
 
     for from_node, to_node in new_defines_edges:
         visitor.add_defines_edge(from_node, to_node)
@@ -216,13 +227,10 @@ def expand_unknowns(visitor):
         for n2 in visitor.uses_edges[n]:
             if n2.namespace is None:
                 for n3 in visitor.nodes[n2.name]:
-                    if n3.namespace is not None and n3.defined:
-                        # Only expand if the name is actually used in the source scope
-                        src_scope = visitor.scopes.get(n.get_name())
-                        if src_scope and n2.name not in src_scope.defs:
-                            continue
-                        if _has_import_to(visitor, n, n3.namespace):
-                            new_uses_edges.append((n, n3))
+                    if (n3.namespace is not None and n3.defined and
+                        _name_referenced_in_scope(visitor, n, n2.name) and
+                        _has_import_to(visitor, n, n3.namespace)):
+                        new_uses_edges.append((n, n3))
 
     for from_node, to_node in new_uses_edges:
         visitor.add_uses_edge(from_node, to_node)
