@@ -2,7 +2,9 @@
 
 ## 2.7.0 (in progress)
 
-*No user-visible changes yet.*
+### Fixed
+
+- **Wildcard expansion no longer invents false edges to same-named definitions in the same module.** An attribute call on an imported-but-unanalyzed module (e.g. `othermod.cache()`) fell back to a `*.cache` wildcard, which `expand_unknowns` then bound to any same-named definition whose module counts as imported — and since a module always "imports" itself, it wired a spurious edge to a local `cache()`. Expansion now fires only when the name actually appears as a bare reference in the source scope, so attribute accesses no longer leak into unrelated same-name functions. (#134)
 
 
 ---

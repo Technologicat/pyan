@@ -504,7 +504,7 @@ def test_issue134_attribute_call_does_not_bind_to_same_module_def():
     ``func_a``'s scope, so the wildcard must be left unexpanded.
     """
     filenames = [os.path.join(ISSUE134_DIR, "mod_a.py")]
-    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+    v = CallGraphVisitor(filenames, root=ISSUE134_DIR, logger=logging.getLogger())
 
     func_a_uses = get_in_dict(v.uses_edges, "mod_a.func_a")
     targets = {n.get_name() for n in func_a_uses}
