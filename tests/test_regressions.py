@@ -485,3 +485,31 @@ def test_issue127_cross_class_reference_still_emits():
     v = _issue127_visitor("within_scope.py")
     uses = get_in_dict(v.uses_edges, "within_scope.Sibling.reads_holder")
     get_node(uses, "within_scope.Holder")
+
+
+# --- Issue #134: wildcard over-expansion creates false edges to same-named, same-module defs ---
+
+
+ISSUE134_DIR = os.path.join(TESTS_DIR, "test_code/issue134")
+
+
+def test_issue134_attribute_call_does_not_bind_to_same_module_def():
+    """Issue #134: ``imported_module.cache()`` must not bind to a local ``cache()``.
+
+    ``othermod`` is imported but not part of the analyzed source set, so
+    ``othermod.cache()`` falls back to the wildcard ``*.cache``. ``expand_unknowns``
+    used to expand that wildcard to every same-named def whose module is imported,
+    and since intra-module is always "imported", it bound to the local ``cache()`` —
+    a false edge. The leaf ``cache`` is an attribute, never a bare name in
+    ``func_a``'s scope, so the wildcard must be left unexpanded.
+    """
+    filenames = [os.path.join(ISSUE134_DIR, "mod_a.py")]
+    v = CallGraphVisitor(filenames, logger=logging.getLogger())
+
+    func_a_uses = get_in_dict(v.uses_edges, "mod_a.func_a")
+    targets = {n.get_name() for n in func_a_uses}
+    assert "mod_a.cache" not in targets, "attribute call wrongly bound to same-module def"
+
+    # Positive control: a genuine intra-module call is still detected.
+    caller_uses = get_in_dict(v.uses_edges, "mod_a.caller")
+    get_node(caller_uses, "mod_a.helper")
