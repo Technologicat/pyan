@@ -267,6 +267,7 @@ class TestImportVisitor:
             "pkg_a.alpha",
             "pkg_b.__init__",
             "pkg_b.beta",
+            "pkg_b.delta",  # imports nothing; must still be in the analyzed set
             "pkg_b.gamma",
         }
         assert set(visitor.modules.keys()) == expected
@@ -330,6 +331,27 @@ class TestImportVisitor:
         for _name, node_list in visitor.nodes.items():
             assert len(node_list) == 1
             assert node_list[0].defined is True
+
+    def test_import_less_module_is_in_analyzed_set(self, visitor):
+        # pkg_b/delta.py imports nothing. It must still be registered as analyzed:
+        # prepare_graph uses the keys of `modules` as the analyzed set, and anything
+        # outside that set is treated as nonexistent.
+        assert "pkg_b.delta" in visitor.modules
+        assert visitor.modules["pkg_b.delta"] == set()
+
+    def test_import_less_module_gets_a_node(self, visitor):
+        # ...and it must appear as a node, not vanish from the graph.
+        visitor.prepare_graph()
+        assert "pkg_b.delta" in visitor.nodes
+
+    def test_edge_into_import_less_module_survives(self, visitor):
+        # The regression: alpha imports pkg_b.delta, which imports nothing. The edge
+        # alpha -> delta must exist. Previously delta had no node, so the edge was
+        # silently dropped and the dependency disappeared from the graph.
+        visitor.prepare_graph()
+        alpha_node = visitor.nodes["pkg_a.alpha"][0]
+        target_names = {n.get_name() for n in visitor.uses_edges[alpha_node]}
+        assert "pkg_b.delta" in target_names
 
     def test_prepare_graph_edges(self, visitor):
         visitor.prepare_graph()

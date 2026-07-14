@@ -106,12 +106,29 @@ class ImportVisitor(ast.NodeVisitor):
         return self
 
     def analyze(self, filenames):
+        # Pass 1: register the analyzed set, before looking at any imports.
+        #
+        # `prepare_graph` treats the keys of `self.modules` as the set of modules we
+        # actually read, and ignores anything outside it (that's how speculative deps
+        # get filtered). So a module must be a key *whether or not it imports anything*
+        # — otherwise an import-less module is indistinguishable from one that doesn't
+        # exist: it gets no node, and every edge pointing *into* it is silently dropped.
+        # Leaf modules (constants, small helpers) are exactly that shape.
+        #
+        # Done as a separate pass so that the analyzed set is complete before any
+        # traversal begins, rather than being filled in as a side effect of visiting.
+        modules_to_visit = []
         for fullpath in filenames:
+            m = filename_to_module_name(fullpath, root=self.root)
+            self.fullpaths[m] = fullpath
+            self.modules.setdefault(m, set())
+            modules_to_visit.append((m, fullpath))
+
+        # Pass 2: walk each module and record what it imports.
+        for m, fullpath in modules_to_visit:
             with open(fullpath, encoding="utf-8") as f:
                 content = f.read()
-            m = filename_to_module_name(fullpath, root=self.root)
             self.current_module = m
-            self.fullpaths[m] = fullpath
             self.visit(ast.parse(content, fullpath))
 
     def add_dependency(self, target_module):  # source module is always self.current_module
