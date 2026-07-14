@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.6.3 (in progress)
+
+*No user-visible changes yet.*
+
+
+---
+
 ## 2.6.2 (14 July 2026)
 
 ### Fixed
