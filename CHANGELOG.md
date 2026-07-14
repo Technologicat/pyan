@@ -1,8 +1,10 @@
 # Changelog
 
-## 2.6.2 (in progress)
+## 2.6.2 (14 July 2026)
 
-*No user-visible changes yet.*
+### Fixed
+
+- **`--module-level` no longer drops modules that import nothing, along with every edge into them.** A module with no `import` statements was never registered in the analyzed set, so it received no node — and `prepare_graph` then discarded each dependency edge pointing at it, with no warning. Leaf modules (constants, small helpers, plain dataclass definitions) are exactly that shape, so a module dependency graph could omit real dependencies while looking perfectly clean. The call-graph mode was unaffected. (#138)
 
 
 ---
