@@ -51,14 +51,18 @@ Both verified by running the analyzer over probe files on 3.15, not by reading:
 
 `pyproject.toml` declares `requires-python = ">=3.10"` with **no upper bound**. So pip will install pyan on 3.15, where it crashes on input it is specifically built to read.
 
-Worth noting the contrast: `unpythonic` caps at `<3.15` deliberately, precisely to avoid running against an AST it does not know — and `unpythonic` does not crash. pyan has no cap and does. Whichever way the cap question is settled fleet-wide, this is the project where the absence has teeth.
+`unpythonic` caps at `<3.15` deliberately, for exactly this reason: an AST consumer should not run against a grammar it has not been taught. That cap is right, and pyan needs the same one.
+
+In fact `unpythonic` is the *only* one of the three AST users that has it — `mcpyrate` also declares a bare `>=3.10`, and on 3.15 mcpyrate does not even import (its `source_to_code` override has the wrong signature for the new importlib protocol). So two of the three advertise support for the version that breaks them, and pyan is one of them.
+
+**On timing.** A cap in the repo only reaches users through a release, so adding `<3.15` today protects nobody who has already installed pyan; meanwhile it would obstruct our own work, since `pdm venv create 3.15` followed by `pdm install` refuses a version the project excludes. So the sensible order is to land the fix first and then set the bound to `<3.16` with a 3.15 classifier, arriving at a cap that is *correct* rather than one that is temporarily defensive. If the fix slips far enough that a release goes out before it, cap at `<3.15` in that release instead.
 
 ## Work items
 
 1. **Fix `analyze_comprehension` to skip a `None` field** (`analyzer.py:1304`), and correct the docstring at `:1238`.
 2. **Regression test**, following the pattern already established for 3.12 syntax: a fixture module under `tests/test_code_315/` plus `@pytest.mark.skipif(sys.version_info < (3, 15), reason="...")`, as `tests/test_type_params.py` does for the `type` statement. Note pyan uses ordinary pytest — it has no macro layer, so none of the `unpythonic.test` machinery applies here.
    - Cover the crash case (`{**d for ...}`) and, since they are free once the fixture exists, the starred comprehension forms and a lazy import, so the passing cases stay passing.
-3. **Version metadata and CI matrix** — add 3.15 to the classifiers and the test matrix once 1 and 2 are green. Decide the cap question with the rest of the fleet rather than separately.
+3. **Add the missing `requires-python` upper bound**, which pyan should have had all along as the third AST user. Once 1 and 2 are green that bound is `<3.16`, landing together with the 3.15 classifier and the CI matrix entry — see "On timing" above for why it is not added ahead of the fix.
 
 ## Possible enhancement, not a defect
 
