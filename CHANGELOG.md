@@ -2,7 +2,15 @@
 
 ## 2.6.3 (in progress)
 
-*No user-visible changes yet.*
+### Fixed
+
+- **pyan now runs on Python 3.15.** Two unrelated breakages, both in how the analyzer reads the interpreter's own structures rather than in any one language feature.
+  - `symtable` renamed the anonymous scopes it reports so they agree with the corresponding code objects: `lambda` became `<lambda>`, `genexpr` became `<genexpr>`. pyan looked them up under the old names, so **any** module containing a lambda failed with `ValueError: Unknown scope`. Scope names in the output are unchanged (still `mymodule.make_adder.lambda.0`), so a project's call graph does not depend on which Python generated it.
+  - Dict-comprehension unpacking (`{**mapping for x in xs}`, new in 3.15) parses to a `DictComp` whose `value` field is `None`, and the analyzer visited that field unconditionally — so analyzing a codebase containing one raised `AttributeError`. Starred comprehension elements (`[*items for item in ...]`) and lazy imports (`lazy import x`) needed no change.
+
+### Changed
+
+- **`requires-python` now declares an upper bound, `>=3.10,<3.16`.** pyan reads the AST and symbol table directly, so a new Python release can break it in ways a version-agnostic package never sees — as 3.15 did, twice. The ceiling means a future Python has to be tested and released for, rather than silently installed onto.
 
 
 ---

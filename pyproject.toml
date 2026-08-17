@@ -7,7 +7,7 @@ name = "pyan3"
 dynamic = ["version"]
 description = "Generate approximate call graphs for Python programs"
 readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.16"
 license = "GPL-2.0-or-later"
 license-files = ["LICENSE.md"]
 authors = [
@@ -28,6 +28,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Topic :: Software Development",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
@@ -140,6 +141,7 @@ exclude = [
     "site-packages",
     "venv",
     "tests/test_code_312",  # 3.12+ syntax — ruff targets 3.10
+    "tests/test_code_315",  # 3.15 syntax ruff cannot parse yet: "Iterable unpacking cannot be used in a comprehension" (ruff 0.15.10). Retry dropping this once ruff supports PEP 798.
 ]
 
 [tool.ruff.lint]

@@ -19,6 +19,7 @@ from .anutils import (
     get_ast_node_name,
     get_module_name,
     infer_root,
+    normalize_symtable_scope_name,
     resolve_import,
     resolve_method_resolution_order,
     tail,
@@ -1238,6 +1239,9 @@ class CallGraphVisitor(ast.NodeVisitor):
         field1 and field2 name the AST attributes holding the output expression(s):
         ListComp/SetComp/GeneratorExp use ``elt``; DictComp uses ``key`` and ``value``.
 
+        The field named by field2 is optional in the AST and may be absent; see the
+        comment where it is visited. The one named by field1 is always present.
+
         Returns the inner scope Node representing the comprehension, so that
         callers (e.g. ``analyze_binding``) can bind it to a target.
         """
@@ -1301,7 +1305,14 @@ class CallGraphVisitor(ast.NodeVisitor):
 
             self.visit(getattr(node, field1))  # e.g. node.elt
             if field2:
-                self.visit(getattr(node, field2))
+                # `DictComp.value` is optional in the grammar (`expr? value`), and is
+                # `None` for the dict-unpacking comprehension `{**mapping for x in xs}`
+                # added in Python 3.15. There `key` holds the whole mapping expression,
+                # so visiting field1 already reaches every name the comprehension uses
+                # and there is nothing further to do.
+                maybe_output_expr = getattr(node, field2)
+                if maybe_output_expr is not None:
+                    self.visit(maybe_output_expr)
         return scope_ctx.inner_scope_node
 
     def visit_Call(self, node):
@@ -1889,7 +1900,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             scopes[ns] = sc
             anon_counts = {}  # number duplicate anonymous scope children
             for t in table.get_children():
-                child_name = t.get_name()
+                child_name = normalize_symtable_scope_name(t.get_name())
                 if child_name in ANON_SCOPE_NAMES:
                     idx = anon_counts.get(child_name, 0)
                     anon_counts[child_name] = idx + 1

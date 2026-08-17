@@ -23,7 +23,7 @@ jobs:
         # Python-version-specific.  The extra 8 jobs to cover every Python
         # version on every OS would just re-find the same bugs in parallel.
         os: [ubuntu-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
         include:
           - os: macos-latest
             python-version: "3.14"
@@ -36,6 +36,11 @@ jobs:
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
         python-version: ${{ matrix.python-version }}
+        # 3.15 is at rc1, which the setup-python manifest marks unstable, so a bare
+        # "3.15" resolves to nothing without this. Versions with a stable release
+        # are unaffected — the prerelease is only a fallback when no stable one
+        # satisfies the request. Becomes a no-op once 3.15 final ships.
+        allow-prereleases: true
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip

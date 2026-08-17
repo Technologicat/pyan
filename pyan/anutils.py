@@ -49,6 +49,28 @@ NAMESPACE_CONSTRUCTORS = frozenset({
 # back into their parent.
 ANON_SCOPE_NAMES = frozenset({"lambda", "listcomp", "setcomp", "dictcomp", "genexpr"})
 
+
+def normalize_symtable_scope_name(name):
+    """Return the bare scope name `symtable` reports, without any angle brackets.
+
+    Python 3.15 renamed the anonymous scopes `symtable` reports, to agree with the
+    corresponding code objects' `co_name`: `lambda` became `<lambda>` and `genexpr`
+    became `<genexpr>`. Stripping the brackets keeps one vocabulary — the one in
+    `ANON_SCOPE_NAMES` — across every supported Python.
+
+    That matters beyond the lookup: these names reach the generated graphs as part
+    of node names such as `mymodule.make_adder.lambda.0`, so adopting whichever
+    spelling the running interpreter happens to use would make a project's call
+    graph depend on the Python it was generated with.
+
+    Source-level names cannot contain angle brackets, so there is nothing else this
+    can collide with.
+    """
+    if len(name) > 2 and name.startswith("<") and name.endswith(">"):
+        return name[1:-1]
+    return name
+
+
 __all__ = [
     "ANON_SCOPE_NAMES",
     "ExecuteInInnerScope",
@@ -61,6 +83,7 @@ __all__ = [
     "get_ast_node_name",
     "get_module_name",
     "infer_root",
+    "normalize_symtable_scope_name",
     "resolve_import",
     "resolve_method_resolution_order",
 ]
@@ -455,7 +478,7 @@ class Scope:
 
     def __init__(self, table):
         """table: SymTable instance from symtable.symtable()"""
-        name = table.get_name()
+        name = normalize_symtable_scope_name(table.get_name())
         if name == "top":
             name = ""  # Pyan defines the top level as anonymous
         self.name = name
