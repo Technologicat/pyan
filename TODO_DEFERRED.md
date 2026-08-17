@@ -63,3 +63,32 @@ Discovered during raven-cherrypick compare mode planning (2026-03-30).
 `expand_unknowns` adds the resolved edges but never removes the originating `*.name` wildcard edge; the wildcard Node is merely flagged `defined = False` at the end of the pass, and visgraph filters undefined Nodes at render time. So the uses/defines dicts carry edges to soon-to-be-suppressed phantom Nodes, and correctness depends on every consumer honouring the `defined` flag. The query API (`find_paths`, `get_related_nodes`) walks the edge dicts directly — worth confirming it filters undefined targets, and worth considering whether expansion should rewrite the edge (drop the wildcard, add the real target) rather than overlay-and-suppress. Off-key architecture, not a live bug.
 
 Noticed while reviewing PR #135 / issue #134 (2026-06-20).
+
+## Should genexprs use their real symtable scope rather than a synthesized one?
+
+`analyze_comprehension` synthesizes a scope when the expected one is missing
+(`analyzer.py:1281–1284`, via `Scope.from_names`), while `visit_Lambda` requires the scope to
+already exist — `ExecuteInInnerScope` raises `ValueError: Unknown scope` otherwise. That
+asymmetry is what made the Python 3.15 `symtable` rename show up only through lambdas: genexprs
+hit the synthesis path and carried on silently.
+
+The tempting reading is that lambdas want a fallback too. Looking at why the synthesis exists
+suggests the opposite. `Scope.from_names` was added for PEP 709: on 3.12+ `symtable` genuinely
+stops reporting scopes for list/set/dict comprehensions, because they are inlined into the
+enclosing function. For those, synthesis is not a fallback at all — it is the only path
+available. **Generator expressions were never inlined**, so `symtable` still reports a real
+scope for them, carrying symbol information a synthesized scope (target names only) does not
+have. Verified on both 3.14 and 3.15: a function containing three comprehensions has no
+symtable children, while one containing a genexpr has a `genexpr` / `<genexpr>` child.
+
+So the question is whether genexprs should be *required* to find their real scope, the way
+lambdas are, with synthesis reserved for the inlined kinds that cannot have one. That would
+have turned the 3.15 rename into a loud failure on genexprs too, rather than a silent downgrade
+to a scope holding less information.
+
+Worth measuring before acting: check whether any resolution actually differs between the
+synthesized and the real genexpr scope. If nothing differs, this is cosmetic and the present
+leniency is fine; if something does, the leniency has been quietly costing accuracy since 3.12.
+
+Raised 2026-08-17 during the Python 3.15 support work. The normalization fix landed then already
+restores the real scope on 3.15 — this item is about the general shape, not that bug.
