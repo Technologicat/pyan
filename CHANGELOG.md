@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.6.3 (in progress)
+## 2.7.0 (17 August 2026) — *Triangulation*
 
 ### Fixed
 
