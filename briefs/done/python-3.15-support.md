@@ -6,7 +6,7 @@
 >
 > So the escalation is: diff the ASDL, *then* import under the new interpreter, *then* run the full suite — and treat the first two as triage rather than as evidence of health. Applies directly to `unpythonic`, whose suite has not yet run on 3.15 at all, being blocked behind mcpyrate's import fix.
 
-Third of three, alongside `mcpyrate/briefs/python-3.15-support.md` (which carries the full AST survey) and `unpythonic/briefs/python-3.15-support.md`. Those two are the macro layer; this one is the static analyzer, and it was the easy one to overlook — pyan has no macro layer, so it does not *look* like a project a Python version bump breaks. It reads the AST just as directly as the other two.
+Third of three, alongside `mcpyrate/briefs/done/python-3.15-support.md` (which carries the full AST survey) and `unpythonic/briefs/done/python-3.15-support.md`. Those two are the macro layer; this one is the static analyzer, and it was the easy one to overlook — pyan has no macro layer, so it does not *look* like a project a Python version bump breaks. It reads the AST just as directly as the other two.
 
 ## Context
 
