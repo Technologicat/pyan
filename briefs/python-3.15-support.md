@@ -1,5 +1,11 @@
 # CC Brief: Python 3.15 support (pyan)
 
+> **Status: done (2026-08-17).** Suite passes 331/331 on 3.15.0rc1 and on 3.14.6. See the caveat below — this brief predicted one bug and there were two.
+>
+> **The lesson for the remaining two projects.** Everything in the survey below was correct and none of it was sufficient. The second bug was `symtable` renaming its anonymous scopes (`lambda` → `<lambda>`, `genexpr` → `<genexpr>`), which broke **any** module containing a lambda — far wider than the dict-unpacking crash this brief was built around, and invisible to every technique used to write it. The ASDL diff cannot see it, because it is not a grammar change. Importing the package cannot see it, because the import succeeds. Only running the test suite on 3.15 found it.
+>
+> So the escalation is: diff the ASDL, *then* import under the new interpreter, *then* run the full suite — and treat the first two as triage rather than as evidence of health. Applies directly to `unpythonic`, whose suite has not yet run on 3.15 at all, being blocked behind mcpyrate's import fix.
+
 Third of three, alongside `mcpyrate/briefs/python-3.15-support.md` (which carries the full AST survey) and `unpythonic/briefs/python-3.15-support.md`. Those two are the macro layer; this one is the static analyzer, and it was the easy one to overlook — pyan has no macro layer, so it does not *look* like a project a Python version bump breaks. It reads the AST just as directly as the other two.
 
 ## Context
