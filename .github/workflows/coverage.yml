@@ -14,10 +14,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - name: Set up Python 3.14
+    - name: Set up Python 3.15
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       with:
-        python-version: "3.14"
+        # The newest Python the project supports, i.e. the top of the CI matrix —
+        # that is where new-syntax code paths actually run. Bump this whenever the
+        # matrix grows; nothing else will remind you.
+        python-version: "3.15"
+        # 3.15 is at rc1, which the setup-python manifest marks unstable, so a bare
+        # "3.15" resolves to nothing without this. Becomes a no-op once 3.15 final ships.
+        allow-prereleases: true
     - name: Install system dependencies
       run: |
         sudo apt-get update -q
