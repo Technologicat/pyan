@@ -181,24 +181,42 @@ class VisualGraph:
         # imports or uses them, they only add visual noise. Their defines
         # edge from the enclosing module is *always* present by construction
         # and so cannot indicate use; we look at uses_edges only.
-        from .node import Flavor  # noqa: PLC0415 -- avoid circular import at module level
-        named_with_uses = set()
+        from .node import Flavor, make_safe_label  # noqa: PLC0415 -- avoid circular import at module level
+        nodes_with_uses = set()
         for from_node, to_nodes in visitor.uses_edges.items():
-            if from_node.flavor == Flavor.NAME:
-                named_with_uses.add(from_node)
-            for to_node in to_nodes:
-                if to_node.flavor == Flavor.NAME:
-                    named_with_uses.add(to_node)
+            if to_nodes:
+                nodes_with_uses.add(from_node)
+            nodes_with_uses.update(to_nodes)
 
         visited_nodes = []
         for name in visitor.nodes:
             for node in visitor.nodes[name]:
                 if not node.defined:
                     continue
-                if node.flavor == Flavor.NAME and node not in named_with_uses:
+                if node.flavor == Flavor.NAME and node not in nodes_with_uses:
                     continue
                 visited_nodes.append(node)
-        visited_nodes.sort(key=lambda x: (x.namespace, x.name))
+
+        # When grouping, a module that has members would otherwise be drawn
+        # twice: once as the cluster holding them, and once as an ellipse
+        # beside it carrying the same label. The cluster is the module, so the
+        # ellipse moves inside it and becomes the module's own body — the
+        # scope CPython itself calls ``<module>``. A module whose body reaches
+        # nothing has no body worth drawing, and is left to the box alone.
+        clustered_namespaces = {node.namespace for node in visited_nodes} if grouped else set()
+
+        def has_own_cluster(node):
+            return node.flavor == Flavor.MODULE and node.get_name() in clustered_namespaces
+
+        if grouped:
+            visited_nodes = [node for node in visited_nodes
+                             if not (has_own_cluster(node) and node not in nodes_with_uses)]
+
+        def grouping_namespace(node):
+            """The namespace of the cluster this node is drawn in."""
+            return node.get_name() if has_own_cluster(node) else node.namespace
+
+        visited_nodes.sort(key=lambda x: (grouping_namespace(x), x.name))
 
         def find_filenames():
             filenames = set()
@@ -220,7 +238,10 @@ class VisualGraph:
             idx, fill_RGBA, text_RGB = colorizer.make_colors(node)
             visual_node = VisualNode(
                 id=node.get_label(),
-                label=labeler(node),
+                # Inside its own cluster, a module node stands for the code in
+                # the module body. Repeating the dotted path there would just
+                # restate the box's label.
+                label="<module>" if has_own_cluster(node) else labeler(node),
                 flavor=repr(node.flavor),
                 fill_color=fill_RGBA,
                 text_color=text_RGB,
@@ -230,29 +251,30 @@ class VisualGraph:
             nodes_dict[node] = visual_node
 
             # next namespace?
-            if grouped and node.namespace != prev_namespace:
+            node_namespace = grouping_namespace(node)
+            if grouped and node_namespace != prev_namespace:
                 if not prev_namespace:
-                    logger.info(f"New namespace {node.namespace}")
+                    logger.info(f"New namespace {node_namespace}")
                 else:
-                    logger.info(f"New namespace {node.namespace}, old was {prev_namespace}")
-                prev_namespace = node.namespace
+                    logger.info(f"New namespace {node_namespace}, old was {prev_namespace}")
+                prev_namespace = node_namespace
 
-                label = node.get_namespace_label()
-                subgraph = cls(label, node.namespace)
+                label = make_safe_label(node_namespace)
+                subgraph = cls(label, node_namespace)
 
                 if nested:
                     # Pop the stack until the newly found namespace is within
                     # one of the parent namespaces, or until the stack runs out
                     # (i.e. this is a sibling).
                     if len(namespace_stack):
-                        m = re.match(namespace_stack[-1].label, node.namespace)
+                        m = re.match(namespace_stack[-1].label, node_namespace)
                         # The '.' check catches siblings in cases like
                         # MeshGenerator vs. Mesh.
-                        while m is None or m.end() == len(node.namespace) or node.namespace[m.end()] != ".":
+                        while m is None or m.end() == len(node_namespace) or node_namespace[m.end()] != ".":
                             namespace_stack.pop()
                             if not len(namespace_stack):
                                 break
-                            m = re.match(namespace_stack[-1].label, node.namespace)
+                            m = re.match(namespace_stack[-1].label, node_namespace)
                     parentgraph = namespace_stack[-1] if len(namespace_stack) else root_graph
                     parentgraph.subgraphs.append(subgraph)
 
@@ -278,6 +300,12 @@ class VisualGraph:
                     continue
                 for n2 in visitor.defines_edges[n]:
                     if n2 not in nodes_dict:
+                        continue
+                    # The cluster box already states that a module contains its
+                    # own members, so drawing the edge as well says it twice.
+                    # Invisible defines edges are exempt: those exist to pull
+                    # related nodes together, which is layout, not statement.
+                    if grouped and draw_defines and n.flavor == Flavor.MODULE and n2.namespace == n.get_name():
                         continue
                     root_graph.edges.append(VisualEdge(nodes_dict[n], nodes_dict[n2], "defines", color))
 

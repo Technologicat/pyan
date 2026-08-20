@@ -203,6 +203,22 @@ class TestYedWriter:
         assert "node" in all_tags
         assert "edge" in all_tags
 
+    def test_markup_characters_in_labels_are_escaped(self, graph):
+        """A label is text, not markup.
+
+        Grouped output labels a module's own body ``<module>``, which reaches
+        the writer as five characters and must leave it as five characters.
+        """
+        buf = io.StringIO()
+        writer = YedWriter(graph, output=buf, logger=logging.getLogger())
+        writer.run()
+        xml_str = buf.getvalue()
+        assert "&lt;module&gt;" in xml_str
+
+        root = ET.fromstring(xml_str)
+        labels = {elem.text for elem in root.iter() if elem.tag.endswith("NodeLabel")}
+        assert "<module>" in labels
+
 
 # ---------------------------------------------------------------------------
 # SVG (requires graphviz `dot` binary)

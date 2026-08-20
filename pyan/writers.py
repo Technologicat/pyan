@@ -8,6 +8,7 @@ import logging
 import os
 import subprocess
 import sys
+from xml.sax.saxutils import escape as xml_escape
 
 from jinja2 import Template
 
@@ -289,7 +290,8 @@ class YedWriter(Writer):
         self.indent()
         self.write('<y:Fill color="#CCCCCC" transparent="false"/>')
         self.write(
-            f'<y:NodeLabel modelName="internal" modelPosition="t" alignment="right">{graph.label}</y:NodeLabel>'
+            f'<y:NodeLabel modelName="internal" modelPosition="t" alignment="right">'
+            f"{xml_escape(graph.label)}</y:NodeLabel>"
         )
         self.write('<y:Shape type="roundrectangle"/>')
         self.dedent()
@@ -322,7 +324,7 @@ class YedWriter(Writer):
         self.write('<y:Geometry height="{}" width="{}"/>'.format("30", width))
         self.write(f'<y:Fill color="{node.fill_color}" transparent="false"/>')
         self.write('<y:BorderStyle color="#000000" type="line" width="1.0"/>')
-        self.write(f"<y:NodeLabel>{node.label}</y:NodeLabel>")
+        self.write(f"<y:NodeLabel>{xml_escape(node.label)}</y:NodeLabel>")
         self.write('<y:Shape type="ellipse"/>')
         self.dedent()
         self.write("</y:ShapeNode>")

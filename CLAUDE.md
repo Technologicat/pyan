@@ -35,7 +35,7 @@ pytest                   # runs all tests (pytest.ini options are in `[tool.pyte
 Tests in `tests/` are organized by concern:
 
 - **Syntax/feature coverage**, one file per cluster: `test_classes.py` (decorators, inheritance, super, class constants), `test_functions.py` (lambdas, closures, defaults, signature annotations), `test_iteration.py` (for, async-for, comprehensions, iter protocol), `test_async_context.py`, `test_match.py`, `test_assignments.py` (walrus, chained assign, star unpacking, AnnAssign), `test_imports.py`, `test_type_params.py` (PEP 695: type aliases + generics), `test_misc.py` (del, nested attr, builtins).
-- **Feature-specific concerns**: `test_namespace_objects.py` (NAME-Node-ification + NAMESPACE_OBJECT overlay, #129), `test_query_api.py` (direction / find_paths / filter_by_depth), `test_subsumption.py` (redundant-edge culling, #140).
+- **Feature-specific concerns**: `test_namespace_objects.py` (NAME-Node-ification + NAMESPACE_OBJECT overlay, #129), `test_query_api.py` (direction / find_paths / filter_by_depth), `test_subsumption.py` (redundant-edge culling, #140), `test_grouping.py` (module nodes and `<module>` under clustering, #140).
 - **Other**: `test_modvis.py` (module graph), `test_writers.py` (output formats), `test_analyzer.py` (low-level helpers), `test_regressions.py`, `test_sphinx.py`, `test_coverage.py` (coverage gap tests), `test_exclude.py`, `test_from_sources.py`.
 
 Version-specific source fixtures live in `tests/test_code_312/` (3.12+ syntax).
@@ -88,7 +88,8 @@ source files → CallGraphVisitor (analyzer.py) → Node graph → VisualGraph (
 
 - **`node.py`** (~185 lines) — `Node` class and `Flavor` enum. A `Node` represents one named entity in the analyzed code (function, class, method, module, namespace, etc.). Has `namespace`, `name`, `flavor`, `defined`, and associated AST node. The `Flavor` enum distinguishes: `MODULE`, `CLASS`, `FUNCTION`, `METHOD`, `STATICMETHOD`, `CLASSMETHOD`, `NAME`, `ATTRIBUTE`, `IMPORTEDITEM`, `NAMESPACE`, `UNKNOWN`, `UNSPECIFIED`.
 
-- **`visgraph.py`** (~250 lines) — `VisualGraph`: format-agnostic output graph. Filters edges (defines/uses), groups by namespace, applies coloring (HSL: hue = file, lightness = nesting depth). `Colorizer` handles the HSL assignment.
+- **`visgraph.py`** (~270 lines) — `VisualGraph`: format-agnostic output graph. Filters edges (defines/uses), groups by namespace, applies coloring (HSL: hue = file, lightness = nesting depth). `Colorizer` handles the HSL assignment.
+  - **Module nodes when grouped (#140)**: the cluster *is* the module, so a module node with a cluster of its own is drawn inside it, labelled `<module>` (CPython's name for the module-level code object), and its defines edges into that cluster are suppressed — the box already states containment. A module whose body has no uses edges either way isn't drawn at all. `grouping_namespace()` is what redirects such a node into its own cluster instead of its parent's; note module Nodes have `namespace == ""` and carry the full dotted path as `name`, so a module's cluster exists only when it has non-module members. All of this is gated on `grouped`; ungrouped output is untouched.
 
 - **`writers.py`** (~360 lines) — Output format writers, all subclassing `Writer`:
   - `DotWriter` — GraphViz DOT format (identifiers quoted for safety).

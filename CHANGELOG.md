@@ -9,6 +9,13 @@
   - A module-level view is unaffected: under `--depth 0` the finer edge collapses back onto the same pair, so no dependency disappears.
   - `--keep-subsumed-edges` restores the raw edge set, as does `cull_subsumed_edges=False` in `create_callgraph()` and `CallGraphVisitor`.
 
+- **A grouped graph no longer draws each module twice.** Under `--grouped` / `--nested-groups`, a module with members was drawn both as the cluster holding them and as an ellipse beside it carrying the same label. The cluster is the module, so the node now sits inside it, labelled `<module>` after the module-level code object CPython names the same way. (#140)
+  - `<module>` appears only where the module body uses something or something uses the module; a module that merely contains definitions is left to its box.
+  - A module's defines edges to its own members are no longer drawn either, the box having already said it.
+  - Ungrouped output is unchanged: module nodes keep their dotted names and their defines edges, which are then the only indication of what contains what.
+
+- **The rules governing what pyan omits from a graph are now documented**, under [What the graph leaves out](README.md#what-the-graph-leaves-out) in the README.
+
 
 ---
 

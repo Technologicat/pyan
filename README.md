@@ -339,6 +339,8 @@ Several strategies for reducing clutter:
 - **`--module-level`** — switch to module-level import dependency view (see below)
 - Analyze only a subset of your project's files — references outside the analyzed set are not drawn
 
+Pyan also drops some relations on its own, when another part of the drawing already states them — see [What the graph leaves out](#what-the-graph-leaves-out) if an edge you expected is missing.
+
 
 ## Sphinx integration
 
@@ -610,6 +612,43 @@ The analyzer also needs to keep track of what type of object `self` currently po
 Of course, this simple approach cannot correctly track cases where the current binding of `self.f` depends on the order in which the methods of the class are executed. To keep things simple, Pyan decides to ignore this complication, just reads through the code in a linear fashion (twice so that any forward-references are picked up), and uses the most recent binding that is currently in scope.
 
 When a binding statement is encountered, the current namespace determines in which scope to store the new value for the name. Similarly, when encountering a use, the current namespace determines which object type or function to tag as the user.
+
+## What the graph leaves out
+
+Pyan draws less than it knows. A call graph that shows every relation the analyzer found is unreadable, so several rules drop relations that another part of the drawing already states. They are listed here because a missing edge is otherwise hard to tell from a bug.
+
+### Uses edges that a more specific edge already conveys
+
+A bare `import b` produces a uses edge whether or not the name is ever referenced. A module node therefore collects one edge per imported name, on top of whatever its body actually does — and each of those runs parallel to the edges of the functions that use the name.
+
+A uses edge `S → T` is dropped when either:
+
+- **`S` is a module, and something defined in that module's own file also uses `T`.** The function's edge says it more precisely.
+- **`T` is a module, and `S` also uses something under `T`.** Reaching into a module implies depending on it.
+
+Three restrictions keep the rule from eating real information:
+
+- **Only modules widen.** `f → Thing` alongside `f → Thing.method` stays: the first is a constructor call, which a call graph exists to show. Between modules, the same shape is an import.
+- **Only one end widens at a time.** For a package that imports its own subpackage, `S` contains `T`, and widening both ends would let an edge between two modules *inside* the subpackage stand in for the package's own import.
+- **Source-side widening counts only same-file members**, since a package's dotted-name descendants are separate files: `sub/beta.py` importing `alpha` says nothing about what `sub/__init__.py` imports.
+
+What survives is anything nothing else records — a module-level use no function reproduces (`router = make_router()`), and an import whose name is never referenced. The rule never removes the last evidence of a dependency: an edge goes only when a finer edge runs between the same pair, so `--depth 0` still shows every module-to-module dependency.
+
+Applies in every mode, including `--text` and the Python API. Switch it off with `--keep-subsumed-edges`, or `cull_subsumed_edges=False` in `create_callgraph()`, `CallGraphVisitor` and `CallGraphVisitor.from_sources` — worth doing when you are asking questions *about imports* rather than about calls.
+
+### Module nodes, when grouping
+
+With `-g` / `--grouped` (or `-e` / `--nested-groups`), a module that has members is represented by the cluster holding them. Drawing the module node beside that cluster would label the same thing twice, so the node moves *inside* its own cluster and is labelled `<module>` — the name CPython gives the module-level code object.
+
+- `<module>` appears only when the module body uses something, or something uses the module. A module that merely contains definitions is left to its box.
+- A module's defines edges to its own members are not drawn: the box already states containment.
+
+Neither applies without grouping. There, module nodes keep their full dotted names and all their defines edges, because those edges are then the only thing showing what contains what.
+
+### Lambdas, comprehensions, and unused module-level names
+
+- **Lambdas and comprehensions are folded into the function that contains them.** A lambda that calls `f` is drawn as its enclosing function calling `f`.
+- **A module-level binding that nothing uses is not drawn.** Names like `__version__` or a private constant become nodes during analysis so that other modules can import them; when nothing does, they would be isolated dots.
 
 # Authors
 
