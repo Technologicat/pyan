@@ -4,11 +4,11 @@
 [metadata]
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
-lock_version = "4.5.0"
-content_hash = "sha256:20623337beadb9d2899ee1498702ae43510e56dac42074ef7c3457566ea760fb"
+lock_version = "4.5.1"
+content_hash = "sha256:481a388112e9aa3a5a24b1a2e515f75ef18e7ce30b9c5dc82dd8613305d8172d"
 
 [[metadata.targets]]
-requires_python = ">=3.10"
+requires_python = ">=3.10,<3.16"
 
 [[package]]
 name = "alabaster"
