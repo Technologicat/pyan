@@ -46,12 +46,6 @@ Global IMPORTEDITEM remapping can leak function-level imports to siblings. Parti
 
 Add type annotations to pyan's modules. The analyzer is the largest target. Would improve IDE support and catch bugs.
 
-## NAMESPACE_OBJECT in a same-named module renders confusingly
-
-When a NAMESPACE_OBJECT is bound at the top of a module that shares its name (e.g. `raven.visualizer.app_state` contains `app_state = env(...)`), visgraph emits both a standalone node for the module and a cluster (group box) labelled with the same dotted path containing the env Node — visually two "raven.visualizer.app_state" boxes side by side. The data model is correct (module Node has its own edges; cluster groups Nodes whose namespace equals the module path), but the rendering doesn't disambiguate the two roles. Consider either suppressing the standalone module Node when its namespace also has a cluster, or labelling the cluster differently (e.g. with a leading marker).
-
-Discovered while smoke-testing #129 against Raven Visualizer (2026-04-29).
-
 ## Audit typing: abstract parameter types, concrete return types
 
 Parameters should use abstract types from `collections.abc` (`Mapping`, `Sequence`, `Iterable`) for widest-possible-accepted semantics. Return types should use concrete lowercase builtins (`tuple[int, int]`, `list[int]`, `dict[str, int]`) — PEP 585, Python 3.9+. The capitalized `typing` forms (`Dict`, `List`, `Tuple`) are deprecated aliases for the builtins and offer no extra width — avoid them. Audit existing type hints across the codebase for consistency.

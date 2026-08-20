@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.7.1 (in progress)
+## 2.8.0 (in progress)
 
 ### Changed
 
