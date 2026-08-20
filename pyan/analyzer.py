@@ -76,7 +76,8 @@ class CallGraphVisitor(ast.NodeVisitor):
     can be gathered."""
 
     def __init__(self, filenames, root: str = None, logger=None,
-                 namespace_constructors: Iterable[str] | None = None):
+                 namespace_constructors: Iterable[str] | None = None,
+                 cull_subsumed_edges: bool = True):
         """Construct a CallGraphVisitor and analyze *filenames*.
 
         Args:
@@ -93,8 +94,12 @@ class CallGraphVisitor(ast.NodeVisitor):
                 populated with the call's keyword arguments (#129).  Each
                 entry should be the canonical dotted import path
                 (e.g. ``"my.lib.MyNamespace"``).
+            cull_subsumed_edges: drop uses edges that a more specific edge
+                already conveys, such as a module's import-derived edge to a
+                name one of its own functions uses (#140).  Set ``False`` for
+                the raw edge set.
         """
-        self._init_common(logger, namespace_constructors)
+        self._init_common(logger, namespace_constructors, cull_subsumed_edges)
 
         # Infer root from filenames when not explicitly given.
         # This ensures namespace packages (directories without __init__.py)
@@ -114,7 +119,8 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     @classmethod
     def from_sources(cls, sources, logger=None,
-                     namespace_constructors: Iterable[str] | None = None):
+                     namespace_constructors: Iterable[str] | None = None,
+                     cull_subsumed_edges: bool = True):
         """Create a CallGraphVisitor from in-memory sources (no file I/O).
 
         Args:
@@ -130,12 +136,13 @@ class CallGraphVisitor(ast.NodeVisitor):
                 resolve correctly.
             logger: optional ``logging.Logger`` instance.
             namespace_constructors: see ``CallGraphVisitor.__init__``.
+            cull_subsumed_edges: see ``CallGraphVisitor.__init__``.
 
         Returns:
             A fully analyzed ``CallGraphVisitor``.
         """
         self = cls.__new__(cls)
-        self._init_common(logger, namespace_constructors)
+        self._init_common(logger, namespace_constructors, cull_subsumed_edges)
         self.root = ""
 
         # Normalize sources: unparse ASTs, store source text.
@@ -156,14 +163,18 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.process()
         return self
 
-    def _init_common(self, logger, namespace_constructors: Iterable[str] | None = None):
+    def _init_common(self, logger, namespace_constructors: Iterable[str] | None = None,
+                     cull_subsumed_edges: bool = True):
         """Shared initialization for both constructors.
 
         *namespace_constructors* — see ``CallGraphVisitor.__init__``.  The
         merged set (built-in registry ∪ user-supplied) is stored on
         ``self.namespace_constructors`` for the recognition path to read.
+
+        *cull_subsumed_edges* — see ``CallGraphVisitor.__init__``.
         """
         self.logger = logger or logging.getLogger(__name__)
+        self.cull_subsumed_edges = cull_subsumed_edges
 
         # Merged set of namespace-constructor FQNs (built-in + user-supplied).
         # Read by `_maybe_register_namespace_object` to upgrade the LHS of a
@@ -392,7 +403,7 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     def postprocess(self):
         """Finalize the analysis. Pipeline lives in :mod:`pyan.postprocessor`."""
-        postprocess(self)
+        postprocess(self, cull_subsumed_edges=self.cull_subsumed_edges)
 
     ###########################################################################
     # visitor methods

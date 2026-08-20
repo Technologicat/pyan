@@ -2,7 +2,12 @@
 
 ## 2.7.1 (in progress)
 
-*No user-visible changes yet.*
+### Changed
+
+- **Uses edges that a more specific edge already conveys are now dropped.** A bare `import` produces a uses edge whether or not the name is ever referenced, so a module node accumulated one per imported name — and in a graph that also shows functions, each ran parallel to the edges of the functions using it, from a node drawn right beside them. Two shapes are culled: a module's edge to a target that something in its own file also uses, and a module's edge to another module it also reaches into. (#140)
+  - Edges that nothing else records are kept — a module-level use no function reproduces (`router = make_router()`), and an import whose name is never referenced.
+  - A module-level view is unaffected: under `--depth 0` the finer edge collapses back onto the same pair, so no dependency disappears.
+  - `--keep-subsumed-edges` restores the raw edge set, as does `cull_subsumed_edges=False` in `create_callgraph()` and `CallGraphVisitor`.
 
 
 ---

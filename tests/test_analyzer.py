@@ -7,10 +7,27 @@ import pytest
 from pyan.analyzer import CallGraphVisitor
 
 
+def _test_code_filenames():
+    return glob(os.path.join(os.path.dirname(__file__), "test_code/**/*.py"), recursive=True)
+
+
 @pytest.fixture
 def callgraph():
-    filenames = glob(os.path.join(os.path.dirname(__file__), "test_code/**/*.py"), recursive=True)
-    v = CallGraphVisitor(filenames, root=os.path.dirname(__file__), logger=logging.getLogger())
+    v = CallGraphVisitor(_test_code_filenames(), root=os.path.dirname(__file__), logger=logging.getLogger())
+    return v
+
+
+@pytest.fixture
+def callgraph_raw():
+    """The same graph, with subsumed edges kept.
+
+    An import that a function in the same module also uses leaves no edge on
+    the module node once subsumption culling has run, so whether the import
+    *resolved* is no longer observable there. Tests about resolution itself
+    need the raw edge set.
+    """
+    v = CallGraphVisitor(_test_code_filenames(), root=os.path.dirname(__file__),
+                         logger=logging.getLogger(), cull_subsumed_edges=False)
     return v
 
 
@@ -24,18 +41,18 @@ def get_in_dict(node_dict, name):
     return node_dict[get_node(node_dict.keys(), name)]
 
 
-def test_resolve_import_as(callgraph):
-    imports = get_in_dict(callgraph.uses_edges, "test_code.submodule2")
+def test_resolve_import_as(callgraph_raw):
+    imports = get_in_dict(callgraph_raw.uses_edges, "test_code.submodule2")
     get_node(imports, "test_code.submodule1")
     assert len(imports) == 1, "only one effective import"
 
-    imports = get_in_dict(callgraph.uses_edges, "test_code.submodule1")
+    imports = get_in_dict(callgraph_raw.uses_edges, "test_code.submodule1")
     get_node(imports, "test_code.subpackage1.submodule1.A")
     get_node(imports, "test_code.subpackage1")
 
 
-def test_import_relative(callgraph):
-    imports = get_in_dict(callgraph.uses_edges, "test_code.subpackage1.submodule1")
+def test_import_relative(callgraph_raw):
+    imports = get_in_dict(callgraph_raw.uses_edges, "test_code.subpackage1.submodule1")
     get_node(imports, "test_code.submodule2.test_2")
 
 

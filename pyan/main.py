@@ -30,7 +30,8 @@ __all__ = [
 
 def _build_graph(filenames=None, root=None, sources=None, function=None, namespace=None,
                  max_iter=1000, direction="both", depth=None,
-                 logger=None, graph_options=None, namespace_constructors=None):
+                 logger=None, graph_options=None, namespace_constructors=None,
+                 cull_subsumed_edges=True):
     """Analyze source files, optionally filter, and build a VisualGraph.
 
     If `sources` is given (source mode / sans-IO mode), it overrides `filenames` and `root`.
@@ -39,10 +40,12 @@ def _build_graph(filenames=None, root=None, sources=None, function=None, namespa
     """
     if sources is not None:
         v = CallGraphVisitor.from_sources(sources, logger=logger,
-                                          namespace_constructors=namespace_constructors)
+                                          namespace_constructors=namespace_constructors,
+                                          cull_subsumed_edges=cull_subsumed_edges)
     else:
         v = CallGraphVisitor(filenames, root=root, logger=logger,
-                             namespace_constructors=namespace_constructors)
+                             namespace_constructors=namespace_constructors,
+                             cull_subsumed_edges=cull_subsumed_edges)
     if function or namespace:
         if function:
             function_name = function.split(".")[-1]
@@ -79,6 +82,7 @@ def create_callgraph(
     depth: int | None = None,
     exclude: list[str] | None = None,
     namespace_constructors: list[str] | None = None,
+    cull_subsumed_edges: bool = True,
     logger=None,
 ) -> str:
     """Create a call graph based on static code analysis.
@@ -154,6 +158,10 @@ def create_callgraph(
             ``types.SimpleNamespace``, ``argparse.Namespace``, …).  Each
             entry is the canonical dotted import path
             (e.g. ``"my.lib.MyNamespace"``).  See #129.
+        cull_subsumed_edges: drop uses edges that a more specific edge already
+            conveys — a module's import-derived edge to a name one of its own
+            functions uses, or its edge to a module it also reaches into.
+            ``False`` keeps the raw edge set.  See #140.
         logger: optional ``logging.Logger`` instance.
 
     Returns:
@@ -184,7 +192,8 @@ def create_callgraph(
                          function=function, namespace=namespace,
                          max_iter=max_iter, direction=direction, depth=depth,
                          logger=logger, graph_options=graph_options,
-                         namespace_constructors=namespace_constructors)
+                         namespace_constructors=namespace_constructors,
+                         cull_subsumed_edges=cull_subsumed_edges)
 
     stream = io.StringIO()
     dot_options = ["rankdir=" + rankdir, "ranksep=" + ranksep, "layout=" + layout]
@@ -487,6 +496,20 @@ def main(cli_args=None):
     )
 
     parser.add_argument(
+        "--keep-subsumed-edges",
+        action="store_true",
+        default=False,
+        dest="keep_subsumed_edges",
+        help=(
+            "keep uses edges that a more specific edge already conveys. By "
+            "default, a module's edge to a name one of its own functions uses "
+            "is dropped, as is its edge to a module it also reaches into, "
+            "since both come from the import rather than from anything the "
+            "module body does. See #140."
+        ),
+    )
+
+    parser.add_argument(
         "--module-level",
         action="store_true",
         default=False,
@@ -542,7 +565,8 @@ def main(cli_args=None):
 
     # --paths-from / --paths-to: list call paths and exit.
     if known_args.paths_from and known_args.paths_to:
-        v = CallGraphVisitor(filenames, root=root, logger=logger)
+        v = CallGraphVisitor(filenames, root=root, logger=logger,
+                             cull_subsumed_edges=not known_args.keep_subsumed_edges)
         src_ns, src_name = known_args.paths_from.rsplit(".", 1)
         tgt_ns, tgt_name = known_args.paths_to.rsplit(".", 1)
         from_node = v.get_node(src_ns, src_name)
@@ -586,7 +610,8 @@ def main(cli_args=None):
                          namespace=known_args.namespace,
                          direction=known_args.direction, depth=depth,
                          logger=logger, graph_options=graph_options,
-                         namespace_constructors=extra_constructors)
+                         namespace_constructors=extra_constructors,
+                         cull_subsumed_edges=not known_args.keep_subsumed_edges)
 
     writer = None
     dot_options = [

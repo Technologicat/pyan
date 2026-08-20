@@ -1,0 +1,3 @@
+import callee
+
+callee.dostuff()

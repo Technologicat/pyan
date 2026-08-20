@@ -21,10 +21,11 @@ __all__ = [
     "expand_unknowns",
     "cull_inherited",
     "collapse_inner",
+    "cull_subsumed",
 ]
 
 
-def postprocess(visitor):
+def postprocess(visitor, cull_subsumed_edges=True):
     """Run the full postprocessing pipeline.
 
     First resolve imports (remap IMPORTEDITEM nodes to their targets),
@@ -38,12 +39,18 @@ def postprocess(visitor):
     Now that :func:`expand_unknowns` checks import relationships, we can
     safely return to contract-then-expand, which is the correct order:
     wildcards must exist before expansion can act on them.
+
+    Subsumption culling runs last, so that it sees the edges
+    :func:`collapse_inner` folds into their parent Nodes. Pass
+    ``cull_subsumed_edges=False`` to keep the raw edge set.
     """
     resolve_imports(visitor)
     contract_nonexistents(visitor)
     expand_unknowns(visitor)
     cull_inherited(visitor)
     collapse_inner(visitor)
+    if cull_subsumed_edges:
+        cull_subsumed(visitor)
 
 
 def resolve_imports(visitor):
@@ -289,3 +296,82 @@ def collapse_inner(visitor):
                         visitor.logger.info(f"Collapsing inner from {n} to {pn}, uses {n2}")
                         visitor.add_uses_edge(pn, n2)
                 n.defined = False
+
+
+def cull_subsumed(visitor):
+    """Drop uses edges that a more specific edge already conveys (#140).
+
+    An edge ``S -> T`` is subsumed when either ``S`` is a module and something
+    defined in its own file also uses ``T``, or ``T`` is a module and ``S``
+    also uses something anywhere under it.
+
+    Only modules widen. An edge whose target is a module came from an
+    ``import``, and says nothing a finer edge into that module does not
+    already say; an edge whose target is a class is a constructor call, and
+    stands on its own. The same asymmetry holds on the source side: a module's
+    edge duplicates its members' edges, where a function's does not.
+    """
+    # A bare `import b` yields a uses edge whether or not the name is ever
+    # referenced, so a module node accumulates one edge per imported name on
+    # top of whatever its body actually does. Those are the edges that make a
+    # grouped graph unreadable: they run parallel to the members' own edges,
+    # from a node drawn right beside them.
+    #
+    # What this must not do is remove the last evidence of a dependency. It
+    # cannot: an edge is dropped only when the subsuming edge runs between the
+    # same two subtrees, so collapsing to module granularity (--depth 0)
+    # recovers exactly the same pair.
+    #
+    # The two ends need different notions of "inside", because a package's
+    # dotted-name descendants are its submodules — separate files. A sibling
+    # module importing something says nothing about what `__init__.py` imports,
+    # so the source side counts only what the module's own file defines, while
+    # the target side counts everything under the package.
+    all_nodes = [n for items in visitor.nodes.values() for n in items]
+    modules = {n.get_name() for n in all_nodes if n.flavor == Flavor.MODULE}
+    members = {name: set() for name in modules}  # defined in that module's own file
+    within = {name: set() for name in modules}  # anywhere under that dotted path
+    for node in all_nodes:
+        prefix = node.get_name().rpartition(".")[0]
+        enclosing_module_seen = False
+        while prefix:
+            if prefix in modules:
+                within[prefix].add(node)
+                if not enclosing_module_seen:
+                    enclosing_module_seen = True
+                    if node.flavor != Flavor.MODULE:
+                        members[prefix].add(node)
+            prefix = prefix.rpartition(".")[0]
+
+    def is_subsumed(from_node, to_node):
+        """Is there a finer edge carrying the same dependency?
+
+        Exactly one end widens per test. Widening both at once would let an
+        edge between two unrelated nodes stand in for this one: for a package
+        importing its own subpackage, ``S`` contains ``T``, so a module inside
+        the subpackage importing its neighbour would qualify — an edge that is
+        not ``S``'s code and does not reach ``T``.
+        """
+        widened_sources = members[from_node.get_name()] if from_node.flavor == Flavor.MODULE else ()
+        widened_targets = within[to_node.get_name()] if to_node.flavor == Flavor.MODULE else ()
+        return (
+            # something in the module's own file reaches the same target
+            any(to_node in visitor.uses_edges.get(s, ()) for s in widened_sources) or
+            # this same source reaches somewhere inside the module
+            any(t in widened_targets for t in visitor.uses_edges.get(from_node, ()))
+        )
+
+    # Decide against the original graph, then remove; culling as we go would
+    # make the result depend on iteration order. Deciding up front cannot empty
+    # a chain of subsumptions: each one points at an edge strictly deeper on one
+    # end, so the relation is well-founded and the finest edge always survives.
+    removed_uses_edges = [
+        (from_node, to_node)
+        for from_node, to_nodes in visitor.uses_edges.items()
+        for to_node in to_nodes
+        if is_subsumed(from_node, to_node)
+    ]
+
+    for from_node, to_node in removed_uses_edges:
+        visitor.logger.info(f"Removing subsumed edge from {from_node} to {to_node}")
+        visitor.remove_uses_edge(from_node, to_node)
