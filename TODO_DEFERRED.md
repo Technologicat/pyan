@@ -14,6 +14,44 @@ Determine confidence of detected edges. See [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
 Partly addressed by #88 fix (import-aware expansion). Remainder: see [johnyf/pyan#5](https://github.com/johnyf/pyan/issues/5).
 
+## No fixture is known to make `cull_inherited` fire
+
+*Cluster: postprocessing · Cost: S · Gate: none · Filed: 2026-08-20 · See also: #140*
+
+`cull_inherited` drops uses edges on the grounds that the inheritance chain already represents them, but an attempt to watch it act failed, so what it actually does is neither documented nor covered by a test of its own.
+
+The fixture: a `Base`/`Derived` pair both defining `hello`, plus `def caller(obj: Derived): obj.hello()`. The resulting graph holds `caller -> Derived` and no edge to either `hello` — the call resolved to the wildcard `*.hello`, which is undefined and so never drawn. Nothing reached the culling stage at all.
+
+Two questions, and an answer to the first may dissolve the second: should an annotated parameter resolve `obj.hello()` to `Derived.hello`? And what shape of code makes `cull_inherited` remove an edge?
+
+Until that is settled the rule is the one omission missing from the README's "What the graph leaves out", which describes every other relation pyan declines to draw.
+
+Discovered while documenting the graph-shaping rules for #140 (2026-08-20).
+
+## A module-level constant that *is* used still produces no uses edge
+
+*Cluster: analyzer · Cost: ? · Gate: none · Filed: 2026-08-20 · See also: #140*
+
+Given `CONSTANT = 42` at module level and a `def caller(): return CONSTANT` in the same file, the analyzer records no edge from `caller` to `m.CONSTANT`. The Node exists — flavor `name`, `defined=True` — and the sibling `UNUSED_CONSTANT` is indistinguishable from it in the graph. visgraph then drops NAME Nodes that have no uses edges, so a constant is invisible whether or not anything reads it.
+
+Unknown whether this is deliberate (a constant is not a call, and a call graph may not want it) or a gap in binding tracking for module-level names read from an inner scope.
+
+It matters for the docs either way: the README's "What the graph leaves out" says that a module-level binding *nothing uses* is not drawn, which a reader will take to mean used ones are. Once the behaviour is settled, that sentence needs to match it.
+
+Discovered while documenting the graph-shaping rules for #140 (2026-08-20).
+
+## Packages with no members are drawn as isolated nodes
+
+*Cluster: rendering · Cost: S · Gate: needs a decision on whether an empty package is worth showing · Filed: 2026-08-20 · See also: #140*
+
+An `__init__.py` with nothing in it yields a module Node with no edges, and — since a module's cluster exists only where it has non-module members — no cluster either. A grouped graph of `pkg/api/routes/...` therefore shows `pkg`, `pkg.api`, `pkg.api.routes` and `pkg.api.schemas` as lone ellipses off to one side, connected to nothing.
+
+Distinct from the twin-node problem #140 fixed: these never had a box to be merged into. What they convey is that the package exists, which the dotted names of everything inside it already convey.
+
+Filtering them is a one-line change, so the work is the decision, not the patch.
+
+Discovered while checking the grouped rendering for #140 (2026-08-20).
+
 ## Type inference for function arguments
 
 Would reduce wildcard noise by resolving argument types at call sites. Ambitious.
