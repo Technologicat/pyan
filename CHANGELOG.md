@@ -6,7 +6,8 @@
 
 - **A parameter's type annotation is now treated as its type**, so `def f(obj: Thing): obj.method()` draws an edge to `Thing.method`. A local already behaved this way — `thing = Thing(); thing.method()` always resolved — and an annotation is the one place a codebase states the type on purpose, which left the asymmetry hard to defend.
   - It is a static reading, and the value that arrives may be an overriding subclass. `--ignore-parameter-annotations` restores the previous behaviour, as does `use_parameter_annotations=False` in `create_callgraph()` and `CallGraphVisitor`.
-  - Classes and modules bind — for both, the scope pyan resolves attributes against *is* the attribute namespace. Not `*args` / `**kwargs`, whose annotation describes the element type. A string annotation, `Optional[X]`, or a union resolves to nothing.
+  - Classes and modules bind — for both, the scope pyan resolves attributes against *is* the attribute namespace. A string annotation, `Optional[X]`, or a union resolves to nothing.
+  - `*args` / `**kwargs` do not bind, being a tuple and a dict, but subscripting one does: `def f(*items: Thing): items[0].method()` reaches `Thing.method`.
 
 ### Fixed
 

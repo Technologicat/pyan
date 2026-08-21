@@ -212,3 +212,16 @@ def test_star_args_annotations_do_not_bind(func):
     """`*items: Thing` says the elements are Things; `items` itself is a tuple."""
     v = _annotated_visitor()
     assert f"{ANNOTATED_PREFIX}.Thing.method" not in _uses_names(v, func)
+
+
+@pytest.mark.parametrize("func", ["varargs_subscript", "kwargs_subscript"])
+def test_subscripting_star_args_reaches_the_element_type(func):
+    """`items[0]` is one element, which is what the annotation describes."""
+    v = _annotated_visitor()
+    assert f"{ANNOTATED_PREFIX}.Thing.method" in _uses_names(v, func)
+
+
+def test_star_args_element_survives_a_local():
+    """`first = items[0]` carries the element type into the local."""
+    v = _annotated_visitor()
+    assert f"{ANNOTATED_PREFIX}.Thing.method" in _uses_names(v, "varargs_element_via_local")

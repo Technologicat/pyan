@@ -42,16 +42,6 @@ Worth measuring before committing to it: `__repr__` is the visible 1.5s, but the
 
 Found while re-profiling after the attribute-fallback speedup (2026-08-21).
 
-## A subscripted `*args` could use its element annotation
-
-*Cluster: analyzer · Cost: S · Gate: none · Filed: 2026-08-21*
-
-`def f(*items: Thing): items[0].method()` resolves to nothing. The parameter itself is deliberately left unbound — it is a tuple, not a `Thing` — but the annotation states the *element* type, and `items[0]` is exactly one element, so the call could resolve to `Thing.method`. Same shape for `**opts: Thing` and `opts["key"].method()`.
-
-Would need the subscript to be recognized: when the value being subscripted is a starred parameter carrying an element annotation, the result has that type. Nothing currently looks at a `Subscript` this way.
-
-Noticed while reviewing the annotated-parameter feature (2026-08-21).
-
 ## Type inference for function arguments
 
 Would reduce wildcard noise by resolving argument types at call sites. Ambitious.

@@ -192,6 +192,12 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.cull_subsumed_edges = cull_subsumed_edges
         self.use_parameter_annotations = use_parameter_annotations
 
+        # (function namespace, parameter name) → the class a `*args: T` or
+        # `**kwargs: T` annotation names. The parameter itself is a tuple or a
+        # dict and stays unbound; this is what one *element* of it is, which is
+        # what `visit_Subscript` needs for `args[0].method()`.
+        self._starred_element_types = {}
+
         # Merged set of namespace-constructor FQNs (built-in + user-supplied).
         # Read by `_maybe_register_namespace_object` to upgrade the LHS of a
         # recognized binding from `Flavor.NAME` to `Flavor.NAMESPACE_OBJECT`.
@@ -834,8 +840,9 @@ class CallGraphVisitor(ast.NodeVisitor):
         `cb.stash.method()` against a local `stash` and draw a call that cannot
         happen.
 
-        `*args` and `**kwargs` are left alone: their annotation describes the
-        element type, where the parameter itself is a tuple or a dict.
+        `*args` and `**kwargs` are not bound: their annotation describes the
+        element type, where the parameter itself is a tuple or a dict. The
+        element type is remembered instead, for subscripts to use.
         """
         sc = self.scopes[inner_ns]
         for arg in node.args.args + node.args.posonlyargs + node.args.kwonlyargs:
@@ -845,6 +852,14 @@ class CallGraphVisitor(ast.NodeVisitor):
             if isinstance(value, Node) and value.flavor in (Flavor.CLASS, Flavor.MODULE):
                 self.logger.info(f"Binding parameter {arg.arg} to annotated type {value}")
                 sc.defs[arg.arg] = value
+
+        for star_arg in (node.args.vararg, node.args.kwarg):
+            if star_arg is None or star_arg.annotation is None:
+                continue
+            value = self._resolve_annotation_to_node(star_arg.annotation)
+            if isinstance(value, Node) and value.flavor in (Flavor.CLASS, Flavor.MODULE):
+                self.logger.info(f"Element type of {star_arg.arg} is {value}")
+                self._starred_element_types[(inner_ns, star_arg.arg)] = value
 
     def _record_import(self, target_module):
         """Record that the current namespace imports from `target_module`.
@@ -1006,6 +1021,37 @@ class CallGraphVisitor(ast.NodeVisitor):
     # Essentially, this should make '.'.join(...) see str.join.
     # Pyan3 currently handles that in resolve_attribute() and get_attribute().
     #
+    def visit_Subscript(self, node):
+        """Subscripting `*args: T` or `**kwargs: T` yields a `T`.
+
+        The parameter itself is a tuple or a dict, so it is deliberately not
+        bound to `T` — but one element of it is exactly what the annotation
+        names, which is what makes `args[0].method()` resolvable.
+        """
+        self.logger.debug(f"Subscript in context {type(node.ctx)}, {self.filename}:{node.lineno}")
+        # Defining this method takes over from `generic_visit`, so the children
+        # have to be walked here or the ordinary case regresses: `TABLE["a"]`
+        # gets its edge to `TABLE` from visiting the value, and the index
+        # expression may reference names of its own.
+        self.visit(node.value)
+        self.visit(node.slice)
+
+        if isinstance(node.ctx, ast.Load):
+            element = self._starred_element_type(node)
+            if element is not None:
+                self.logger.debug(f"Subscript of {node.value.id} resolves to element type {element}")
+                return element
+        # Otherwise contribute no value, as `generic_visit` did: pyan does not
+        # track what a container holds, so the result of a subscript is unknown.
+        return None
+
+    def _starred_element_type(self, subscript_ast):
+        """The element type of a `*args: T` / `**kwargs: T` this subscripts, if any."""
+        if not isinstance(subscript_ast.value, ast.Name):
+            return None
+        ns = self.get_node_of_current_namespace().get_name()
+        return self._starred_element_types.get((ns, subscript_ast.value.id))
+
     def visit_Constant(self, node):
         """Return no value: a literal does not bind its target to anything."""
         # Returning the literal's *type* here — a Node named `<namespace>.int` —
@@ -1933,6 +1979,14 @@ class CallGraphVisitor(ast.NodeVisitor):
                 # are object types.
                 #
                 obj_node = self.get_node("", tn, None, flavor=Flavor.CLASS)
+
+            # attribute of a subscript. `*args: T` annotates the *element* type,
+            # so `args[0]` is a `T` even though `args` itself is a tuple.
+            elif isinstance(ast_node.value, ast.Subscript):
+                obj_node = self._starred_element_type(ast_node.value)
+                if not isinstance(obj_node, Node):
+                    self.logger.debug(f"Unresolved subscript as obj, returning attr {ast_node.attr} of unknown")
+                    return None, ast_node.attr
 
             # attribute of a function call. Detect cases like super().dostuff()
             elif isinstance(ast_node.value, ast.Call):
