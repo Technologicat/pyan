@@ -69,6 +69,22 @@ def test_super_call(v):
     get_node(uses, f"{PREFIX}.Parent.greet")
 
 
+def test_calls_to_base_and_override_both_survive():
+    """Two call sites are two edges, even when one class inherits the other.
+
+    Attribute lookup walks the MRO and returns one target per call site, so a
+    function holding edges to `Base.hello` and `Derived.hello` is a function
+    that calls both — there is no ambiguity here to resolve away.
+    """
+    filenames = [os.path.join(TESTS_DIR, "test_code/inherited_calls.py")]
+    v = CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
+
+    prefix = "test_code.inherited_calls"
+    uses = get_in_dict(v.uses_edges, f"{prefix}.call_both")
+    get_node(uses, f"{prefix}.Base.hello")
+    get_node(uses, f"{prefix}.Derived.hello")
+
+
 # --- Class-body annotations ---
 
 def test_class_body_annotation_uses(v):

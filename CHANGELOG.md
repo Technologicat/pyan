@@ -2,6 +2,10 @@
 
 ## 2.8.0 (in progress)
 
+### Fixed
+
+- **A call to an overridden method is no longer dropped when the caller also calls the base version.** A postprocessing stage removed the *more specific* of two same-named uses edges whenever one class inherited the other, deleting a real call site: a function calling both `ASTMarker(...)` and a locally defined `Tagged(ASTMarker)` lost its edge to `Tagged.__init__`. Attribute lookup returns one target per call site, and the stage excluded wildcards by construction, so it could never reach the ambiguous case it was written for — it has been removed.
+
 ### Changed
 
 - **Uses edges that a more specific edge already conveys are now dropped.** A bare `import` produces a uses edge whether or not the name is ever referenced, so a module node accumulated one per imported name — and in a graph that also shows functions, each ran parallel to the edges of the functions using it, from a node drawn right beside them. Two shapes are culled: a module's edge to a target that something in its own file also uses, and a module's edge to another module it also reaches into. (#140)

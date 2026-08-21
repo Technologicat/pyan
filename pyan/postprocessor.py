@@ -19,7 +19,6 @@ __all__ = [
     "resolve_imports",
     "contract_nonexistents",
     "expand_unknowns",
-    "cull_inherited",
     "collapse_inner",
     "cull_subsumed",
 ]
@@ -47,7 +46,6 @@ def postprocess(visitor, cull_subsumed_edges=True):
     resolve_imports(visitor)
     contract_nonexistents(visitor)
     expand_unknowns(visitor)
-    cull_inherited(visitor)
     collapse_inner(visitor)
     if cull_subsumed_edges:
         cull_subsumed(visitor)
@@ -247,36 +245,6 @@ def expand_unknowns(visitor):
         for n in visitor.nodes[name]:
             if n.namespace is None:
                 n.defined = False
-
-
-def cull_inherited(visitor):
-    """For each use edge from W to X.name, if it also has an edge to W to Y.name where
-    Y is used by X, then remove the first edge.
-    """
-    removed_uses_edges = []
-    for n in visitor.uses_edges:
-        for n2 in visitor.uses_edges[n]:
-            inherited = False
-            for n3 in visitor.uses_edges[n]:
-                if (
-                    n3.name == n2.name and
-                    n2.namespace is not None and
-                    n3.namespace is not None and
-                    n3.namespace != n2.namespace
-                ):
-                    pn2 = visitor.get_parent_node(n2)
-                    pn3 = visitor.get_parent_node(n3)
-                    # if pn3 in visitor.uses_edges and pn2 in visitor.uses_edges[pn3]:
-                    # remove the second edge W to Y.name (TODO: add an option to choose this)
-                    if pn2 in visitor.uses_edges and pn3 in visitor.uses_edges[pn2]:  # remove the first edge W to X.name
-                        inherited = True
-
-            if inherited and n in visitor.uses_edges:
-                removed_uses_edges.append((n, n2))
-                visitor.logger.info(f"Removing inherited edge from {n} to {n2}")
-
-    for from_node, to_node in removed_uses_edges:
-        visitor.remove_uses_edge(from_node, to_node)
 
 
 def collapse_inner(visitor):

@@ -14,19 +14,15 @@ Determine confidence of detected edges. See [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
 Partly addressed by #88 fix (import-aware expansion). Remainder: see [johnyf/pyan#5](https://github.com/johnyf/pyan/issues/5).
 
-## No fixture is known to make `cull_inherited` fire
+## Should an annotated parameter resolve an attribute call?
 
-*Cluster: postprocessing · Cost: S · Gate: none · Filed: 2026-08-20 · See also: #140*
+*Cluster: analyzer · Cost: ? · Gate: none · Filed: 2026-08-21*
 
-`cull_inherited` drops uses edges on the grounds that the inheritance chain already represents them, but an attempt to watch it act failed, so what it actually does is neither documented nor covered by a test of its own.
+`def caller(obj: Derived): obj.hello()` yields a uses edge to the wildcard `*.hello`, not to `Derived.hello`, so the annotation contributes nothing to resolving the call. A local does better: `thing = Derived(); thing.hello()` resolves to `Derived.hello`.
 
-The fixture: a `Base`/`Derived` pair both defining `hello`, plus `def caller(obj: Derived): obj.hello()`. The resulting graph holds `caller -> Derived` and no edge to either `hello` — the call resolved to the wildcard `*.hello`, which is undefined and so never drawn. Nothing reached the culling stage at all.
+Whether to honour the annotation is a design question, not obviously a bug — an annotation is a claim about the *static* type and the object may be a subclass, which is exactly the imprecision pyan already declines to guess at elsewhere. But the asymmetry with the local-variable case is hard to justify to a reader, and annotations are the one place a codebase states the type on purpose.
 
-Two questions, and an answer to the first may dissolve the second: should an annotated parameter resolve `obj.hello()` to `Derived.hello`? And what shape of code makes `cull_inherited` remove an edge?
-
-Until that is settled the rule is the one omission missing from the README's "What the graph leaves out", which describes every other relation pyan declines to draw.
-
-Discovered while documenting the graph-shaping rules for #140 (2026-08-20).
+Noticed while trying to construct a fixture for `cull_inherited`, which has since been deleted (2026-08-21).
 
 ## A module-level constant that *is* used still produces no uses edge
 
