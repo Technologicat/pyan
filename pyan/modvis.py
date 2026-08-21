@@ -146,9 +146,9 @@ class ImportVisitor(ast.NodeVisitor):
         # Since nonexistent modules are not in the analyzed set (i.e. do not
         # appear as keys of self.modules), prepare_graph will ignore them.
         #
-        # NOTE: A plain-text output reading raw self.modules would see these
-        # spurious deps.  Fix: always go through prepare_graph().
-        # See TODO_DEFERRED.md "modvis plain-text output".
+        # So `self.modules` is not presentable as it stands, in any format:
+        # anything rendering it must go through prepare_graph(), which is where
+        # the filtering to the analyzed set happens.
         modpath = target_module.split(".")
         for k in range(1, len(modpath) + 1):
             base = ".".join(modpath[:k])
