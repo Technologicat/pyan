@@ -659,6 +659,24 @@ def bar():
     Thing()                # c.bar -> b.Thing    ...kept
 ```
 
+The second case needs one node to do both — to use the module *and* to reach inside it. Here that node is `c` itself:
+
+```python
+# c.py
+import b                   # c -> b              ...dropped
+b.setup()                  # c -> b.setup        ...kept
+```
+
+Move the call into a function and the import edge stays, because the node reaching inside `b` is then `c.bar`, and `c` is left using nothing but `b`:
+
+```python
+# c.py
+import b                   # c -> b              ...kept
+
+def bar():
+    b.Thing()              # c.bar -> b.Thing    ...kept
+```
+
 Note what this is *not*. A module that merely **defines** a function has a `defines` edge to it, and defines edges are never touched — so in a module where `bar()` calls `foo()`, nothing is dropped, there being no module-level *use* of `foo` in the first place. The rule needs the module's own body to use something, which in practice means an import.
 
 Three restrictions keep the rule from eating real information:
@@ -667,25 +685,90 @@ Three restrictions keep the rule from eating real information:
 - **Only one end widens at a time.** For a package that imports its own subpackage, `S` contains `T`, and widening both ends would let an edge between two modules *inside* the subpackage stand in for the package's own import.
 - **Source-side widening counts only same-file members**, since a package's dotted-name descendants are separate files: `sub/beta.py` importing `alpha` says nothing about what `sub/__init__.py` imports.
 
-What survives is anything nothing else records — a module-level use no function reproduces (`router = make_router()`), and an import whose name is never referenced. The rule never removes the last evidence of a dependency: an edge goes only when a finer edge runs between the same pair, so `--depth 0` still shows every module-to-module dependency.
+The last two are both about packages, and one arrangement shows each:
+
+```python
+# pkg/__init__.py
+from pkg import sub            # pkg -> pkg.sub              ...kept
+
+# pkg/sub/__init__.py
+from pkg.sub import alpha      # pkg.sub -> pkg.sub.alpha    ...kept
+
+# pkg/sub/beta.py
+from pkg.sub import alpha      # pkg.sub.beta -> pkg.sub.alpha    ...dropped
+
+def g():
+    return alpha               # pkg.sub.beta.g -> pkg.sub.alpha  ...kept
+```
+
+`pkg → pkg.sub` is the both-ends case: `pkg` contains `pkg.sub`, so widening both at once would accept `g`'s use of `alpha` as evidence for it — code that is not in `pkg/__init__.py` and does not point at `pkg.sub`. `pkg.sub → pkg.sub.alpha` is the source-side one: `g` does use exactly that target, but it lives in `beta.py`, and what `sub/__init__.py` imports is its own business. Inside `beta.py` the first case then applies normally, and the module-level import goes.
+
+What survives is anything nothing else records — a module-level use no function reproduces, and an import whose name is never referenced:
+
+```python
+# c.py
+from b import make_router, helper   # c -> b.helper       ...kept, nothing else uses it
+
+router = make_router()              # c -> b.make_router  ...kept, no function repeats it
+```
+
+The rule never removes the last evidence of a dependency: an edge goes only when a finer edge runs between the same pair, so `--depth 0` still shows every module-to-module dependency.
 
 Applies in every mode, including `--text` and the Python API. Switch it off with `--keep-subsumed-edges`, or `cull_subsumed_edges=False` in `create_callgraph()`, `CallGraphVisitor` and `CallGraphVisitor.from_sources` — worth doing when you are asking questions *about imports* rather than about calls.
 
 ### Module nodes, when grouping
 
-With `-g` / `--grouped` (or `-e` / `--nested-groups`), a module that has members is represented by the cluster holding them. Drawing the module node beside that cluster would label the same thing twice, so the node moves *inside* its own cluster and is labelled `<module>` — the name CPython gives the module-level code object.
+With `-g` / `--grouped` (or `-e` / `--nested-groups`), every module is drawn as a cluster. Drawing the module node beside that cluster would label the same thing twice, so the node moves *inside* its own cluster and is labelled `<module>` — the name CPython gives the module-level code object.
 
-- `<module>` appears only when the module body uses something, or something uses the module. A module that merely contains definitions is left to its box.
+- `<module>` appears where the module body uses something, where something uses the module, or where it is the only thing its box would hold. A module that merely contains definitions is left to its members.
 - A module's defines edges to its own members are not drawn: the box already states containment.
 
-Neither applies without grouping. There, module nodes keep their full dotted names and all their defines edges, because those edges are then the only thing showing what contains what.
+All three clauses of the first bullet come up in three files:
+
+```python
+# pkg/__init__.py                  (empty)
+
+# pkg/mod.py
+from pkg.other import helper
+
+def bar():
+    helper()
+
+# pkg/other.py
+def helper():
+    pass
+```
+
+Three boxes, one edge:
+
+- **`pkg`** holds `<module>` alone. It has no members, and an empty box would represent the module by an absence.
+- **`pkg.mod`** holds `bar` alone. Its module-level import edge was subsumed by `bar`'s (above), leaving the body using nothing, and nothing uses `pkg.mod` either.
+- **`pkg.other`** holds `helper` alone, for the same reason.
+- The only edge drawn is `bar → helper`. `pkg.mod`'s defines edge to `bar` is not, the box having said it.
+
+Neither bullet applies without grouping. There, module nodes keep their full dotted names and all their defines edges, because those edges are then the only thing showing what contains what.
 
 ### Lambdas, comprehensions, and unused module-level names
 
-An analyzed module is drawn even when it connects to nothing — a package whose `__init__.py` is empty appears as a node with no edges, and that is the point: you handed pyan the file, so "this links nowhere" is an answer rather than clutter. When grouping, it stays a plain node rather than becoming a box: a cluster exists only where a module has members to hold, and an empty `__init__.py` has none. Modules that were only ever imported, never analyzed, are not drawn at all.
+An analyzed module is drawn even when it connects to nothing — a package whose `__init__.py` is empty appears as a node with no edges, and that is the point: you handed pyan the file, so "this links nowhere" is an answer rather than clutter. When grouping, it becomes a box holding `<module>`, like any other module. Modules that were only ever imported, never analyzed, are not drawn at all.
 
 - **Lambdas and comprehensions are folded into the function that contains them.** A lambda that calls `f` is drawn as its enclosing function calling `f`.
 - **A module-level binding that nothing uses is not drawn.** Names like `__version__` or a private constant become nodes during analysis so that other modules can import them; when nothing does, they would be isolated dots.
+
+Both, in one module:
+
+```python
+__version__ = "1.0"             # not drawn — no other module imports it
+
+def f(x):
+    return x
+
+def bar(items):
+    g = lambda x: f(x)          # m.bar -> m.f
+    return [f(y) for y in items]  # m.bar -> m.f, again
+```
+
+The graph holds `m` defining `f` and `bar`, and `bar` using `f`. There is no node for the lambda, none for the comprehension, and none for `__version__`.
 
 # Authors
 

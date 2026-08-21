@@ -2,7 +2,9 @@
 
 ## 2.8.1 (in progress)
 
-*No user-visible changes yet.*
+### Fixed
+
+- **[What the graph leaves out](README.md#what-the-graph-leaves-out) now describes grouped output correctly, and gives an example of each rule.** Every module is drawn as a box under `--grouped`; the README said a module without members stays a plain node, which it does not — an empty `__init__.py` gets a box holding `<module>` alone. Only the first of the culling rules came with an example, so the rest have one now.
 
 
 ---
