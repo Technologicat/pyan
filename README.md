@@ -626,13 +626,11 @@ When a binding statement is encountered, the current namespace determines in whi
 
 This is a static reading, and it can be wrong in the ordinary way: the value that actually arrives may be a subclass that overrides `method`, in which case the edge points at the base's version. Where a codebase's annotations are loose enough that this misleads more than it helps, `--ignore-parameter-annotations` turns it off (`use_parameter_annotations=False` from the API), and the call falls back to resolving against nothing.
 
-Only classes bind, and only ordinary parameters.
+Only classes and modules bind, and only ordinary parameters.
 
-Classes, because pyan resolves an attribute by looking in the target's *scope*, and a class's scope is exactly its attribute namespace.
+Classes and modules, because pyan resolves an attribute by looking in the target's *scope*, and for both of those the scope is exactly the attribute namespace. `def f(mod: mymodule): mod.helper()` resolves, provided `mymodule` is in the analyzed set.
 
-A function's is not — but not because functions have no attributes. `helper.marker = Thing` is recorded, and `helper.marker()` resolves; the binding simply lands in the same dictionary as `helper`'s local variables, and nothing separates the two at the point of lookup. So binding a parameter to a function would resolve `cb.stash.method()` against a local named `stash` and draw a call that cannot happen. That is a limitation of the analyzer rather than a fact about Python, and a fixable one — the scope already records which names are locals — but nothing exploits that yet.
-
-(A module's scope *is* its attribute namespace, so modules would be safe; they are excluded only because annotating a parameter with a module is vanishingly rare.)
+A function's scope is not — though not because functions have no attributes. `helper.marker = Thing` is recorded, and `helper.marker()` resolves; the binding simply lands in the same dictionary as `helper`'s local variables, and nothing separates the two at the point of lookup. So binding a parameter to a function would resolve `cb.stash.method()` against a local named `stash` and draw a call that cannot happen. That is a limitation of this analyzer rather than a fact about Python, and a fixable one — the scope already records which names are locals — but nothing exploits that yet.
 
 Ordinary parameters, because on `*args` / `**kwargs` the annotation describes the *element* type while the parameter itself is a tuple or a dict. Note this leaves something on the table: in `args[0].method()` the element type is exactly right, and pyan does not currently use it.
 

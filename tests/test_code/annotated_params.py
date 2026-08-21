@@ -1,5 +1,7 @@
 """Attribute access on a parameter whose type the signature states."""
 
+from test_code import submodule1
+
 
 class Thing:
     def method(self):
@@ -27,3 +29,8 @@ def varargs(*items: Thing):
 def kwargs_only(**opts: Thing):
     # Likewise: `opts` is a dict.
     opts.method()
+
+
+def module_annotated(mod: submodule1):
+    # A module's scope is its attribute namespace, same as a class's.
+    mod.test_func1()

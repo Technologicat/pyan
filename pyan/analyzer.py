@@ -826,14 +826,13 @@ class CallGraphVisitor(ast.NodeVisitor):
         annotation is the one place a codebase states the type deliberately, so
         the asymmetry cost more than it bought.
 
-        Only classes are bound. Attribute resolution looks the name up in the
-        target's *scope*, and a class's scope is its attribute namespace. A
-        function's scope holds its locals and any attributes assigned to it in
-        one dictionary, undistinguished at lookup, so binding a parameter to a
-        function would resolve `cb.stash.method()` against a local `stash` and
-        draw a call that cannot happen. A module's scope would be safe by the
-        same test; modules are left out only because annotating a parameter with
-        one is vanishingly rare.
+        Classes and modules bind, and nothing else. Attribute resolution looks
+        the name up in the target's *scope*, and for those two the scope is
+        exactly the attribute namespace. A function's scope holds its locals and
+        any attributes assigned to it in one dictionary, undistinguished at
+        lookup, so binding a parameter to a function would resolve
+        `cb.stash.method()` against a local `stash` and draw a call that cannot
+        happen.
 
         `*args` and `**kwargs` are left alone: their annotation describes the
         element type, where the parameter itself is a tuple or a dict.
@@ -843,7 +842,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             if arg.annotation is None:
                 continue
             value = self._resolve_annotation_to_node(arg.annotation)
-            if isinstance(value, Node) and value.flavor == Flavor.CLASS:
+            if isinstance(value, Node) and value.flavor in (Flavor.CLASS, Flavor.MODULE):
                 self.logger.info(f"Binding parameter {arg.arg} to annotated type {value}")
                 sc.defs[arg.arg] = value
 

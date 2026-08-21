@@ -157,7 +157,10 @@ ANNOTATED_PREFIX = "test_code.annotated_params"
 
 
 def _annotated_visitor(use_parameter_annotations=True):
-    filenames = [os.path.join(TESTS_DIR, "test_code/annotated_params.py")]
+    # submodule1 comes along because one parameter is annotated with it: a
+    # module only resolves as a type when it is in the analyzed set.
+    filenames = [os.path.join(TESTS_DIR, "test_code/annotated_params.py"),
+                 os.path.join(TESTS_DIR, "test_code/submodule1.py")]
     return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger(),
                             use_parameter_annotations=use_parameter_annotations)
 
@@ -196,6 +199,12 @@ def test_unannotated_parameter_is_unaffected():
     for flag in (True, False):
         v = _annotated_visitor(use_parameter_annotations=flag)
         assert f"{ANNOTATED_PREFIX}.Thing.method" not in _uses_names(v, "unannotated")
+
+
+def test_module_annotated_parameter_binds():
+    """A module's scope is its attribute namespace too, so it binds like a class."""
+    v = _annotated_visitor()
+    assert "test_code.submodule1.test_func1" in _uses_names(v, "module_annotated")
 
 
 @pytest.mark.parametrize("func", ["varargs", "kwargs_only"])
