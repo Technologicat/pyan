@@ -670,6 +670,8 @@ Neither applies without grouping. There, module nodes keep their full dotted nam
 
 ### Lambdas, comprehensions, and unused module-level names
 
+An analyzed module is drawn even when it connects to nothing — a package whose `__init__.py` is empty appears as a node with no edges, and that is the point: you handed pyan the file, so "this links nowhere" is an answer rather than clutter. Modules that were only ever imported, never analyzed, are not drawn at all.
+
 - **Lambdas and comprehensions are folded into the function that contains them.** A lambda that calls `f` is drawn as its enclosing function calling `f`.
 - **A module-level binding that nothing uses is not drawn.** Names like `__version__` or a private constant become nodes during analysis so that other modules can import them; when nothing does, they would be isolated dots.
 

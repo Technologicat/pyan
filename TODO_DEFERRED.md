@@ -52,18 +52,6 @@ Would need the subscript to be recognized: when the value being subscripted is a
 
 Noticed while reviewing the annotated-parameter feature (2026-08-21).
 
-## Packages with no members are drawn as isolated nodes
-
-*Cluster: rendering · Cost: S · Gate: needs a decision on whether an empty package is worth showing · Filed: 2026-08-20 · See also: #140*
-
-An `__init__.py` with nothing in it yields a module Node with no edges, and — since a module's cluster exists only where it has non-module members — no cluster either. A grouped graph of `pkg/api/routes/...` therefore shows `pkg`, `pkg.api`, `pkg.api.routes` and `pkg.api.schemas` as lone ellipses off to one side, connected to nothing.
-
-Distinct from the twin-node problem #140 fixed: these never had a box to be merged into. What they convey is that the package exists, which the dotted names of everything inside it already convey.
-
-Filtering them is a one-line change, so the work is the decision, not the patch.
-
-Discovered while checking the grouped rendering for #140 (2026-08-20).
-
 ## Type inference for function arguments
 
 Would reduce wildcard noise by resolving argument types at call sites. Ambitious.
