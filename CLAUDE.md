@@ -101,7 +101,8 @@ source files → CallGraphVisitor (analyzer.py) → Node graph → VisualGraph (
   - `YedWriter` — yEd GraphML.
   - `TextWriter` — Plain-text dependency list.
 
-- **`modvis.py`** (~620 lines) — Module-level import analysis. `ImportVisitor` (separate `ast.NodeVisitor`) finds import statements. `create_modulegraph()` builds a module dependency graph. Includes import cycle detection. `__init__` modules excluded by default (`with_init` parameter). Can also be run as a CLI mode via `pyan3 --module-level`.
+- **`modvis.py`** (~620 lines) — Module-level import analysis. `ImportVisitor` (separate `ast.NodeVisitor`) finds import statements. `create_modulegraph()` builds a module dependency graph. Includes import cycle detection. A package's `__init__` is drawn as the package, under the name `pkg`, unless `with_init` asks for it separately as `pkg.__init__` — see `prepare_graph`, which is also where the speculative `<prefix>.__init__` dependencies get filtered out. Can also be run as a CLI mode via `pyan3 --module-level`.
+  - **`detect_cycles` reads `self.modules` directly**, not the prepared graph, so its report names a package `pkg.__init__` where the graph says `pkg`, and it counts the speculative implicit-init dependencies as edges. Deliberate for the counting — the docstring explains why those cycles are usually harmless — but the naming mismatch is not, and is tracked in `TODO_DEFERRED.md`.
 
 - **`main.py`** (~525 lines) — CLI entry point and `create_callgraph()` API. Argument parsing, source expansion, output format dispatch. Supports `--depth`, `--direction`, `--concentrate`, `--paths-from`/`--paths-to`, `--graphviz-layout`, `--dot-ranksep`.
 

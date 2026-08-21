@@ -4,9 +4,10 @@
 
 ### Fixed
 
-- **`--module-level` no longer drops every dependency on a package itself.** A package's `__init__.py` was registered under the name `pkg.__init__`, while `import pkg` records a dependency on `pkg` — so the edge pointed at a module that, as far as the graph was concerned, did not exist, and was discarded without a warning. Both directions went: a module importing a name re-exported from `pkg/__init__.py` showed no dependency at all, and the package's own imports vanished with the node they started from. On Raven, 192 of 875 module dependencies were missing.
+- **`--module-level` no longer drops every dependency on a package itself.** A package's `__init__.py` was registered under the name `pkg.__init__`, while `import pkg` records a dependency on `pkg` — so the edge pointed at a module that, as far as the graph was concerned, did not exist, and was discarded without a warning. Both directions went: a module importing a name re-exported from `pkg/__init__.py` showed no dependency at all, and the package's own imports vanished with the node they started from. On Raven, 192 of 876 module dependencies were missing.
   - The `__init__` is now drawn as the package, under the name `pkg`. `--init` still draws it separately as `pkg.__init__`, together with the implicit dependency every module under the package has on it — which is what the default omits, and what it was trying to omit all along.
-  - Still missed: `from . import thing`, where `thing` is a name defined in `__init__.py` rather than a submodule. Recorded in `TODO_DEFERRED.md`.
+  - An `__init__.py` naming its own package — `from harbor import quay`, written in `harbor/__init__.py` — resolves to the module the import is written in, and draws nothing. A module does not depend on itself.
+  - Still missed: `from . import thing`, where `thing` is a name defined in `__init__.py` rather than a submodule. Recorded in `TODO_DEFERRED.md`, along with the cycle report naming a package `pkg.__init__` where the graph now says `pkg`.
 
 - **A misspelled option is now an error instead of being ignored.** Filenames are whatever the argument parser does not claim, so `--with-init` — a plausible misspelling of `--init` — was taken for a glob, matched nothing, and left pyan running with the setting the user was trying to change. Both the call graph and `--module-level` were affected. A glob matching no files is likewise an error in `--module-level` now, as it already was for the call graph.
 

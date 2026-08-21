@@ -340,7 +340,11 @@ class ImportVisitor(ast.NodeVisitor):
                 continue
             for d in deps:
                 n_to = target_of.get(d)
-                if n_to is not None:
+                # An `__init__.py` naming its own package absolutely — `from harbor
+                # import quay`, written in `harbor/__init__.py` — resolves to the
+                # node the import is written in. A module does not depend on itself,
+                # and a self-loop is what it would draw.
+                if n_to is not None and n_to is not n_from:
                     add_uses_edge(n_from, n_to)
 
         # sanity check output

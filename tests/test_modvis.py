@@ -380,6 +380,15 @@ class TestImportVisitor:
         target_names = {n.get_name() for n in visitor.uses_edges.get(pkg_b_node, ())}
         assert "pkg_b.beta" in target_names
 
+    def test_package_does_not_depend_on_itself(self, visitor):
+        # pkg_b/__init__.py says `from pkg_b import beta`, naming its own package.
+        # That dependency resolves to the node the import is written in, and a
+        # module does not depend on itself.
+        visitor.prepare_graph()
+        assert "pkg_b" in visitor.modules["pkg_b.__init__"]
+        pkg_b_node = visitor.nodes["pkg_b"][0]
+        assert pkg_b_node not in visitor.uses_edges.get(pkg_b_node, ())
+
     def test_implicit_init_dependency_draws_no_edge(self, visitor):
         # Every import under a package adds a speculative dep on that package's
         # __init__ — which is the clutter the default exists to remove. Folding the

@@ -435,6 +435,8 @@ pyan3 --module-level pkg/**/*.py -C
 
 This finds all unique import cycles in the analyzed module set, and reports statistics (count, min/average/median/max cycle length). Note that for large codebases, the number of cycles can be large — most are harmless consequences of cross-package imports.
 
+The cycle report works on the raw import records rather than the drawn graph, so it names a package `pkg.__init__` where the graph says `pkg`, and it counts the implicit dependency every module under a package has on that package's `__init__`. That is deliberate for the counting — those implicit imports are exactly how a cycle between two packages usually arises — but it does mean the two views name the same module differently.
+
 If a cycle is actually causing an `ImportError`, you usually already know which cycle from the traceback. The `-C` flag provides a broader view of what other cycles exist.
 
 
@@ -642,7 +644,7 @@ Pyan draws less than it knows. A call graph that shows every relation the analyz
 
 ### Uses edges that a more specific edge already conveys
 
-A bare `import b` produces a uses edge whether or not the name is ever referenced. A module node therefore collects one edge per imported name, on top of whatever its body actually does — and each of those runs parallel to the edges of the functions that use the name.
+A bare `import harbor` produces a uses edge whether or not the name is ever referenced. A module node therefore collects one edge per imported name, on top of whatever its body actually does — and each of those runs parallel to the edges of the functions that use the name.
 
 A uses edge `S → T` is dropped when either:
 
@@ -652,64 +654,64 @@ A uses edge `S → T` is dropped when either:
 The first case in full — the module-level edge goes, the function's stays:
 
 ```python
-# c.py
-from b import Thing        # c -> b.Thing        ...dropped
+# boat.py
+from harbor import Berth   # boat -> harbor.Berth           ...dropped
 
-def bar():
-    Thing()                # c.bar -> b.Thing    ...kept
+def cast_off():
+    Berth()                # boat.cast_off -> harbor.Berth  ...kept
 ```
 
-The second case needs one node to do both — to use the module *and* to reach inside it. Here that node is `c` itself:
+The second case needs one node to do both — to use the module *and* to reach inside it. Here that node is `boat` itself:
 
 ```python
-# c.py
-import b                   # c -> b              ...dropped
-b.setup()                  # c -> b.setup        ...kept
+# boat.py
+import harbor              # boat -> harbor          ...dropped
+harbor.signal()            # boat -> harbor.signal   ...kept
 ```
 
-Move the call into a function and the import edge stays, because the node reaching inside `b` is then `c.bar`, and `c` is left using nothing but `b`:
+Move the call into a function and the import edge stays, because the node reaching inside `harbor` is then `boat.cast_off`, and `boat` is left using nothing but `harbor`:
 
 ```python
-# c.py
-import b                   # c -> b              ...kept
+# boat.py
+import harbor              # boat -> harbor                 ...kept
 
-def bar():
-    b.Thing()              # c.bar -> b.Thing    ...kept
+def cast_off():
+    harbor.Berth()         # boat.cast_off -> harbor.Berth  ...kept
 ```
 
-Note what this is *not*. A module that merely **defines** a function has a `defines` edge to it, and defines edges are never touched — so in a module where `bar()` calls `foo()`, nothing is dropped, there being no module-level *use* of `foo` in the first place. The rule needs the module's own body to use something, which in practice means an import.
+Note what this is *not*. A module that merely **defines** a function has a `defines` edge to it, and defines edges are never touched — so in a module where `cast_off()` calls `moor()`, nothing is dropped, there being no module-level *use* of `moor` in the first place. The rule needs the module's own body to use something, which in practice means an import.
 
 Three restrictions keep the rule from eating real information:
 
-- **Only modules widen.** `f → Thing` alongside `f → Thing.method` stays: the first is a constructor call, which a call graph exists to show. Between modules, the same shape is an import.
+- **Only modules widen.** `cast_off → Berth` alongside `cast_off → Berth.assign` stays: the first is a constructor call, which a call graph exists to show. Between modules, the same shape is an import.
 - **Only one end widens at a time.** For a package that imports its own subpackage, `S` contains `T`, and widening both ends would let an edge between two modules *inside* the subpackage stand in for the package's own import.
-- **Source-side widening counts only same-file members**, since a package's dotted-name descendants are separate files: `sub/beta.py` importing `alpha` says nothing about what `sub/__init__.py` imports.
+- **Source-side widening counts only same-file members**, since a package's dotted-name descendants are separate files: `quay/bollard.py` importing `crane` says nothing about what `quay/__init__.py` imports.
 
 The last two are both about packages, and one arrangement shows each:
 
 ```python
-# pkg/__init__.py
-from pkg import sub            # pkg -> pkg.sub              ...kept
+# harbor/__init__.py
+from harbor import quay             # harbor -> harbor.quay                    ...kept
 
-# pkg/sub/__init__.py
-from pkg.sub import alpha      # pkg.sub -> pkg.sub.alpha    ...kept
+# harbor/quay/__init__.py
+from harbor.quay import crane       # harbor.quay -> harbor.quay.crane         ...kept
 
-# pkg/sub/beta.py
-from pkg.sub import alpha      # pkg.sub.beta -> pkg.sub.alpha    ...dropped
+# harbor/quay/bollard.py
+from harbor.quay import crane       # harbor.quay.bollard -> harbor.quay.crane ...dropped
 
-def g():
-    return alpha               # pkg.sub.beta.g -> pkg.sub.alpha  ...kept
+def tie_up():
+    return crane                    # harbor.quay.bollard.tie_up -> harbor.quay.crane  ...kept
 ```
 
-`pkg → pkg.sub` is the both-ends case: `pkg` contains `pkg.sub`, so widening both at once would accept `g`'s use of `alpha` as evidence for it — code that is not in `pkg/__init__.py` and does not point at `pkg.sub`. `pkg.sub → pkg.sub.alpha` is the source-side one: `g` does use exactly that target, but it lives in `beta.py`, and what `sub/__init__.py` imports is its own business. Inside `beta.py` the first case then applies normally, and the module-level import goes.
+`harbor → harbor.quay` is the both-ends case: `harbor` contains `harbor.quay`, so widening both at once would accept `tie_up`'s use of `crane` as evidence for it — code that is not in `harbor/__init__.py` and does not point at `harbor.quay`. `harbor.quay → harbor.quay.crane` is the source-side one: `tie_up` does use exactly that target, but it lives in `bollard.py`, and what `quay/__init__.py` imports is its own business. Inside `bollard.py` the first case then applies normally, and the module-level import goes.
 
 What survives is anything nothing else records — a module-level use no function reproduces, and an import whose name is never referenced:
 
 ```python
-# c.py
-from b import make_router, helper   # c -> b.helper       ...kept, nothing else uses it
+# boat.py
+from harbor import make_manifest, tide_table  # boat -> harbor.tide_table    ...kept, nothing else uses it
 
-router = make_router()              # c -> b.make_router  ...kept, no function repeats it
+manifest = make_manifest()                    # boat -> harbor.make_manifest ...kept, no function repeats it
 ```
 
 The rule never removes the last evidence of a dependency: an edge goes only when a finer edge runs between the same pair, so `--depth 0` still shows every module-to-module dependency.
@@ -726,25 +728,25 @@ With `-g` / `--grouped` (or `-e` / `--nested-groups`), every module is drawn as 
 All three clauses of the first bullet come up in three files:
 
 ```python
-# pkg/__init__.py                  (empty)
+# harbor/__init__.py               (empty)
 
-# pkg/mod.py
-from pkg.other import helper
+# harbor/pier.py
+from harbor.crane import lift
 
-def bar():
-    helper()
+def unload():
+    lift()
 
-# pkg/other.py
-def helper():
+# harbor/crane.py
+def lift():
     pass
 ```
 
 Three boxes, one edge:
 
-- **`pkg`** holds `<module>` alone. It has no members, and an empty box would represent the module by an absence.
-- **`pkg.mod`** holds `bar` alone. Its module-level import edge was subsumed by `bar`'s (above), leaving the body using nothing, and nothing uses `pkg.mod` either.
-- **`pkg.other`** holds `helper` alone, for the same reason.
-- The only edge drawn is `bar → helper`. `pkg.mod`'s defines edge to `bar` is not, the box having said it.
+- **`harbor`** holds `<module>` alone. It has no members, and an empty box would represent the module by an absence.
+- **`harbor.pier`** holds `unload` alone. Its module-level import edge was subsumed by `unload`'s (above), leaving the body using nothing, and nothing uses `harbor.pier` either.
+- **`harbor.crane`** holds `lift` alone, for the same reason.
+- The only edge drawn is `unload → lift`. `harbor.pier`'s defines edge to `unload` is not, the box having said it.
 
 Neither bullet applies without grouping. There, module nodes keep their full dotted names and all their defines edges, because those edges are then the only thing showing what contains what.
 
@@ -752,23 +754,24 @@ Neither bullet applies without grouping. There, module nodes keep their full dot
 
 An analyzed module is drawn even when it connects to nothing — a package whose `__init__.py` is empty appears as a node with no edges, and that is the point: you handed pyan the file, so "this links nowhere" is an answer rather than clutter. When grouping, it becomes a box holding `<module>`, like any other module. Modules that were only ever imported, never analyzed, are not drawn at all.
 
-- **Lambdas and comprehensions are folded into the function that contains them.** A lambda that calls `f` is drawn as its enclosing function calling `f`.
+- **Lambdas and comprehensions are folded into the function that contains them.** A lambda that calls `knot` is drawn as its enclosing function calling `knot`.
 - **A module-level binding that nothing uses is not drawn.** Names like `__version__` or a private constant become nodes during analysis so that other modules can import them; when nothing does, they would be isolated dots.
 
 Both, in one module:
 
 ```python
-__version__ = "1.0"             # not drawn — no other module imports it
+# rigging.py
+__version__ = "1.0"                # not drawn — no other module imports it
 
-def f(x):
+def knot(x):
     return x
 
-def bar(items):
-    g = lambda x: f(x)          # m.bar -> m.f
-    return [f(y) for y in items]  # m.bar -> m.f, again
+def rig(lines):
+    fasten = lambda x: knot(x)     # rigging.rig -> rigging.knot
+    return [knot(y) for y in lines]  # rigging.rig -> rigging.knot, again
 ```
 
-The graph holds `m` defining `f` and `bar`, and `bar` using `f`. There is no node for the lambda, none for the comprehension, and none for `__version__`.
+The graph holds `rigging` defining `knot` and `rig`, and `rig` using `knot`. There is no node for the lambda, none for the comprehension, and none for `__version__`.
 
 # Authors
 

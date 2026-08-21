@@ -154,6 +154,26 @@ Raised 2026-08-17 during the Python 3.15 support work. The normalization fix lan
 restores the real scope on 3.15 — this item is about the general shape, not that bug.
 
 
+## The cycle report and the module graph name packages differently
+
+*Cluster: modvis dependency resolution · Cost: S · Gate: needs a decision on the speculative deps · Filed: 2026-08-21*
+
+`detect_cycles` walks `self.modules` directly, where a package is keyed `pkg.__init__` and every
+import under it carries a speculative dependency on that key. `prepare_graph` draws the same
+package as `pkg` and drops those speculative deps. So `-C` and `--text` describe the same tree in
+two vocabularies, and a reader cross-referencing one against the other has to know that
+`harbor.__init__` and `harbor` are the same node.
+
+Renaming in the report is the easy half. The hard half is that the speculative deps are
+*load-bearing for cycle detection* — a cycle between two packages typically runs through exactly
+those implicit imports, and the `detect_cycles` docstring says as much. So they cannot simply be
+filtered to match the graph; the report would have to name them as what they are (an implicit
+dependency on the package's initialization) rather than as an ordinary import.
+
+Noticed while fixing the dependency-on-a-package bug (2026-08-21), which made the mismatch
+visible: before it, the default graph did not draw packages at all.
+
+
 ## `--module-level` misses `from . import name` when the name lives in `__init__.py`
 
 *Cluster: modvis dependency resolution · Cost: M · Gate: none · Filed: 2026-08-21*
