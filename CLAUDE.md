@@ -44,7 +44,7 @@ Version-specific source fixtures live in `tests/test_code_312/` (3.12+ syntax).
 
 GitHub Actions: test matrix across 3.10–3.15 on Linux plus macOS and Windows on 3.14 (`.github/workflows/ci.yml`), coverage on 3.14 via Codecov (`.github/workflows/coverage.yml`).
 
-**This repo tests its documentation.** `tests/test_docs.py` runs under `pytest`, so it runs in CI: it checks the README's table of contents against the document's own headings (every heading listed, every entry resolving, in document order) and that anchor links in the prose resolve. A Markdown-only push can therefore fail CI here, unlike elsewhere in the fleet — watch the run even for a docs-only change.
+**This repo tests its documentation.** `tests/test_docs.py` runs under `pytest`, so it runs in CI: it checks the README's table of contents against the document's own headings (every heading listed, every entry resolving, in document order) and that anchor links in the prose resolve. So a push touching **`README.md`** can fail CI here on its content alone, unlike anywhere else in the fleet — watch that one. Other Markdown (this file, `CHANGELOG.md`, `TODO_DEFERRED.md`, briefs) is read by no test, and needs no watch.
 
 ### Linting
 
