@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.8.0 (in progress)
+## 2.8.0 (21 August 2026) — *Ground truth*
 
 ### New
 
@@ -29,7 +29,8 @@
   - `--keep-subsumed-edges` restores the raw edge set, as does `cull_subsumed_edges=False` in `create_callgraph()` and `CallGraphVisitor`.
 
 - **A grouped graph no longer draws each module twice.** Under `--grouped` / `--nested-groups`, a module with members was drawn both as the cluster holding them and as an ellipse beside it carrying the same label. The cluster is the module, so the node now sits inside it, labelled `<module>` after the module-level code object CPython names the same way. (#140)
-  - `<module>` appears only where the module body uses something or something uses the module; a module that merely contains definitions is left to its box.
+  - Every module is drawn as a box, whether or not it has members, so a module's appearance no longer depends on its contents. A package with an empty `__init__.py` gets a box holding `<module>` alone.
+  - `<module>` itself appears where the module body uses something, where something uses the module, or where it is the only node its box would hold. A module that merely contains definitions is left to its members.
   - A module's defines edges to its own members are no longer drawn either, the box having already said it.
   - Ungrouped output is unchanged: module nodes keep their dotted names and their defines edges, which are then the only indication of what contains what.
 
