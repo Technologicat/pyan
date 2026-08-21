@@ -152,3 +152,33 @@ leniency is fine; if something does, the leniency has been quietly costing accur
 
 Raised 2026-08-17 during the Python 3.15 support work. The normalization fix landed then already
 restores the real scope on 3.15 — this item is about the general shape, not that bug.
+
+
+## `--module-level` misses `from . import name` when the name lives in `__init__.py`
+
+*Cluster: modvis dependency resolution · Cost: M · Gate: none · Filed: 2026-08-21*
+
+`add_dependency` records what an import *names*, and separately speculates that each dotted
+prefix might be a package by adding `<prefix>.__init__`. `prepare_graph` then keeps whichever of
+those exists in the analyzed set. That covers `from pkg import x` (the plain dep on `pkg`
+resolves to the package's node) but not the relative form.
+
+`from . import thing`, written in `pkg/sub.py` where `thing` is a *name* defined in
+`pkg/__init__.py`, resolves to `pkg.thing`, and `add_dependency("pkg.thing")` records:
+
+- `pkg.thing` — no such module, correctly dropped;
+- `pkg.__init__` — speculative, dropped by default along with every other module's;
+- `pkg.thing.__init__` — no such module, correctly dropped.
+
+So nothing is left, and a real dependency on the package goes unrecorded. `from .. import thing`
+is the same shape one level up. Note the *submodule* case (`from . import gamma`, gamma being
+`gamma.py`) is fine — `pkg.gamma` is a real module and resolves.
+
+The fix wants the speculative entries resolved against the analyzed set once both passes are
+done, rather than each import guessing in isolation: if `pkg.thing` turns out not to be a
+module, the dependency is on `pkg` itself. That needs `add_dependency` to keep the speculative
+deps distinguishable from the plain ones — presently they go into the same set — so it is a
+change to how dependencies are recorded, not a filter at the end.
+
+Discovered while fixing the sibling case, where a dependency on a package was dropped because
+the package's node was named `pkg.__init__` and the dependency was named `pkg` (2026-08-21).

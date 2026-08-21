@@ -51,6 +51,19 @@ def split_module_name(m):
     return (m[:k], m[(k + 1) :])
 
 
+def _package_of_init(m):
+    """'pkg.sub.__init__' -> 'pkg.sub'; anything else -> None.
+
+    A top-level ``__init__`` returns the empty string: it is an ``__init__.py``
+    module with no package above it to belong to.
+    """
+    if m == "__init__":
+        return ""
+    if m.endswith(".__init__"):
+        return m[: -len(".__init__")]
+    return None
+
+
 # blacklist = (".git", "build", "dist", "test")
 # def find_py_files(basedir):
 #     py_files = []
@@ -261,8 +274,11 @@ class ImportVisitor(ast.NodeVisitor):
         """Postprocessing. Prepare data for visgraph for graph file generation.
 
         Args:
-            with_init: if True, include ``__init__`` modules.
-                Excluded by default to reduce clutter.
+            with_init: if True, a package's ``__init__`` is a node of its own,
+                named ``pkg.__init__``, and the implicit dependency every module
+                under ``pkg`` has on it is drawn. By default it is instead drawn
+                as the package, under the name ``pkg``, and only dependencies
+                that name the package are edges.
         """
         self.nodes = {}  # Node name: list of Node objects (in possibly different namespaces)
         self.uses_edges = {}
@@ -271,10 +287,21 @@ class ImportVisitor(ast.NodeVisitor):
         # TODO: Right now we care only about modules whose files we read.
         # TODO: If we want to include in the graph also targets that are not in the analyzed set,
         # TODO: then we could create nodes also for the modules listed in the *values* of self.modules.
+        #
+        # Without __init__ modules, a package's node is drawn under the package's
+        # own name: the cluttering __init__ dependency is the *speculative* one
+        # `add_dependency` attaches to every import under a package, and dropping
+        # the node instead takes the package's real dependencies with it.
+        node_of = {}  # analyzed module name -> Node, for the source end of an edge
         for m in self.modules:
-            if not with_init and (m.endswith(".__init__") or m == "__init__"):
-                continue
-            ns, mod = split_module_name(m)
+            package = _package_of_init(m)
+            if package is not None and not with_init:
+                if not package:  # a top-level __init__.py, with no package name to fold into
+                    continue
+                name = package
+            else:
+                name = m
+            ns, mod = split_module_name(name)
             # The `filename` attribute of the node determines the visual color.
             # Color by top-level directory relative to root, so that modules
             # from different projects get distinct hues in multi-project runs.
@@ -286,7 +313,21 @@ class ImportVisitor(ast.NodeVisitor):
             # which is used as the key to self.nodes; but we use the fully qualified
             # name as the key. Nevertheless, visgraph expects a format where the
             # values in the visitor's `nodes` attribute are lists.
-            self.nodes[m] = [n]
+            self.nodes[name] = [n]
+            node_of[m] = n
+
+        # `import pkg` records a dependency on `pkg`, and the module that satisfies
+        # it is `pkg.__init__` — so without the alias, every dependency on a package
+        # itself points outside the analyzed set and is silently dropped.
+        #
+        # Only this name is aliased. The speculative `pkg.__init__` deps keep
+        # resolving by the ordinary rule, which is what still filters them out when
+        # the __init__ modules are not drawn.
+        target_of = {name: node_list[0] for name, node_list in self.nodes.items()}
+        for m, n in node_of.items():
+            package = _package_of_init(m)
+            if package:
+                target_of.setdefault(package, n)
 
         def add_uses_edge(from_node, to_node):
             if from_node not in self.uses_edges:
@@ -294,11 +335,13 @@ class ImportVisitor(ast.NodeVisitor):
             self.uses_edges[from_node].add(to_node)
 
         for m, deps in self.modules.items():
+            n_from = node_of.get(m)
+            if n_from is None:
+                continue
             for d in deps:
-                n_from = self.nodes.get(m)
-                n_to = self.nodes.get(d)
-                if n_from and n_to:
-                    add_uses_edge(n_from[0], n_to[0])
+                n_to = target_of.get(d)
+                if n_to is not None:
+                    add_uses_edge(n_from, n_to)
 
         # sanity check output
         for m, deps in self.uses_edges.items():
@@ -357,8 +400,10 @@ def create_modulegraph(
         annotated: annotate nodes with module location.
         grouped: group nodes into subgraph clusters by namespace.
             [dot only]
-        with_init: include ``__init__`` modules in the output.
-            Excluded by default to reduce clutter.
+        with_init: draw a package's ``__init__`` as a node of its own, named
+            ``pkg.__init__``, along with the implicit dependency every module
+            under ``pkg`` has on it. By default it is drawn as the package
+            instead, under the name ``pkg``.
         concentrate: merge bidirectional edges into single double-headed
             arrows (GraphViz ``concentrate`` attribute). [dot/svg/html only]
         exclude: list of exclusion patterns.  Patterns without a path
@@ -516,7 +561,8 @@ def main(cli_args=None):
     )
     parser.add_argument(
         "--init", action="store_true", default=False, dest="with_init",
-        help="include __init__ modules in the output (excluded by default to reduce clutter)",
+        help="draw a package's __init__ as its own node, with the implicit dependency every module "
+             "under the package has on it (by default it is drawn as the package itself)",
     )
     parser.add_argument(
         "--concentrate", action="store_true", default=False, dest="concentrate",

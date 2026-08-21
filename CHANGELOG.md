@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **`--module-level` no longer drops every dependency on a package itself.** A package's `__init__.py` was registered under the name `pkg.__init__`, while `import pkg` records a dependency on `pkg` — so the edge pointed at a module that, as far as the graph was concerned, did not exist, and was discarded without a warning. Both directions went: a module importing a name re-exported from `pkg/__init__.py` showed no dependency at all, and the package's own imports vanished with the node they started from. On Raven, 192 of 875 module dependencies were missing.
+  - The `__init__` is now drawn as the package, under the name `pkg`. `--init` still draws it separately as `pkg.__init__`, together with the implicit dependency every module under the package has on it — which is what the default omits, and what it was trying to omit all along.
+  - Still missed: `from . import thing`, where `thing` is a name defined in `__init__.py` rather than a submodule. Recorded in `TODO_DEFERRED.md`.
+
 - **[What the graph leaves out](README.md#what-the-graph-leaves-out) now describes grouped output correctly, and gives an example of each rule.** Every module is drawn as a box under `--grouped`; the README said a module without members stays a plain node, which it does not — an empty `__init__.py` gets a box holding `<module>` alone. Only the first of the culling rules came with an example, so the rest have one now.
 
 

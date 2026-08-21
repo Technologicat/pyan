@@ -421,7 +421,7 @@ The module-level mode has its own set of options (separate from the call-graph m
 - `--graphviz-layout` — layout algorithm (`dot`, `fdp`, `neato`, etc.)
 - `--concentrate` — merge bidirectional edges into double-headed arrows (note: may produce small gaps at split points due to GraphViz precision; see above)
 - `-x`, `--exclude` — exclude files matching a pattern (repeatable; see [Excluding files](#excluding-files))
-- `--init` — include `__init__` modules (excluded by default to reduce clutter)
+- `--init` — draw a package's `__init__` as its own node, named `pkg.__init__`, together with the implicit dependency every module under `pkg` has on it. By default the `__init__` is drawn as the package itself, under the name `pkg`, and only dependencies that name the package are edges
 - `--root` — project root directory (file paths are made relative to this before deriving module names; if omitted, inferred automatically)
 
 
@@ -450,7 +450,7 @@ dot_source = pyan.create_modulegraph(
     format="dot",              # also: "svg", "html", "tgf", "yed", "text"
     colored=True,
     nested_groups=True,
-    with_init=False,           # exclude __init__ modules (default)
+    with_init=False,           # draw a package's __init__ as the package (default)
     concentrate=True,          # merge bidirectional edges
     exclude=["test_*.py"],     # exclude files matching these patterns
     layout="dot",              # GraphViz layout algorithm
@@ -587,7 +587,7 @@ _Items tagged with ☆ are new in Pyan3 (the Python 3 fork). Items tagged with �
 
 **Module-level analysis** ★:
 
-- `__init__` modules excluded by default (opt-in with `--init`) ★
+- A package's `__init__` drawn as the package itself, or separately with `--init` ★
 - Directory input — pass a directory path, auto-globs `**/*.py` ★
 
 ## TODO

@@ -265,6 +265,7 @@ class TestImportVisitor:
         expected = {
             "pkg_a.__init__",
             "pkg_a.alpha",
+            "pkg_a.epsilon",
             "pkg_b.__init__",
             "pkg_b.beta",
             "pkg_b.delta",  # imports nothing; must still be in the analyzed set
@@ -352,6 +353,63 @@ class TestImportVisitor:
         alpha_node = visitor.nodes["pkg_a.alpha"][0]
         target_names = {n.get_name() for n in visitor.uses_edges[alpha_node]}
         assert "pkg_b.delta" in target_names
+
+    def test_package_is_a_node_under_its_own_name(self, visitor):
+        # A package's __init__.py is registered as `pkg_b.__init__`, but an import
+        # of the package names it `pkg_b`. Without __init__ modules, the node is
+        # drawn under the package name, so that dependencies on it can land.
+        visitor.prepare_graph()
+        assert "pkg_b" in visitor.nodes
+        assert "pkg_b.__init__" not in visitor.nodes
+
+    def test_edge_onto_a_package_survives(self, visitor):
+        # The regression: epsilon.py imports PKG_B_CONST, which is defined in
+        # pkg_b/__init__.py, so pkg_b is the only module it depends on. That
+        # dependency used to be dropped — the edge pointed at `pkg_b`, and the
+        # only node for that file was called `pkg_b.__init__`.
+        visitor.prepare_graph()
+        epsilon_node = visitor.nodes["pkg_a.epsilon"][0]
+        target_names = {n.get_name() for n in visitor.uses_edges.get(epsilon_node, ())}
+        assert "pkg_b" in target_names
+
+    def test_edge_out_of_a_package_survives(self, visitor):
+        # The same loss in the other direction: pkg_b/__init__.py imports beta,
+        # and that edge went with the node it started from.
+        visitor.prepare_graph()
+        pkg_b_node = visitor.nodes["pkg_b"][0]
+        target_names = {n.get_name() for n in visitor.uses_edges.get(pkg_b_node, ())}
+        assert "pkg_b.beta" in target_names
+
+    def test_implicit_init_dependency_draws_no_edge(self, visitor):
+        # Every import under a package adds a speculative dep on that package's
+        # __init__ — which is the clutter the default exists to remove. Folding the
+        # package's node under `pkg_b` must not turn those deps into edges.
+        #
+        # beta.py says only `from . import gamma`, so `pkg_b.__init__` is in its raw
+        # dep set while `pkg_b` is not; gamma.py says only `import pkg_a.alpha`, so
+        # the same holds for it and `pkg_a`.
+        visitor.prepare_graph()
+        assert "pkg_b.__init__" in visitor.modules["pkg_b.beta"]
+        beta_targets = {n.get_name() for n in visitor.uses_edges.get(visitor.nodes["pkg_b.beta"][0], ())}
+        assert "pkg_b" not in beta_targets
+        gamma_targets = {n.get_name() for n in visitor.uses_edges.get(visitor.nodes["pkg_b.gamma"][0], ())}
+        assert "pkg_a" not in gamma_targets
+
+    def test_explicitly_named_package_draws_an_edge(self, visitor):
+        # The other side of it: alpha.py says `from pkg_b import gamma`, naming the
+        # package outright, so that one is a dependency and not speculation.
+        visitor.prepare_graph()
+        alpha_targets = {n.get_name() for n in visitor.uses_edges.get(visitor.nodes["pkg_a.alpha"][0], ())}
+        assert "pkg_b" in alpha_targets
+
+    def test_with_init_keeps_the_package_addressable(self, visitor):
+        # Under --init the __init__ module is drawn separately, and an import of
+        # the package still has to find it.
+        visitor.prepare_graph(with_init=True)
+        assert "pkg_b.__init__" in visitor.nodes
+        epsilon_node = visitor.nodes["pkg_a.epsilon"][0]
+        target_names = {n.get_name() for n in visitor.uses_edges.get(epsilon_node, ())}
+        assert "pkg_b.__init__" in target_names
 
     def test_prepare_graph_edges(self, visitor):
         visitor.prepare_graph()
