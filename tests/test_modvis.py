@@ -437,6 +437,19 @@ class TestCLI:
             main([])
         assert exc_info.value.code != 0
 
+    def test_misspelled_option_errors(self, capsys):
+        # `--with-init` is not the flag; `--init` is. Accepting it as a glob left
+        # the run looking successful while doing the opposite of what was asked.
+        with pytest.raises(SystemExit) as exc_info:
+            main(fixture_files() + ["--text", "--root", FIXTURE_DIR, "--with-init"])
+        assert exc_info.value.code != 0
+        assert "--with-init" in capsys.readouterr().err
+
+    def test_glob_matching_nothing_errors(self):
+        with pytest.raises(SystemExit) as exc_info:
+            main([os.path.join(FIXTURE_DIR, "no_such_dir", "*.py"), "--text"])
+        assert exc_info.value.code != 0
+
     def test_dot_output(self, capsys):
         main(fixture_files() + ["--dot", "--root", FIXTURE_DIR])
         captured = capsys.readouterr()

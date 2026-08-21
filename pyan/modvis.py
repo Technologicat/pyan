@@ -470,7 +470,7 @@ def create_modulegraph(
 
 
 def main(cli_args=None):
-    usage = """%(prog)s FILENAME... [--dot|--tgf|--yed|--svg|--html|--text]"""
+    usage = """%(prog)s --module-level FILENAME... [--dot|--tgf|--yed|--svg|--html|--text]"""
     desc = "Analyse one or more Python source files and generate an approximate module dependency graph."
     parser = ArgumentParser(usage=usage, description=desc)
     from . import __version__
@@ -596,10 +596,18 @@ def main(cli_args=None):
         ),
     )
 
+    # Filenames are the leftovers, and an option-shaped leftover is a typo — see
+    # the same check in `pyan.main.main` for why they are collected this way.
     known_args, unknown_args = parser.parse_known_args(cli_args)
+    misspelled = [a for a in unknown_args if a.startswith("-")]
+    if misspelled:
+        parser.error("unrecognized option(s): {}".format(" ".join(misspelled)))
+
     filenames = expand_sources(unknown_args, exclude=known_args.exclude)
     if len(unknown_args) == 0:
         parser.error("Need one or more filenames to process")
+    elif len(filenames) == 0:
+        parser.error("No files found matching given glob: {}".format(" ".join(unknown_args)))
 
     if known_args.nested_groups:
         known_args.grouped = True

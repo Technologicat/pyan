@@ -143,6 +143,21 @@ class TestPyanCLI:
             pyan_main([])
         assert exc_info.value.code != 0
 
+    def test_misspelled_option_errors(self, capsys):
+        # Filenames are collected as argparse leftovers, so an unrecognized option
+        # is indistinguishable from one — it used to be accepted as a glob that
+        # matched nothing, and pyan ran on with the default it was told to change.
+        with pytest.raises(SystemExit) as exc_info:
+            pyan_main([FIXTURE, "--root", TESTS_DIR, "--dot", "--no-such-option"])
+        assert exc_info.value.code != 0
+        assert "--no-such-option" in capsys.readouterr().err
+
+    def test_filenames_may_surround_options(self, capsys):
+        # The reason for the leftover-collection: argparse cannot take a declared
+        # positional interspersed with options.
+        pyan_main([FIXTURE, "--root", TESTS_DIR, "--dot", FIXTURE])
+        assert "digraph G" in capsys.readouterr().out
+
     def test_dot_output(self, capsys):
         pyan_main([FIXTURE, "--root", TESTS_DIR, "--dot"])
         captured = capsys.readouterr()

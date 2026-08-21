@@ -8,6 +8,8 @@
   - The `__init__` is now drawn as the package, under the name `pkg`. `--init` still draws it separately as `pkg.__init__`, together with the implicit dependency every module under the package has on it — which is what the default omits, and what it was trying to omit all along.
   - Still missed: `from . import thing`, where `thing` is a name defined in `__init__.py` rather than a submodule. Recorded in `TODO_DEFERRED.md`.
 
+- **A misspelled option is now an error instead of being ignored.** Filenames are whatever the argument parser does not claim, so `--with-init` — a plausible misspelling of `--init` — was taken for a glob, matched nothing, and left pyan running with the setting the user was trying to change. Both the call graph and `--module-level` were affected. A glob matching no files is likewise an error in `--module-level` now, as it already was for the call graph.
+
 - **[What the graph leaves out](README.md#what-the-graph-leaves-out) now describes grouped output correctly, and gives an example of each rule.** Every module is drawn as a box under `--grouped`; the README said a module without members stays a plain node, which it does not — an empty `__init__.py` gets a box holding `<module>` alone. Only the first of the culling rules came with an example, so the rest have one now.
 
 

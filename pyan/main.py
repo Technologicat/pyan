@@ -541,7 +541,16 @@ def main(cli_args=None):
         help="module-level import dependency analysis (use --module-level --help for full options)",
     )
 
+    # The filenames are whatever argparse did not claim, rather than a declared
+    # positional, because a declared one cannot be interspersed with options:
+    # `nargs="*"` takes a single contiguous run, so `pyan3 a.py --dot b.py` would
+    # become an error. The price is that a misspelled option looks exactly like a
+    # filename, so reject the option-shaped leftovers by hand — otherwise pyan
+    # runs with the default the user was trying to override, and says nothing.
     known_args, unknown_args = parser.parse_known_args(cli_args)
+    misspelled = [a for a in unknown_args if a.startswith("-")]
+    if misspelled:
+        parser.error("unrecognized option(s): {}".format(" ".join(misspelled)))
 
     filenames = [os.path.abspath(fn2) for fn2 in expand_sources(unknown_args, exclude=known_args.exclude)]
 
