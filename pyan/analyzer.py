@@ -827,12 +827,13 @@ class CallGraphVisitor(ast.NodeVisitor):
         the asymmetry cost more than it bought.
 
         Only classes are bound. Attribute resolution looks the name up in the
-        target's *scope*, and a class's scope is its attribute namespace — where
-        a function's scope is its locals, which no attribute access can reach.
-        Binding a parameter to a function would resolve `cb.stash.method()`
-        against a local `stash` inside it, drawing a call that cannot happen. A
-        module's scope would be safe by the same test; modules are left out only
-        because annotating a parameter with one is vanishingly rare.
+        target's *scope*, and a class's scope is its attribute namespace. A
+        function's scope holds its locals and any attributes assigned to it in
+        one dictionary, undistinguished at lookup, so binding a parameter to a
+        function would resolve `cb.stash.method()` against a local `stash` and
+        draw a call that cannot happen. A module's scope would be safe by the
+        same test; modules are left out only because annotating a parameter with
+        one is vanishingly rare.
 
         `*args` and `**kwargs` are left alone: their annotation describes the
         element type, where the parameter itself is a tuple or a dict.

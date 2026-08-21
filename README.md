@@ -628,7 +628,11 @@ This is a static reading, and it can be wrong in the ordinary way: the value tha
 
 Only classes bind, and only ordinary parameters.
 
-Classes, because pyan resolves an attribute by looking in the target's *scope*, and a class's scope is exactly its attribute namespace. A function's scope is its locals, which are not reachable as attributes — binding a parameter to one would resolve `cb.stash.method()` against a local named `stash` inside that function and draw a call that cannot happen. (A module's scope is its attribute namespace too, so modules would be safe; they are excluded only because annotating a parameter with a module is vanishingly rare.)
+Classes, because pyan resolves an attribute by looking in the target's *scope*, and a class's scope is exactly its attribute namespace.
+
+A function's is not — but not because functions have no attributes. `helper.marker = Thing` is recorded, and `helper.marker()` resolves; the binding simply lands in the same dictionary as `helper`'s local variables, and nothing separates the two at the point of lookup. So binding a parameter to a function would resolve `cb.stash.method()` against a local named `stash` and draw a call that cannot happen. That is a limitation of the analyzer rather than a fact about Python, and a fixable one — the scope already records which names are locals — but nothing exploits that yet.
+
+(A module's scope *is* its attribute namespace, so modules would be safe; they are excluded only because annotating a parameter with a module is vanishingly rare.)
 
 Ordinary parameters, because on `*args` / `**kwargs` the annotation describes the *element* type while the parameter itself is a tuple or a dict. Note this leaves something on the table: in `args[0].method()` the element type is exactly right, and pyan does not currently use it.
 

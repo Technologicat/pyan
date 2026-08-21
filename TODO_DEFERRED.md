@@ -14,6 +14,20 @@ Determine confidence of detected edges. See [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
 Partly addressed by #88 fix (import-aware expansion). Remainder: see [johnyf/pyan#5](https://github.com/johnyf/pyan/issues/5).
 
+## Function attributes and locals share one scope dictionary
+
+*Cluster: analyzer · Cost: M · Gate: none · Filed: 2026-08-21*
+
+`helper.marker = Thing` is recorded and `helper.marker()` resolves — but by accident rather than by design. The binding lands in `scopes["mod.helper"].defs`, the same dictionary holding `helper`'s locals, and nothing at the point of lookup tells the two apart. So an attribute access on a function would reach its locals as readily as its attributes, which is why a parameter annotated with a function is deliberately not bound to it (see "What a parameter's annotation means" in the README): `cb.stash.method()` would resolve against a local `stash`.
+
+The discriminator already exists and is unused. `Scope.locals` holds exactly the names `symtable` reports as local, and an attribute assigned from outside the function is not among them — so a `defs` entry absent from `locals` is an attribute.
+
+Worth settling rather than leaving to luck, because function attributes are load-bearing in real code: `unpythonic.syntax` stashes markers on functions.
+
+What stays out of reach is the general case — attributes stashed onto a parameter inside a decorator, where knowing which functions acquire the attribute means knowing which functions flow through the decorator. Static analysis is unlikely to answer that; the assignment-on-a-named-function half looks entirely tractable.
+
+Raised while reviewing why annotated parameters bind only to classes (2026-08-21).
+
 ## A subscripted `*args` could use its element annotation
 
 *Cluster: analyzer · Cost: S · Gate: none · Filed: 2026-08-21*
