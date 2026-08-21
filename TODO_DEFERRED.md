@@ -14,6 +14,16 @@ Determine confidence of detected edges. See [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
 Partly addressed by #88 fix (import-aware expansion). Remainder: see [johnyf/pyan#5](https://github.com/johnyf/pyan/issues/5).
 
+## A subscripted `*args` could use its element annotation
+
+*Cluster: analyzer · Cost: S · Gate: none · Filed: 2026-08-21*
+
+`def f(*items: Thing): items[0].method()` resolves to nothing. The parameter itself is deliberately left unbound — it is a tuple, not a `Thing` — but the annotation states the *element* type, and `items[0]` is exactly one element, so the call could resolve to `Thing.method`. Same shape for `**opts: Thing` and `opts["key"].method()`.
+
+Would need the subscript to be recognized: when the value being subscripted is a starred parameter carrying an element annotation, the result has that type. Nothing currently looks at a `Subscript` this way.
+
+Noticed while reviewing the annotated-parameter feature (2026-08-21).
+
 ## A module-level constant that *is* used still produces no uses edge
 
 *Cluster: analyzer · Cost: ? · Gate: none · Filed: 2026-08-20 · See also: #140*

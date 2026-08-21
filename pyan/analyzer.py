@@ -15,13 +15,16 @@ from .anutils import (
     Scope,
     UnresolvedSuperCallError,
     canonize_exprs,
+    enclosing_namespaces,
     format_alias,
     get_ast_node_name,
     get_module_name,
     infer_root,
     normalize_symtable_scope_name,
+    parent_namespace,
     resolve_import,
     resolve_method_resolution_order,
+    split_qualified_name,
     tail,
 )
 from .callgraph import CallGraph
@@ -823,10 +826,13 @@ class CallGraphVisitor(ast.NodeVisitor):
         annotation is the one place a codebase states the type deliberately, so
         the asymmetry cost more than it bought.
 
-        Only classes are bound. An annotation naming a function or a module says
-        nothing about what attribute access on the parameter will find, and the
-        static type may of course be a base of what actually arrives — which is
-        why `use_parameter_annotations` exists to turn this off.
+        Only classes are bound. Attribute resolution looks the name up in the
+        target's *scope*, and a class's scope is its attribute namespace — where
+        a function's scope is its locals, which no attribute access can reach.
+        Binding a parameter to a function would resolve `cb.stash.method()`
+        against a local `stash` inside it, drawing a call that cannot happen. A
+        module's scope would be safe by the same test; modules are left out only
+        because annotating a parameter with one is vanishingly rare.
 
         `*args` and `**kwargs` are left alone: their annotation describes the
         element type, where the parameter itself is a tuple or a dict.
@@ -1303,12 +1309,8 @@ class CallGraphVisitor(ast.NodeVisitor):
         lambda inside a comprehension is two levels down, and only the outermost
         of the three is the inlined one.
         """
-        prefix = namespace.rpartition(".")[0]
-        while prefix:
-            if prefix in self._inlined_comprehension_scopes:
-                return True
-            prefix = prefix.rpartition(".")[0]
-        return False
+        return any(ns in self._inlined_comprehension_scopes
+                   for ns in enclosing_namespaces(parent_namespace(namespace)))
 
     def _next_anon_scope_name(self, scope_type, ast_node):
         """Return a numbered scope name like ``listcomp.0``, ``lambda.1``, etc.
@@ -2299,16 +2301,7 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     def get_parent_node(self, graph_node):
         """Get the parent node of the given Node. (Used in postprocessing.)"""
-        parts = graph_node.namespace.split(".")
-        # An anonymous scope is named in two dotted pieces — `lambda.0` — so
-        # taking the last piece as the name would split the index off, and
-        # `get_node` would create a fresh Node under a namespace nothing else
-        # uses. Edges folded into that Node are then invisible: they hang off a
-        # parent that shares its dotted name with the real one but is not it.
-        if len(parts) >= 2 and parts[-1].isdigit() and parts[-2] in ANON_SCOPE_NAMES:
-            ns, name = ".".join(parts[:-2]), f"{parts[-2]}.{parts[-1]}"
-        else:
-            ns, name = ".".join(parts[:-1]), parts[-1]
+        ns, name = split_qualified_name(graph_node.namespace)
         return self.get_node(ns, name, None)
 
     @staticmethod
@@ -2349,10 +2342,9 @@ class CallGraphVisitor(ast.NodeVisitor):
         """
         if graph_node.defined:
             return graph_node
-        full = graph_node.get_name()
-        if "." not in full:
+        parent_full = parent_namespace(graph_node.get_name())
+        if not parent_full:
             return None
-        parent_full = full.rsplit(".", 1)[0]
         return next(
             (n for lst in self.nodes.values() for n in lst
              if n.defined and n.get_name() == parent_full),

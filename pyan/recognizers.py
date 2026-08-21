@@ -26,7 +26,7 @@ See ``briefs/namespace-objects-brief.md`` for the design context.
 import ast
 import builtins as _builtins_module
 
-from .anutils import Scope, UnresolvedSuperCallError
+from .anutils import Scope, UnresolvedSuperCallError, enclosing_namespaces
 from .node import Flavor, Node
 
 __all__ = [
@@ -290,14 +290,11 @@ def _resolve_setattr_name(visitor, name_arg_ast):
         # is keyed by the fully-qualified namespace where the literal was
         # bound, so we have to traverse by namespace string rather than
         # by `Scope` object (whose `.name` is "" for the module).
-        ns = visitor.get_node_of_current_namespace().get_name()
-        while True:
+        start = visitor.get_node_of_current_namespace().get_name()
+        for ns in enclosing_namespaces(start):
             bucket = visitor.name_literals.get(ns, {})
             if name_arg_ast.id in bucket:
                 return bucket[name_arg_ast.id]
-            if "." not in ns:
-                break
-            ns = ns.rsplit(".", 1)[0]
         # Level 3: the Name might resolve to an imported binding.
         # `get_value` returns the resolved Node (after import resolution
         # within the visitor pass).  Look up its FQN's namespace in

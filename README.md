@@ -626,7 +626,13 @@ When a binding statement is encountered, the current namespace determines in whi
 
 This is a static reading, and it can be wrong in the ordinary way: the value that actually arrives may be a subclass that overrides `method`, in which case the edge points at the base's version. Where a codebase's annotations are loose enough that this misleads more than it helps, `--ignore-parameter-annotations` turns it off (`use_parameter_annotations=False` from the API), and the call falls back to resolving against nothing.
 
-Only classes bind, and only ordinary parameters. An annotation naming a function or a module says nothing about what attribute access will find, and on `*args` / `**kwargs` the annotation describes the *element* type while the parameter itself is a tuple or a dict. A string annotation, `Optional[X]`, or a union resolves to nothing: choosing one arm of a union would be a guess.
+Only classes bind, and only ordinary parameters.
+
+Classes, because pyan resolves an attribute by looking in the target's *scope*, and a class's scope is exactly its attribute namespace. A function's scope is its locals, which are not reachable as attributes — binding a parameter to one would resolve `cb.stash.method()` against a local named `stash` inside that function and draw a call that cannot happen. (A module's scope is its attribute namespace too, so modules would be safe; they are excluded only because annotating a parameter with a module is vanishingly rare.)
+
+Ordinary parameters, because on `*args` / `**kwargs` the annotation describes the *element* type while the parameter itself is a tuple or a dict. Note this leaves something on the table: in `args[0].method()` the element type is exactly right, and pyan does not currently use it.
+
+A string annotation, `Optional[X]`, or a union resolves to nothing. Binding every arm of a union would be defensible — pyan already binds a wildcard to several candidates elsewhere — but distinguishing the arms needs to know which value actually arrives, and that is dynamic analysis.
 
 ## What the graph leaves out
 

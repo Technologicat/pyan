@@ -5,6 +5,7 @@ import os
 import pytest
 
 from pyan.analyzer import CallGraphVisitor
+from pyan.anutils import enclosing_namespaces, parent_namespace, split_qualified_name
 
 
 def _test_code_filenames():
@@ -79,3 +80,32 @@ def test_resolve_package_with_known_root():
     # Root directory itself is not part of the module name (like sys.path).
     defines = get_in_dict(callgraph.defines_edges, "test_code.subpackage2.submodule_hidden1")
     get_node(defines, "test_code.subpackage2.submodule_hidden1.test_func1")
+
+
+# --- Qualified-name splitting ---
+#
+# An anonymous scope is named in two dotted pieces, so these cannot be
+# `rsplit(".", 1)`; that is the whole reason the helpers exist.
+
+@pytest.mark.parametrize("qualified, expected", [
+    ("mod", ("", "mod")),
+    ("pkg.mod", ("pkg", "mod")),
+    ("pkg.mod.Cls.meth", ("pkg.mod.Cls", "meth")),
+    ("pkg.mod.f.lambda.0", ("pkg.mod.f", "lambda.0")),
+    ("pkg.mod.f.listcomp.1.lambda.0", ("pkg.mod.f.listcomp.1", "lambda.0")),
+    # A digit that is not an anonymous-scope index still reads as a name.
+    ("pkg.mod.weird.0", ("pkg.mod.weird", "0")),
+])
+def test_split_qualified_name(qualified, expected):
+    assert split_qualified_name(qualified) == expected
+    assert parent_namespace(qualified) == expected[0]
+
+
+def test_enclosing_namespaces_walks_outward():
+    assert list(enclosing_namespaces("pkg.mod.f.lambda.0")) == [
+        "pkg.mod.f.lambda.0", "pkg.mod.f", "pkg.mod", "pkg",
+    ]
+
+
+def test_enclosing_namespaces_of_a_top_level_name():
+    assert list(enclosing_namespaces("mod")) == ["mod"]

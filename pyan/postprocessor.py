@@ -11,7 +11,7 @@ Use :func:`postprocess` to run the full pipeline; the individual stages
 are exposed for testing and reuse.
 """
 
-from .anutils import ANON_SCOPE_NAMES
+from .anutils import ANON_SCOPE_NAMES, enclosing_namespaces, parent_namespace
 from .node import Flavor
 
 __all__ = [
@@ -176,20 +176,10 @@ def _has_import_to(visitor, from_node, target_ns):
     target_parts = target_ns.split(".")
     target_ancestors = {".".join(target_parts[:i + 1]) for i in range(len(target_parts))}
 
-    # Walk up from from_node's namespace.
-    ns = from_node.get_name()
-    while True:
-        imports = visitor.namespace_imports.get(ns, set())
-        if imports & target_ancestors:
-            return True
-        if "." not in ns:
-            break
-        ns = ns.rsplit(".", 1)[0]
-
-    # Also check the module-level namespace (which may be the module name itself,
-    # with no dots if it's a top-level module).
-    imports = visitor.namespace_imports.get(ns, set())
-    return bool(imports & target_ancestors)
+    # Walk up from from_node's namespace, ending at the module-level one (which
+    # may be the module name itself, with no dots if it's a top-level module).
+    return any(visitor.namespace_imports.get(ns, set()) & target_ancestors
+               for ns in enclosing_namespaces(from_node.get_name()))
 
 
 def _name_referenced_in_scope(visitor, from_node, name):
@@ -309,16 +299,14 @@ def cull_subsumed(visitor):
     members = {name: set() for name in modules}  # defined in that module's own file
     within = {name: set() for name in modules}  # anywhere under that dotted path
     for node in all_nodes:
-        prefix = node.get_name().rpartition(".")[0]
         enclosing_module_seen = False
-        while prefix:
-            if prefix in modules:
-                within[prefix].add(node)
+        for ns in enclosing_namespaces(parent_namespace(node.get_name())):
+            if ns in modules:
+                within[ns].add(node)
                 if not enclosing_module_seen:
                     enclosing_module_seen = True
                     if node.flavor != Flavor.MODULE:
-                        members[prefix].add(node)
-            prefix = prefix.rpartition(".")[0]
+                        members[ns].add(node)
 
     def is_subsumed(from_node, to_node):
         """Is there a finer edge carrying the same dependency?

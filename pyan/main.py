@@ -18,7 +18,7 @@ import signal
 import sys
 
 from .analyzer import CallGraphVisitor
-from .anutils import expand_sources
+from .anutils import expand_sources, split_qualified_name
 from .visgraph import VisualGraph
 from .writers import DotWriter, HTMLWriter, SVGWriter, TextWriter, TgfWriter, YedWriter
 
@@ -592,8 +592,8 @@ def main(cli_args=None):
         v = CallGraphVisitor(filenames, root=root, logger=logger,
                              cull_subsumed_edges=not known_args.keep_subsumed_edges,
                              use_parameter_annotations=not known_args.ignore_parameter_annotations)
-        src_ns, src_name = known_args.paths_from.rsplit(".", 1)
-        tgt_ns, tgt_name = known_args.paths_to.rsplit(".", 1)
+        src_ns, src_name = split_qualified_name(known_args.paths_from)
+        tgt_ns, tgt_name = split_qualified_name(known_args.paths_to)
         from_node = v.get_node(src_ns, src_name)
         to_node = v.get_node(tgt_ns, tgt_name)
         paths = v.find_paths(from_node, to_node, max_paths=known_args.max_paths)
