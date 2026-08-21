@@ -14,20 +14,39 @@ Determine confidence of detected edges. See [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
 Partly addressed by #88 fix (import-aware expansion). Remainder: see [johnyf/pyan#5](https://github.com/johnyf/pyan/issues/5).
 
+Measured 2026-08-21, in case anyone is tempted to retire the machinery as a leftover from the era before base-class lookup: it is load-bearing, and increasingly so with project size. Counting only edges between defined, non-wildcard Nodes, disabling `contract_nonexistents` + `expand_unknowns` costs 3 edges on pyan, 96 on mcpyrate, and **3198 on raven — about 20% of that graph**. The wildcard round-trip is what recovers cross-module attribute access on objects pyan cannot type, which is most of what a large application does.
+
+That measures quantity, not correctness. Expansion is an overapproximation, and how many of those 3198 are real is unknown; establishing that needs ground truth this project does not have.
+
 ## The same input does not always produce the same graph
 
 *Cluster: analyzer · Cost: ? · Gate: none · Filed: 2026-08-21*
 
 Two runs over the same 328-file project, in the same process, differ. Measured on raven: 47588 edges then 47586, the two extra both wildcards — `raven.librarian.chat_controller._descend_to_latest -> *.get_payload` and `raven.visualizer.info_panel.build_window -> *.is_any_modal_window_visible`.
 
-Two distinct causes, and the second is much the larger:
+Two distinct causes. The hash seed accounts for about two edges — fixing `PYTHONHASHSEED` makes a run reproducible, so something iterates a set of strings. **File order accounts for the rest, and is much the larger:** on mcpyrate, with the seed pinned, sorted input gives 6673 edges, reversed 6721, shuffled 6734 — a 1% swing decided by the order of arguments on the command line.
 
-- **Hash seed.** Fixing `PYTHONHASHSEED` makes a run reproducible: seed 0 gives 47675 edges with a stable digest across runs, seed 1 gives 47676. So something downstream — `expand_unknowns` is the obvious suspect, since every observed difference is a wildcard — depends on the iteration order of a set or dict keyed by strings.
-- **File order.** The same files given in a different order change the result by roughly 88 edges (47587 unsorted glob vs 47675 sorted). Much bigger than the hash effect, and it means the command line's argument order is part of the answer.
+Investigated 2026-08-21; the mechanism is known, and it is not where one would look first.
 
-Why it matters beyond tidiness: a call graph that changes between runs cannot be diffed against a previous one, which is what anybody comparing two revisions of a project wants to do. It also makes output comparison unreliable as a regression check — the `*args` subscript work had to distinguish a real one-edge change from this noise, and could only do so by pinning the seed.
+- **Not the postprocessor.** The divergence is already 95 edges straight out of the visitor passes, before any stage runs.
+- **Not an unreached fixed point.** Three and four passes give exactly the same 86-edge difference as two. The analysis converges — to different answers.
+- **It is pass 1 recording edges that pass 2 would not, and nothing retracting them.** Discarding `uses_edges` after pass 1 drops the order-dependence from 86 edges to 1. That also removes 236 edges from mcpyrate's graph, ~3.5% of it: residue recorded before the analyzer knew enough.
 
-Worth establishing first whether the file-order dependence is a *bug* or the documented consequence of two-pass analysis: pass 1 collects definitions and pass 2 resolves, so order should not matter, and the fact that it does suggests something is resolved during pass 1 that ought to wait.
+**Suppressing only the wildcards in pass 1 does not work**, and the reason is worth knowing: pass 1 does not record wildcards. It records edges to *name Nodes that turn out not to exist*, and `contract_nonexistents` converts those to `*.name` afterwards. Refusing namespace-`None` targets during pass 1 therefore drops 6 edges and leaves the order-dependence at 86.
+
+**Discarding pass 1 wholesale is not the fix either**, because 34 of those 236 are resolved edges that only pass 1 produces. The clean example is a forward reference to a module-level name bound *after* the function that reads it:
+
+```python
+def deactivate():
+    SourceFileLoader.path_stats = stdlib_path_stats   # visited first
+stdlib_path_stats = SourceFileLoader.path_stats       # bound later
+```
+
+In pass 1 the name is unbound when the body is visited, so `visit_Name` creates the NAME Node and links to it. In pass 2 the name *is* bound — to an unresolved attribute — so the value is used and the edge to the name is never made. Neither pass is wrong; they disagree, the output is their union, and file order decides which union.
+
+So the fix needs a decision, not a patch: which pass is authoritative for a given name, or edges tagged by the pass that made them plus a merge rule. Note the disagreement is the same name-versus-value question as the module-level constant fix (2026-08-21), where the name turned out to be the more useful target.
+
+Why it matters beyond tidiness: a graph that changes between runs cannot be diffed against a previous revision, which is a main reason to keep one. It also makes output comparison unreliable as a regression check — verifying the `*args` subscript change meant telling a real one-edge difference from this noise, which needed the seed pinned and the file list fixed.
 
 Found while diffing edge sets to verify the subscript change (2026-08-21).
 
