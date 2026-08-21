@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.8.1 (in progress)
+
+*No user-visible changes yet.*
+
+
+---
+
 ## 2.8.0 (21 August 2026) — *Ground truth*
 
 ### New
