@@ -77,7 +77,8 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     def __init__(self, filenames, root: str = None, logger=None,
                  namespace_constructors: Iterable[str] | None = None,
-                 cull_subsumed_edges: bool = True):
+                 cull_subsumed_edges: bool = True,
+                 use_parameter_annotations: bool = True):
         """Construct a CallGraphVisitor and analyze *filenames*.
 
         Args:
@@ -98,8 +99,14 @@ class CallGraphVisitor(ast.NodeVisitor):
                 already conveys, such as a module's import-derived edge to a
                 name one of its own functions uses (#140).  Set ``False`` for
                 the raw edge set.
+            use_parameter_annotations: bind an annotated parameter to the class
+                its annotation names, so that attribute access on it resolves
+                the way it does for a local.  ``False`` leaves the parameter
+                unresolved, which is the safer reading when a codebase's
+                annotations are loose and the values are often subclasses.
         """
-        self._init_common(logger, namespace_constructors, cull_subsumed_edges)
+        self._init_common(logger, namespace_constructors, cull_subsumed_edges,
+                          use_parameter_annotations)
 
         # Infer root from filenames when not explicitly given.
         # This ensures namespace packages (directories without __init__.py)
@@ -120,7 +127,8 @@ class CallGraphVisitor(ast.NodeVisitor):
     @classmethod
     def from_sources(cls, sources, logger=None,
                      namespace_constructors: Iterable[str] | None = None,
-                     cull_subsumed_edges: bool = True):
+                     cull_subsumed_edges: bool = True,
+                     use_parameter_annotations: bool = True):
         """Create a CallGraphVisitor from in-memory sources (no file I/O).
 
         Args:
@@ -137,12 +145,14 @@ class CallGraphVisitor(ast.NodeVisitor):
             logger: optional ``logging.Logger`` instance.
             namespace_constructors: see ``CallGraphVisitor.__init__``.
             cull_subsumed_edges: see ``CallGraphVisitor.__init__``.
+            use_parameter_annotations: see ``CallGraphVisitor.__init__``.
 
         Returns:
             A fully analyzed ``CallGraphVisitor``.
         """
         self = cls.__new__(cls)
-        self._init_common(logger, namespace_constructors, cull_subsumed_edges)
+        self._init_common(logger, namespace_constructors, cull_subsumed_edges,
+                          use_parameter_annotations)
         self.root = ""
 
         # Normalize sources: unparse ASTs, store source text.
@@ -164,17 +174,20 @@ class CallGraphVisitor(ast.NodeVisitor):
         return self
 
     def _init_common(self, logger, namespace_constructors: Iterable[str] | None = None,
-                     cull_subsumed_edges: bool = True):
+                     cull_subsumed_edges: bool = True,
+                     use_parameter_annotations: bool = True):
         """Shared initialization for both constructors.
 
         *namespace_constructors* — see ``CallGraphVisitor.__init__``.  The
         merged set (built-in registry ∪ user-supplied) is stored on
         ``self.namespace_constructors`` for the recognition path to read.
 
-        *cull_subsumed_edges* — see ``CallGraphVisitor.__init__``.
+        *cull_subsumed_edges*, *use_parameter_annotations* — see
+        ``CallGraphVisitor.__init__``.
         """
         self.logger = logger or logging.getLogger(__name__)
         self.cull_subsumed_edges = cull_subsumed_edges
+        self.use_parameter_annotations = use_parameter_annotations
 
         # Merged set of namespace-constructor FQNs (built-in + user-supplied).
         # Read by `_maybe_register_namespace_object` to upgrade the LHS of a
@@ -643,6 +656,11 @@ class CallGraphVisitor(ast.NodeVisitor):
             # pattern: visit in enclosing scope, bind inside.
             self._visit_function_annotations(node)
 
+            # ...and let an annotated parameter carry its type into the body, so
+            # that attribute access on it resolves the way it does for a local.
+            if self.use_parameter_annotations:
+                self._bind_annotated_parameters(node, inner_ns)
+
             # Analyze the function body
             #
             for stmt in node.body:
@@ -774,6 +792,53 @@ class CallGraphVisitor(ast.NodeVisitor):
             self.visit(node.args.vararg.annotation)
         if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
             self.visit(node.args.kwarg.annotation)
+
+    def _resolve_annotation_to_node(self, ann):
+        """Return the graph Node an annotation expression names, or None.
+
+        Handles a bare name (``Derived``) and a dotted one (``mod.Derived``).
+        A string annotation, ``Optional[X]``, or a union resolves to nothing:
+        picking one arm of a union would be a guess, and pyan does not guess.
+        """
+        if isinstance(ann, ast.Name):
+            return self.get_value(ann.id)
+        if isinstance(ann, ast.Attribute):
+            try:
+                obj_node, attr_name = self.resolve_attribute(ann)
+            except UnresolvedSuperCallError:
+                return None
+            if isinstance(obj_node, Node) and obj_node.namespace is not None:
+                sc = self.scopes.get(obj_node.get_name())
+                if sc is not None and isinstance(sc.defs.get(attr_name), Node):
+                    return sc.defs[attr_name]
+        return None
+
+    def _bind_annotated_parameters(self, node, inner_ns):
+        """Bind each annotated parameter to the class its annotation names.
+
+        Without this, ``def f(obj: Derived): obj.hello()`` leaves ``obj`` on the
+        placeholder every parameter starts on, so the call resolves only to the
+        wildcard ``*.hello``, while the same call on a local — ``thing =
+        Derived(); thing.hello()`` — resolves to ``Derived.hello``. An
+        annotation is the one place a codebase states the type deliberately, so
+        the asymmetry cost more than it bought.
+
+        Only classes are bound. An annotation naming a function or a module says
+        nothing about what attribute access on the parameter will find, and the
+        static type may of course be a base of what actually arrives — which is
+        why `use_parameter_annotations` exists to turn this off.
+
+        `*args` and `**kwargs` are left alone: their annotation describes the
+        element type, where the parameter itself is a tuple or a dict.
+        """
+        sc = self.scopes[inner_ns]
+        for arg in node.args.args + node.args.posonlyargs + node.args.kwonlyargs:
+            if arg.annotation is None:
+                continue
+            value = self._resolve_annotation_to_node(arg.annotation)
+            if isinstance(value, Node) and value.flavor == Flavor.CLASS:
+                self.logger.info(f"Binding parameter {arg.arg} to annotated type {value}")
+                sc.defs[arg.arg] = value
 
     def _record_import(self, target_module):
         """Record that the current namespace imports from `target_module`.

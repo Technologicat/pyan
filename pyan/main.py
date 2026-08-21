@@ -31,7 +31,7 @@ __all__ = [
 def _build_graph(filenames=None, root=None, sources=None, function=None, namespace=None,
                  max_iter=1000, direction="both", depth=None,
                  logger=None, graph_options=None, namespace_constructors=None,
-                 cull_subsumed_edges=True):
+                 cull_subsumed_edges=True, use_parameter_annotations=True):
     """Analyze source files, optionally filter, and build a VisualGraph.
 
     If `sources` is given (source mode / sans-IO mode), it overrides `filenames` and `root`.
@@ -41,11 +41,13 @@ def _build_graph(filenames=None, root=None, sources=None, function=None, namespa
     if sources is not None:
         v = CallGraphVisitor.from_sources(sources, logger=logger,
                                           namespace_constructors=namespace_constructors,
-                                          cull_subsumed_edges=cull_subsumed_edges)
+                                          cull_subsumed_edges=cull_subsumed_edges,
+                                          use_parameter_annotations=use_parameter_annotations)
     else:
         v = CallGraphVisitor(filenames, root=root, logger=logger,
                              namespace_constructors=namespace_constructors,
-                             cull_subsumed_edges=cull_subsumed_edges)
+                             cull_subsumed_edges=cull_subsumed_edges,
+                             use_parameter_annotations=use_parameter_annotations)
     if function or namespace:
         if function:
             function_name = function.split(".")[-1]
@@ -83,6 +85,7 @@ def create_callgraph(
     exclude: list[str] | None = None,
     namespace_constructors: list[str] | None = None,
     cull_subsumed_edges: bool = True,
+    use_parameter_annotations: bool = True,
     logger=None,
 ) -> str:
     """Create a call graph based on static code analysis.
@@ -162,6 +165,11 @@ def create_callgraph(
             conveys — a module's import-derived edge to a name one of its own
             functions uses, or its edge to a module it also reaches into.
             ``False`` keeps the raw edge set.  See #140.
+        use_parameter_annotations: bind an annotated parameter to the class its
+            annotation names, so that ``def f(obj: Thing): obj.method()``
+            resolves to ``Thing.method`` — as it already does for a local.
+            ``False`` leaves the parameter unresolved, the safer reading where
+            annotations are loose and the values are usually subclasses.
         logger: optional ``logging.Logger`` instance.
 
     Returns:
@@ -193,7 +201,8 @@ def create_callgraph(
                          max_iter=max_iter, direction=direction, depth=depth,
                          logger=logger, graph_options=graph_options,
                          namespace_constructors=namespace_constructors,
-                         cull_subsumed_edges=cull_subsumed_edges)
+                         cull_subsumed_edges=cull_subsumed_edges,
+                         use_parameter_annotations=use_parameter_annotations)
 
     stream = io.StringIO()
     dot_options = ["rankdir=" + rankdir, "ranksep=" + ranksep, "layout=" + layout]
@@ -510,6 +519,21 @@ def main(cli_args=None):
     )
 
     parser.add_argument(
+        "--ignore-parameter-annotations",
+        action="store_true",
+        default=False,
+        dest="ignore_parameter_annotations",
+        help=(
+            "do not treat a parameter's type annotation as its type. By "
+            "default, 'def f(obj: Thing): obj.method()' resolves to "
+            "Thing.method, the same as it would for a local assigned from "
+            "Thing(). Pass this where annotations are loose and the values "
+            "are usually subclasses, so that the resolved target would be "
+            "misleading."
+        ),
+    )
+
+    parser.add_argument(
         "--module-level",
         action="store_true",
         default=False,
@@ -566,7 +590,8 @@ def main(cli_args=None):
     # --paths-from / --paths-to: list call paths and exit.
     if known_args.paths_from and known_args.paths_to:
         v = CallGraphVisitor(filenames, root=root, logger=logger,
-                             cull_subsumed_edges=not known_args.keep_subsumed_edges)
+                             cull_subsumed_edges=not known_args.keep_subsumed_edges,
+                             use_parameter_annotations=not known_args.ignore_parameter_annotations)
         src_ns, src_name = known_args.paths_from.rsplit(".", 1)
         tgt_ns, tgt_name = known_args.paths_to.rsplit(".", 1)
         from_node = v.get_node(src_ns, src_name)
@@ -611,7 +636,8 @@ def main(cli_args=None):
                          direction=known_args.direction, depth=depth,
                          logger=logger, graph_options=graph_options,
                          namespace_constructors=extra_constructors,
-                         cull_subsumed_edges=not known_args.keep_subsumed_edges)
+                         cull_subsumed_edges=not known_args.keep_subsumed_edges,
+                         use_parameter_annotations=not known_args.ignore_parameter_annotations)
 
     writer = None
     dot_options = [

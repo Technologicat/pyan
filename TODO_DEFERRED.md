@@ -14,18 +14,6 @@ Determine confidence of detected edges. See [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
 Partly addressed by #88 fix (import-aware expansion). Remainder: see [johnyf/pyan#5](https://github.com/johnyf/pyan/issues/5).
 
-## Should an annotated parameter resolve an attribute call?
-
-*Cluster: analyzer · Cost: ? · Gate: none · Filed: 2026-08-21*
-
-`def caller(obj: Derived): obj.hello()` yields a uses edge to the wildcard `*.hello`, not to `Derived.hello`, so the annotation contributes nothing to resolving the call. A local does better: `thing = Derived(); thing.hello()` resolves to `Derived.hello`.
-
-Whether to honour the annotation is a design question, not obviously a bug — an annotation is a claim about the *static* type and the object may be a subclass, which is exactly the imprecision pyan already declines to guess at elsewhere. But the asymmetry with the local-variable case is hard to justify to a reader, and annotations are the one place a codebase states the type on purpose.
-
-**Decided (2026-08-21): make it a CLI option**, since it is useful or harmful depending on what the user expects the graph to mean, and both readings are legitimate. Still open: which way the default goes. Honouring annotations matches how a local variable already behaves and removes the asymmetry; not honouring them keeps today's output for existing users.
-
-Noticed while trying to construct a fixture for `cull_inherited`, which has since been deleted (2026-08-21).
-
 ## A module-level constant that *is* used still produces no uses edge
 
 *Cluster: analyzer · Cost: ? · Gate: none · Filed: 2026-08-20 · See also: #140*

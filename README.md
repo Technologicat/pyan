@@ -74,6 +74,7 @@ The original stable has been archived; the development repository is now the sol
 - [Features](#features)
   - [TODO](#todo)
 - [How Pyan works](#how-pyan-works)
+  - [What a parameter's annotation means](#what-a-parameters-annotation-means)
   - [What the graph leaves out](#what-the-graph-leaves-out)
     - [Uses edges that a more specific edge already conveys](#uses-edges-that-a-more-specific-edge-already-conveys)
     - [Module nodes, when grouping](#module-nodes-when-grouping)
@@ -618,6 +619,14 @@ The analyzer also needs to keep track of what type of object `self` currently po
 Of course, this simple approach cannot correctly track cases where the current binding of `self.f` depends on the order in which the methods of the class are executed. To keep things simple, Pyan decides to ignore this complication, just reads through the code in a linear fashion (twice so that any forward-references are picked up), and uses the most recent binding that is currently in scope.
 
 When a binding statement is encountered, the current namespace determines in which scope to store the new value for the name. Similarly, when encountering a use, the current namespace determines which object type or function to tag as the user.
+
+## What a parameter's annotation means
+
+`def f(obj: Thing): obj.method()` draws an edge to `Thing.method`. The annotation is treated as the parameter's type, so attribute access on it resolves — the same as it already did for a local: `thing = Thing(); thing.method()`.
+
+This is a static reading, and it can be wrong in the ordinary way: the value that actually arrives may be a subclass that overrides `method`, in which case the edge points at the base's version. Where a codebase's annotations are loose enough that this misleads more than it helps, `--ignore-parameter-annotations` turns it off (`use_parameter_annotations=False` from the API), and the call falls back to resolving against nothing.
+
+Only classes bind, and only ordinary parameters. An annotation naming a function or a module says nothing about what attribute access will find, and on `*args` / `**kwargs` the annotation describes the *element* type while the parameter itself is a tuple or a dict. A string annotation, `Optional[X]`, or a union resolves to nothing: choosing one arm of a union would be a guess.
 
 ## What the graph leaves out
 

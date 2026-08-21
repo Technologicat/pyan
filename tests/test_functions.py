@@ -149,3 +149,57 @@ def test_other_nestings_analyze(nested, func):
     """Comprehension in lambda, lambda in comprehension, and the monkeypatch-stub shape."""
     uses = get_in_dict(nested.uses_edges, f"{NESTED_PREFIX}.{func}")
     get_node(uses, f"{NESTED_PREFIX}.target")
+
+
+# --- Annotated parameters as types ---
+
+ANNOTATED_PREFIX = "test_code.annotated_params"
+
+
+def _annotated_visitor(use_parameter_annotations=True):
+    filenames = [os.path.join(TESTS_DIR, "test_code/annotated_params.py")]
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger(),
+                            use_parameter_annotations=use_parameter_annotations)
+
+
+def _uses_names(v, func):
+    node = get_node(v.uses_edges.keys(), f"{ANNOTATED_PREFIX}.{func}")
+    return {n.get_name() for n in v.uses_edges[node]}
+
+
+def test_annotated_parameter_resolves_attribute_call():
+    """`def f(obj: Thing): obj.method()` reaches Thing.method."""
+    v = _annotated_visitor()
+    assert f"{ANNOTATED_PREFIX}.Thing.method" in _uses_names(v, "annotated")
+
+
+def test_annotated_parameter_matches_the_local_case():
+    """The asymmetry this removes.
+
+    A local assigned from `Thing()` always resolved; the parameter did not,
+    though the signature states the type just as plainly.
+    """
+    v = _annotated_visitor()
+    method = f"{ANNOTATED_PREFIX}.Thing.method"
+    assert method in _uses_names(v, "via_local")  # true before this feature too
+    assert method in _uses_names(v, "annotated")  # now true as well
+
+
+def test_annotations_can_be_ignored():
+    """`use_parameter_annotations=False` restores the unresolved reading."""
+    v = _annotated_visitor(use_parameter_annotations=False)
+    assert f"{ANNOTATED_PREFIX}.Thing.method" not in _uses_names(v, "annotated")
+
+
+def test_unannotated_parameter_is_unaffected():
+    """Nothing states the type, so there is nothing to bind, either way."""
+    for flag in (True, False):
+        v = _annotated_visitor(use_parameter_annotations=flag)
+        assert f"{ANNOTATED_PREFIX}.Thing.method" not in _uses_names(v, "unannotated")
+
+
+@pytest.mark.parametrize("func", ["varargs", "kwargs_only"])
+def test_star_args_annotations_do_not_bind(func):
+    """`*items: Thing` says the elements are Things; `items` itself is a tuple."""
+    v = _annotated_visitor()
+    assert f"{ANNOTATED_PREFIX}.Thing.method" not in _uses_names(v, func)
