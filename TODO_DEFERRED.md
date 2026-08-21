@@ -34,7 +34,7 @@ Investigated 2026-08-21; the mechanism is known, and it is not where one would l
 
 **Suppressing only the wildcards in pass 1 does not work**, and the reason is worth knowing: pass 1 does not record wildcards. It records edges to *name Nodes that turn out not to exist*, and `contract_nonexistents` converts those to `*.name` afterwards. Refusing namespace-`None` targets during pass 1 therefore drops 6 edges and leaves the order-dependence at 86.
 
-**Discarding pass 1 wholesale is not the fix either**, because 34 of those 236 are resolved edges that only pass 1 produces. The clean example is a forward reference to a module-level name bound *after* the function that reads it:
+**Discarding pass 1 wholesale is not the fix either**, because 34 of those 236 are resolved edges that only pass 1 produces — a forward reference to a module-level name bound *after* the function that reads it:
 
 ```python
 def deactivate():
@@ -42,9 +42,11 @@ def deactivate():
 stdlib_path_stats = SourceFileLoader.path_stats       # bound later
 ```
 
-In pass 1 the name is unbound when the body is visited, so `visit_Name` creates the NAME Node and links to it. In pass 2 the name *is* bound — to an unresolved attribute — so the value is used and the edge to the name is never made. Neither pass is wrong; they disagree, the output is their union, and file order decides which union.
+Pass 1 finds the name unbound and links to the NAME Node; pass 2 finds it bound, to an unresolved attribute, and uses the value instead, so the link to the name is never remade. Both orders produce this edge — the binding is in the same file, so pass 1 always reaches the function first. **Deterministic, and not the source of the nondeterminism.** It is a pass-1-only edge, which is a separate question about which pass should win.
 
-So the fix needs a decision, not a patch: which pass is authoritative for a given name, or edges tagged by the pass that made them plus a merge rule. Note the disagreement is the same name-versus-value question as the module-level constant fix (2026-08-21), where the name turned out to be the more useful target.
+**The order-dependence is the cross-file case**, where whether pass 1 could resolve at all depends on which file came first. `mcpyrate.astdumper.dump.recurse -> *.FIELDNAME` is present with the files sorted and absent with them reversed: `FIELDNAME` is set as `self.FIELDNAME` in `ColorScheme.__init__`, so the attribute is only known once `colorizer.py` has been visited. Pass 2 always resolves it, so the *resolved* edge converges. The pass-1 artifact does not, because nothing retracts it.
+
+So the fix wants edges that pass 2 supersedes to be withdrawn, which needs a way to tell "pass 1 could not resolve this yet" from "this genuinely refers to the name" — the two look identical at the point the edge is made. Note that is the same name-versus-value question as the module-level constant fix (2026-08-21), where the name turned out to be the more useful target.
 
 Why it matters beyond tidiness: a graph that changes between runs cannot be diffed against a previous revision, which is a main reason to keep one. It also makes output comparison unreliable as a regression check — verifying the `*args` subscript change meant telling a real one-edge difference from this noise, which needed the seed pinned and the file list fixed.
 
