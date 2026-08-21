@@ -649,6 +649,18 @@ A uses edge `S → T` is dropped when either:
 - **`S` is a module, and something defined in that module's own file also uses `T`.** The function's edge says it more precisely.
 - **`T` is a module, and `S` also uses something under `T`.** Reaching into a module implies depending on it.
 
+The first case in full — the module-level edge goes, the function's stays:
+
+```python
+# c.py
+from b import Thing        # c -> b.Thing        ...dropped
+
+def bar():
+    Thing()                # c.bar -> b.Thing    ...kept
+```
+
+Note what this is *not*. A module that merely **defines** a function has a `defines` edge to it, and defines edges are never touched — so in a module where `bar()` calls `foo()`, nothing is dropped, there being no module-level *use* of `foo` in the first place. The rule needs the module's own body to use something, which in practice means an import.
+
 Three restrictions keep the rule from eating real information:
 
 - **Only modules widen.** `f → Thing` alongside `f → Thing.method` stays: the first is a constructor call, which a call graph exists to show. Between modules, the same shape is an import.
