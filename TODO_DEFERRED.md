@@ -24,7 +24,9 @@ The discriminator already exists and is unused. `Scope.locals` holds exactly the
 
 Worth settling rather than leaving to luck, because function attributes are load-bearing in real code: `unpythonic.syntax` stashes markers on functions.
 
-What stays out of reach is the general case — attributes stashed onto a parameter inside a decorator, where knowing which functions acquire the attribute means knowing which functions flow through the decorator. Static analysis is unlikely to answer that; the assignment-on-a-named-function half looks entirely tractable.
+The assignment-on-a-named-function half looks entirely tractable, and has precedent: the NAMESPACE_OBJECT overlay (#129) already turns attribute assignments into scope entries deliberately.
+
+The harder half is an attribute stashed onto a *parameter* inside a decorator, since knowing which functions acquire it means knowing which functions reach that parameter. In full generality that is interprocedural dataflow and out of scope. Worth checking first whether the decorator case collapses to something bounded, though: pyan already resolves decorators statically, so "this decorator's body assigns `func.attr`, therefore everything it decorates has `attr`" may be a pattern rather than a dataflow problem. Unverified — that is the thing to establish before estimating the rest.
 
 Raised while reviewing why annotated parameters bind only to classes (2026-08-21).
 
