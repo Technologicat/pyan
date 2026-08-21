@@ -255,15 +255,24 @@ def collapse_inner(visitor):
 
     # BUG: resolve relative imports causes (RuntimeError: dictionary changed size during iteration)
     # temporary solution is adding list to force a copy of 'visitor.nodes'
-    for name in list(visitor.nodes):
-        if name.partition(".")[0] in ANON_SCOPE_NAMES:
-            for n in visitor.nodes[name]:
-                pn = visitor.get_parent_node(n)
-                if n in visitor.uses_edges:
-                    for n2 in visitor.uses_edges[n]:  # outgoing uses edges
-                        visitor.logger.info(f"Collapsing inner from {n} to {pn}, uses {n2}")
-                        visitor.add_uses_edge(pn, n2)
-                n.defined = False
+    anon_nodes = [n for name in list(visitor.nodes) if name.partition(".")[0] in ANON_SCOPE_NAMES
+                  for n in visitor.nodes[name]]
+
+    # Deepest first. An anonymous scope inside another must hand its uses up
+    # before the one holding it does the same, or the inner scope's calls land
+    # on a node that is itself about to be marked undefined and stop there —
+    # so a lambda returning a lambda lost every edge out of the inner one.
+    anon_nodes.sort(key=lambda n: n.get_name().count("."), reverse=True)
+
+    for n in anon_nodes:
+        pn = visitor.get_parent_node(n)
+        if n in visitor.uses_edges:
+            for n2 in visitor.uses_edges[n]:  # outgoing uses edges
+                if n2 is pn:  # a closure referring to its own enclosing scope
+                    continue
+                visitor.logger.info(f"Collapsing inner from {n} to {pn}, uses {n2}")
+                visitor.add_uses_edge(pn, n2)
+        n.defined = False
 
 
 def cull_subsumed(visitor):

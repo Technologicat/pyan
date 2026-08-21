@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **A lambda inside a lambda no longer aborts the analysis.** The inner scope was registered under a name the visitor never asks for, so any file containing one failed with `ValueError: Unknown scope`, taking the whole run with it — a single occurrence in a 328-file project meant no graph at all. The shape is ordinary: a test stub whose lambda builds an object from another lambda.
+  - The same crash hit a lambda inside a comprehension on Python 3.12+, where PEP 709 stops `symtable` reporting the comprehension's table and moves the lambda's up to the enclosing function.
+- **Calls made from a nested lambda or comprehension now reach the enclosing function.** Folding an anonymous scope into its parent looked the parent up by splitting the namespace at its last dot — but an anonymous scope is named in two dotted pieces (`lambda.0`), so for anything nested the call was folded onto a node nothing else referenced and vanished from the graph. A function whose only call to `helper` went through two levels of lambda appeared to call nothing.
+
 - **A call to an overridden method is no longer dropped when the caller also calls the base version.** A postprocessing stage removed the *more specific* of two same-named uses edges whenever one class inherited the other, deleting a real call site: a function calling both `ASTMarker(...)` and a locally defined `Tagged(ASTMarker)` lost its edge to `Tagged.__init__`. Attribute lookup returns one target per call site, and the stage excluded wildcards by construction, so it could never reach the ambiguous case it was written for — it has been removed.
 
 ### Changed

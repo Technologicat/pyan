@@ -95,3 +95,57 @@ def test_funcdef_return_annotation_uses(v):
     """def annotated_func(...) -> ReturnType creates uses edge to ReturnType."""
     uses = get_in_dict(v.uses_edges, f"{PREFIX}.annotated_func")
     get_node(uses, f"{PREFIX}.ReturnType")
+
+
+# --- Anonymous scopes nested in anonymous scopes ---
+
+NESTED_PREFIX = "test_code.nested_anon_scopes"
+
+
+@pytest.fixture
+def nested():
+    filenames = [os.path.join(TESTS_DIR, "test_code/nested_anon_scopes.py")]
+    return CallGraphVisitor(filenames, root=TESTS_DIR, logger=logging.getLogger())
+
+
+def test_lambda_inside_lambda(nested):
+    """The inner lambda is numbered like any other anonymous scope.
+
+    The visitor asks for the scope by the name it generates, so a scope
+    registered under a different name is not a naming quirk — it aborts the
+    whole analysis with ValueError.
+    """
+    defines = get_in_dict(nested.defines_edges, f"{NESTED_PREFIX}.lambda_in_lambda.lambda.0")
+    get_node(defines, f"{NESTED_PREFIX}.lambda_in_lambda.lambda.0.lambda.0")
+
+
+def test_nested_lambdas_reach_the_function_they_call(nested):
+    """Collapsing folds the inner scopes into the parent, so the call survives."""
+    uses = get_in_dict(nested.uses_edges, f"{NESTED_PREFIX}.lambda_in_lambda")
+    get_node(uses, f"{NESTED_PREFIX}.target")
+
+
+def test_two_outer_lambdas_each_keep_their_own_inner(nested):
+    """Two lambdas in one function, each wrapping one more.
+
+    Numbering is per (namespace, kind), so each inner lambda counts from zero
+    inside its own outer one rather than continuing a shared sequence.
+    """
+    for outer in ("lambda.0", "lambda.1"):
+        defines = get_in_dict(nested.defines_edges, f"{NESTED_PREFIX}.two_nested_lambdas.{outer}")
+        get_node(defines, f"{NESTED_PREFIX}.two_nested_lambdas.{outer}.lambda.0")
+
+
+def test_two_lambdas_inside_one_lambda_are_numbered_apart(nested):
+    """A lambda returning a tuple of two lambdas: the inner pair must not collide."""
+    parent = f"{NESTED_PREFIX}.two_inner_lambdas.lambda.0"
+    defines = get_in_dict(nested.defines_edges, parent)
+    get_node(defines, f"{parent}.lambda.0")
+    get_node(defines, f"{parent}.lambda.1")
+
+
+@pytest.mark.parametrize("func", ["comprehension_in_lambda", "lambda_in_comprehension", "stub_factory"])
+def test_other_nestings_analyze(nested, func):
+    """Comprehension in lambda, lambda in comprehension, and the monkeypatch-stub shape."""
+    uses = get_in_dict(nested.uses_edges, f"{NESTED_PREFIX}.{func}")
+    get_node(uses, f"{NESTED_PREFIX}.target")

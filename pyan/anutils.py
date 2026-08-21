@@ -548,8 +548,22 @@ class ExecuteInInnerScope:
         analyzer.name_stack.append(scopename)
         inner_ns = analyzer.get_node_of_current_namespace().get_name()
         if inner_ns not in analyzer.scopes:
-            analyzer.name_stack.pop()
-            raise ValueError(f"Unknown scope '{inner_ns}'")
+            # A scope nested inside an inlined comprehension is reported by
+            # symtable as a child of the *enclosing function*: PEP 709 did not
+            # remove the comprehension's scope, only symtable's table for it. So
+            # the nested scope never gets registered under the namespace we walk.
+            # Synthesize it: a lambda's locals are its parameters, and those are
+            # bound explicitly on entry anyway.
+            #
+            # Deliberately narrow. Any other miss is a disagreement between
+            # `analyze_scopes` and `_next_anon_scope_name` — a bug that should
+            # be loud, not papered over with an empty scope.
+            if analyzer.is_inside_inlined_comprehension(inner_ns):
+                analyzer.logger.debug(f"Synthesizing scope '{inner_ns}' nested in an inlined comprehension")
+                analyzer.scopes[inner_ns] = Scope.from_names(scopename, set())
+            else:
+                analyzer.name_stack.pop()
+                raise ValueError(f"Unknown scope '{inner_ns}'")
         analyzer.scope_stack.append(analyzer.scopes[inner_ns])
         analyzer.context_stack.append(scopename)
 

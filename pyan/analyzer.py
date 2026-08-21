@@ -229,6 +229,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.class_stack = []  # Nodes for class definitions currently in scope
         self.context_stack = []  # for detecting which FunctionDefs are methods
         self._anon_scope_idx = {}  # (parent_ns, scope_type) → next index
+        self._inlined_comprehension_scopes = set()  # namespaces synthesized for PEP 709
 
     ###########################################################################
     # Graph state — properties read/write through self.graph so existing call
@@ -364,6 +365,7 @@ class CallGraphVisitor(ast.NodeVisitor):
             else:
                 self._import_module_name = self.module_name
         self._anon_scope_idx = {}  # reset per source unit — must match between analyze_scopes and visitor
+        self._inlined_comprehension_scopes = set()
         self.analyze_scopes(content, self.filename)  # add to the currently known scopes
         self.visit(ast.parse(content, self.filename))
         self.module_name = None
@@ -1222,6 +1224,27 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.logger.debug(f"GeneratorExp, {self.filename}:{node.lineno}")
         return self.analyze_comprehension(node, "genexpr")
 
+    def is_inside_inlined_comprehension(self, namespace):
+        """Does *namespace* sit anywhere below a comprehension scope we synthesized?
+
+        PEP 709 (Python 3.12+) inlines comprehensions into the enclosing
+        function. Their lexical scope is unchanged — iteration variables still
+        do not leak — but `symtable` no longer reports a table for it, and
+        reports whatever the comprehension contains as a child of the enclosing
+        function instead. So nothing below such a level can be looked up under
+        the namespace the visitor walks, which still models the scope.
+
+        Checks every ancestor rather than the immediate parent: a lambda inside a
+        lambda inside a comprehension is two levels down, and only the outermost
+        of the three is the inlined one.
+        """
+        prefix = namespace.rpartition(".")[0]
+        while prefix:
+            if prefix in self._inlined_comprehension_scopes:
+                return True
+            prefix = prefix.rpartition(".")[0]
+        return False
+
     def _next_anon_scope_name(self, scope_type, ast_node):
         """Return a numbered scope name like ``listcomp.0``, ``lambda.1``, etc.
 
@@ -1294,6 +1317,10 @@ class CallGraphVisitor(ast.NodeVisitor):
             for gen in gens:
                 self._collect_target_names(gen.target, target_names)
             self.scopes[inner_ns] = Scope.from_names(numbered_label, target_names)
+            # Remember that this level exists only in our namespace, not in
+            # symtable's — anything nested inside it is reported one level up,
+            # so its scope has to be synthesized too. See ExecuteInInnerScope.
+            self._inlined_comprehension_scopes.add(inner_ns)
 
         with ExecuteInInnerScope(self, numbered_label) as scope_ctx:
             # Bind outermost targets to the iterator value in inner scope.
@@ -1905,10 +1932,20 @@ class CallGraphVisitor(ast.NodeVisitor):
         #
         scopes = {}
 
-        def process(parent_ns, table):
+        def register(parent_ns, table):
+            """Register *table* under its own namespace, then its children."""
             sc = Scope(table)
             ns = f"{parent_ns}.{sc.name}" if len(sc.name) else parent_ns
             scopes[ns] = sc
+            register_children(ns, table)
+
+        def register_children(ns, table):
+            """Register the child scopes of *table*, which is itself registered as *ns*.
+
+            Anonymous scopes are numbered per (namespace, kind). That numbering has
+            to match `_next_anon_scope_name`, since the visitor looks a scope up by
+            the name it generates there, and a miss is a hard error.
+            """
             anon_counts = {}  # number duplicate anonymous scope children
             for t in table.get_children():
                 child_name = normalize_symtable_scope_name(t.get_name())
@@ -1916,25 +1953,24 @@ class CallGraphVisitor(ast.NodeVisitor):
                     idx = anon_counts.get(child_name, 0)
                     anon_counts[child_name] = idx + 1
                     child_sc = Scope(t)
-                    numbered_name = f"{child_name}.{idx}"
-                    child_sc.name = numbered_name
-                    child_ns = f"{ns}.{numbered_name}"
+                    child_sc.name = f"{child_name}.{idx}"
+                    child_ns = f"{ns}.{child_sc.name}"
                     scopes[child_ns] = child_sc
-                    for sub_t in t.get_children():
-                        process(child_ns, sub_t)
+                    # Recurse through here rather than through `register`, so that
+                    # the numbering is applied at every depth: a lambda inside a
+                    # lambda is `lambda.0.lambda.0`, which is what the visitor asks
+                    # for. Going through `register` would name it `lambda.0.lambda`.
+                    register_children(child_ns, t)
                 elif _is_type_params_scope(t):
                     # PEP 695 (#123): store the type-parameter scope
                     # under a synthetic key and process its children
                     # under the current namespace (see docstring above).
-                    tp_scope = Scope(t)
-                    tp_key = f"{ns}.<type_params>.{child_name}"
-                    scopes[tp_key] = tp_scope
-                    for sub_t in t.get_children():
-                        process(ns, sub_t)
+                    scopes[f"{ns}.<type_params>.{child_name}"] = Scope(t)
+                    register_children(ns, t)
                 else:
-                    process(ns, t)
+                    register(ns, t)
 
-        process(self.module_name, symtable.symtable(code, filename, compile_type="exec"))
+        register(self.module_name, symtable.symtable(code, filename, compile_type="exec"))
 
         # add to existing scopes (while not overwriting any existing definitions with None)
         for ns in scopes:
@@ -2198,10 +2234,16 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     def get_parent_node(self, graph_node):
         """Get the parent node of the given Node. (Used in postprocessing.)"""
-        if "." in graph_node.namespace:
-            ns, name = graph_node.namespace.rsplit(".", 1)
+        parts = graph_node.namespace.split(".")
+        # An anonymous scope is named in two dotted pieces — `lambda.0` — so
+        # taking the last piece as the name would split the index off, and
+        # `get_node` would create a fresh Node under a namespace nothing else
+        # uses. Edges folded into that Node are then invisible: they hang off a
+        # parent that shares its dotted name with the real one but is not it.
+        if len(parts) >= 2 and parts[-1].isdigit() and parts[-2] in ANON_SCOPE_NAMES:
+            ns, name = ".".join(parts[:-2]), f"{parts[-2]}.{parts[-1]}"
         else:
-            ns, name = "", graph_node.namespace
+            ns, name = ".".join(parts[:-1]), parts[-1]
         return self.get_node(ns, name, None)
 
     @staticmethod
