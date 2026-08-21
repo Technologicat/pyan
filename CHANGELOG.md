@@ -18,6 +18,8 @@
 
 ### Changed
 
+- **Analyzing a large project is about three times faster** — 49s to 16s on a 94k-line, 328-file codebase, with byte-identical output. The attribute-uses fallback looked a Node up by scanning every Node in the graph and formatting each one's dotted name to compare, so its cost grew with the project while being paid per unresolved attribute access. It now asks the by-name index for the one bucket the answer can be in. Small projects were never affected enough to notice; this is where pyan's superlinear scaling came from.
+
 - **Uses edges that a more specific edge already conveys are now dropped.** A bare `import` produces a uses edge whether or not the name is ever referenced, so a module node accumulated one per imported name — and in a graph that also shows functions, each ran parallel to the edges of the functions using it, from a node drawn right beside them. Two shapes are culled: a module's edge to a target that something in its own file also uses, and a module's edge to another module it also reaches into. (#140)
   - Edges that nothing else records are kept — a module-level use no function reproduces (`router = make_router()`), and an import whose name is never referenced.
   - A module-level view is unaffected: under `--depth 0` the finer edge collapses back onto the same pair, so no dependency disappears.

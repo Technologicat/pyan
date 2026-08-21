@@ -30,6 +30,18 @@ The harder half is an attribute stashed onto a *parameter* inside a decorator, s
 
 Raised while reviewing why annotated parameters bind only to classes (2026-08-21).
 
+## Log calls build their messages whether or not logging is on
+
+*Cluster: performance · Cost: M (mechanical but widespread) · Gate: none · Filed: 2026-08-21*
+
+Profiling a 94k-line project shows **8 million calls to `Scope.__repr__`**, about 1.5s of a 16s run, with logging disabled entirely. The analyzer logs through f-strings — `self.logger.debug(f"Get {name} in {self.scope_stack[-1]}, found in {sc}")` — and an f-string is evaluated before the call, so every message is formatted and thrown away.
+
+The fix is the lazy form, `logger.debug("Get %s in %s", name, scope)`, which defers formatting to the handler. Mechanical, but there are a lot of call sites, and a blind find-replace would break the ones doing real work in the expression rather than just interpolating.
+
+Worth measuring before committing to it: `__repr__` is the visible 1.5s, but the f-string machinery around it costs more than that, and how much more is unknown.
+
+Found while re-profiling after the attribute-fallback speedup (2026-08-21).
+
 ## A subscripted `*args` could use its element annotation
 
 *Cluster: analyzer · Cost: S · Gate: none · Filed: 2026-08-21*

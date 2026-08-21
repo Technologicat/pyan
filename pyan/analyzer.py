@@ -2345,11 +2345,14 @@ class CallGraphVisitor(ast.NodeVisitor):
         parent_full = parent_namespace(graph_node.get_name())
         if not parent_full:
             return None
-        return next(
-            (n for lst in self.nodes.values() for n in lst
-             if n.defined and n.get_name() == parent_full),
-            None,
-        )
+        # `self.nodes` is indexed by short name, so ask it for the one bucket the
+        # parent can be in. Scanning every Node and formatting its dotted name to
+        # compare was 80% of the runtime on a 90k-line project: this is called per
+        # unresolved attribute access, and the graph it searched grew with the
+        # codebase, which is where pyan's near-quadratic scaling came from.
+        ns, name = split_qualified_name(parent_full)
+        return next((n for n in self.nodes.get(name, ())
+                     if n.defined and n.namespace == ns), None)
 
     def associate_node(self, graph_node, ast_node, filename=None):
         """Change the AST node (and optionally filename) mapping of a graph node.
