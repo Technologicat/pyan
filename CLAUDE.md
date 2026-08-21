@@ -42,7 +42,9 @@ Version-specific source fixtures live in `tests/test_code_312/` (3.12+ syntax).
 
 ### CI
 
-GitHub Actions: test matrix across 3.10–3.14 (`.github/workflows/ci.yml`), coverage on 3.14 via Codecov (`.github/workflows/coverage.yml`).
+GitHub Actions: test matrix across 3.10–3.15 on Linux plus macOS and Windows on 3.14 (`.github/workflows/ci.yml`), coverage on 3.14 via Codecov (`.github/workflows/coverage.yml`).
+
+**This repo tests its documentation.** `tests/test_docs.py` runs under `pytest`, so it runs in CI: it checks the README's table of contents against the document's own headings (every heading listed, every entry resolving, in document order) and that anchor links in the prose resolve. A Markdown-only push can therefore fail CI here, unlike elsewhere in the fleet — watch the run even for a docs-only change.
 
 ### Linting
 
