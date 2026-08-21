@@ -1006,15 +1006,22 @@ class CallGraphVisitor(ast.NodeVisitor):
     # Essentially, this should make '.'.join(...) see str.join.
     # Pyan3 currently handles that in resolve_attribute() and get_attribute().
     #
-    # Python 3.4 does not have ast.Constant, but 3.6 does.
-    # TODO: actually test this with Python 3.6 or later.
-    #
     def visit_Constant(self, node):
+        """Return no value: a literal does not bind its target to anything."""
+        # Returning the literal's *type* here — a Node named `<namespace>.int` —
+        # was how `x = 42` bound `x`. Every read of a constant then resolved to
+        # `int` or `str` rather than to the constant, and since the builtin types
+        # are never in the analyzed set, those edges were wildcards that no
+        # output draws. It also swallowed enum members: `Color.RED` is a name
+        # bound to a literal, so it resolved to `str` and the reference to the
+        # member disappeared.
+        #
+        # Leaving the name unbound is what a dict or list literal already did,
+        # which is why a dict-valued constant was visible in the graph and an
+        # int-valued one was not. Attribute access on a literal *expression*
+        # (`"hello".upper()`) is unaffected: `resolve_attribute` handles that.
         self.logger.debug(f"Constant {node.value}, {self.filename}:{node.lineno}")
-        t = type(node.value)
-        ns = self.get_node_of_current_namespace().get_name()
-        tn = t.__name__
-        return self.get_node(ns, tn, node, flavor=Flavor.ATTRIBUTE)
+        return None
 
     # attribute access (node.ctx is ast.Load/Store/Del)
     # Store context: handled by _bind_target

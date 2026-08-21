@@ -52,18 +52,6 @@ Would need the subscript to be recognized: when the value being subscripted is a
 
 Noticed while reviewing the annotated-parameter feature (2026-08-21).
 
-## A module-level constant that *is* used still produces no uses edge
-
-*Cluster: analyzer · Cost: ? · Gate: none · Filed: 2026-08-20 · See also: #140*
-
-Given `CONSTANT = 42` at module level and a `def caller(): return CONSTANT` in the same file, the analyzer records no edge from `caller` to `m.CONSTANT`. The Node exists — flavor `name`, `defined=True` — and the sibling `UNUSED_CONSTANT` is indistinguishable from it in the graph. visgraph then drops NAME Nodes that have no uses edges, so a constant is invisible whether or not anything reads it.
-
-Unknown whether this is deliberate (a constant is not a call, and a call graph may not want it) or a gap in binding tracking for module-level names read from an inner scope.
-
-It matters for the docs either way: the README's "What the graph leaves out" says that a module-level binding *nothing uses* is not drawn, which a reader will take to mean used ones are. Once the behaviour is settled, that sentence needs to match it.
-
-Discovered while documenting the graph-shaping rules for #140 (2026-08-20).
-
 ## Packages with no members are drawn as isolated nodes
 
 *Cluster: rendering · Cost: S · Gate: needs a decision on whether an empty package is worth showing · Filed: 2026-08-20 · See also: #140*

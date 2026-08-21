@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- **Reading a module-level constant now reaches the constant, not its type.** `LIMIT = 42` bound the name to a Node standing for `int`, so a read drew an edge to `int` — never drawn, builtins not being in the analyzed set — and the constant, referenced by nothing, was dropped as unused. Most visibly this swallowed enum members: `Color.RED` is a name bound to a literal, so every member access resolved to `str`. Container constants were already correct, a dict or list literal having never bound a type.
+
 - **A lambda inside a lambda no longer aborts the analysis.** The inner scope was registered under a name the visitor never asks for, so any file containing one failed with `ValueError: Unknown scope`, taking the whole run with it — a single occurrence in a 328-file project meant no graph at all. The shape is ordinary: a test stub whose lambda builds an object from another lambda.
   - The same crash hit a lambda inside a comprehension on Python 3.12+, where PEP 709 stops `symtable` reporting the comprehension's table and moves the lambda's up to the enclosing function.
 - **Calls made from a nested lambda or comprehension now reach the enclosing function.** Folding an anonymous scope into its parent looked the parent up by splitting the namespace at its last dot — but an anonymous scope is named in two dotted pieces (`lambda.0`), so for anything nested the call was folded onto a node nothing else referenced and vanished from the graph. A function whose only call to `helper` went through two levels of lambda appeared to call nothing.
