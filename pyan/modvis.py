@@ -389,6 +389,9 @@ def create_modulegraph(
         "grouped": grouped,
         "nested_groups": nested_groups,
         "annotated": annotated,
+        # Every node here *is* a module, so visgraph must not apply the
+        # call-graph treatment of drawing a module as a box around its members.
+        "module_level": True,
     }
 
     if sources is not None:
@@ -563,6 +566,7 @@ def main(cli_args=None):
         "grouped": known_args.grouped,
         "nested_groups": known_args.nested_groups,
         "annotated": known_args.annotated,
+        "module_level": True,
     }
 
     # TODO: use an int argument for verbosity

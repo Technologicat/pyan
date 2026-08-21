@@ -197,24 +197,38 @@ class VisualGraph:
                     continue
                 visited_nodes.append(node)
 
-        # When grouping, a module that has members would otherwise be drawn
-        # twice: once as the cluster holding them, and once as an ellipse
-        # beside it carrying the same label. The cluster is the module, so the
-        # ellipse moves inside it and becomes the module's own body — the
-        # scope CPython itself calls ``<module>``. A module whose body reaches
-        # nothing has no body worth drawing, and is left to the box alone.
-        clustered_namespaces = {node.namespace for node in visited_nodes} if grouped else set()
+        # When grouping, every module is its own cluster, and the module node
+        # moves inside as the module's own body — the scope CPython itself
+        # calls ``<module>``. Drawing it beside the cluster instead would label
+        # the same thing twice, and drawing modules *without* members as bare
+        # nodes would make a module look like either a box or an ellipse
+        # depending on its contents, which is the harder thing to read.
+        member_namespaces = {node.namespace for node in visited_nodes} if grouped else set()
 
-        def has_own_cluster(node):
-            return node.flavor == Flavor.MODULE and node.get_name() in clustered_namespaces
+        # Not in a module-level graph, where every node is a module and none has
+        # members: boxing each one and relabelling it `<module>` would rename the
+        # whole graph to one word.
+        module_level = options.get("module_level", False)
+
+        def draws_own_cluster(node):
+            return grouped and not module_level and node.flavor == Flavor.MODULE
+
+        def has_members(node):
+            return node.get_name() in member_namespaces
 
         if grouped:
+            # The body node earns its place two ways: something links to or
+            # from it, or it is the only thing its own box would hold. Dropping
+            # it in the latter case would leave an empty box — representing the
+            # module by an absence, and an empty cluster renders poorly besides.
             visited_nodes = [node for node in visited_nodes
-                             if not (has_own_cluster(node) and node not in nodes_with_uses)]
+                             if not (draws_own_cluster(node)
+                                     and node not in nodes_with_uses
+                                     and has_members(node))]
 
         def grouping_namespace(node):
             """The namespace of the cluster this node is drawn in."""
-            return node.get_name() if has_own_cluster(node) else node.namespace
+            return node.get_name() if draws_own_cluster(node) else node.namespace
 
         visited_nodes.sort(key=lambda x: (grouping_namespace(x), x.name))
 
@@ -241,7 +255,7 @@ class VisualGraph:
                 # Inside its own cluster, a module node stands for the code in
                 # the module body. Repeating the dotted path there would just
                 # restate the box's label.
-                label="<module>" if has_own_cluster(node) else labeler(node),
+                label="<module>" if draws_own_cluster(node) else labeler(node),
                 flavor=repr(node.flavor),
                 fill_color=fill_RGBA,
                 text_color=text_RGB,

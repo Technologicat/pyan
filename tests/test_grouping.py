@@ -68,6 +68,20 @@ def test_module_with_no_uses_edges_is_left_to_its_box():
     assert "pkg.schemas" not in all_node_labels(graph)
 
 
+def test_a_module_with_no_members_is_a_box_too():
+    """A module looks the same whether or not it contains anything.
+
+    `pkg/__init__.py` is empty, so there is nothing for its box to hold but the
+    body node — which is exactly why the body node stays: dropping it would
+    leave an empty box, and drawing the module as a bare ellipse instead would
+    make a module's appearance depend on its contents.
+    """
+    graph = build("pkg/__init__.py", "pkg/routes.py", "pkg/schemas.py")
+
+    assert node_labels(cluster(graph, "pkg")) == {"<module>"}
+    assert "pkg" not in all_node_labels(graph)
+
+
 def test_containment_is_not_drawn_twice():
     """The box states that `login` is in `pkg.routes`, so no defines edge does."""
     graph = build("pkg/routes.py", "pkg/schemas.py")
