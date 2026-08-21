@@ -14,6 +14,23 @@ Determine confidence of detected edges. See [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
 Partly addressed by #88 fix (import-aware expansion). Remainder: see [johnyf/pyan#5](https://github.com/johnyf/pyan/issues/5).
 
+## The same input does not always produce the same graph
+
+*Cluster: analyzer · Cost: ? · Gate: none · Filed: 2026-08-21*
+
+Two runs over the same 328-file project, in the same process, differ. Measured on raven: 47588 edges then 47586, the two extra both wildcards — `raven.librarian.chat_controller._descend_to_latest -> *.get_payload` and `raven.visualizer.info_panel.build_window -> *.is_any_modal_window_visible`.
+
+Two distinct causes, and the second is much the larger:
+
+- **Hash seed.** Fixing `PYTHONHASHSEED` makes a run reproducible: seed 0 gives 47675 edges with a stable digest across runs, seed 1 gives 47676. So something downstream — `expand_unknowns` is the obvious suspect, since every observed difference is a wildcard — depends on the iteration order of a set or dict keyed by strings.
+- **File order.** The same files given in a different order change the result by roughly 88 edges (47587 unsorted glob vs 47675 sorted). Much bigger than the hash effect, and it means the command line's argument order is part of the answer.
+
+Why it matters beyond tidiness: a call graph that changes between runs cannot be diffed against a previous one, which is what anybody comparing two revisions of a project wants to do. It also makes output comparison unreliable as a regression check — the `*args` subscript work had to distinguish a real one-edge change from this noise, and could only do so by pinning the seed.
+
+Worth establishing first whether the file-order dependence is a *bug* or the documented consequence of two-pass analysis: pass 1 collects definitions and pass 2 resolves, so order should not matter, and the fact that it does suggests something is resolved during pass 1 that ought to wait.
+
+Found while diffing edge sets to verify the subscript change (2026-08-21).
+
 ## Function attributes and locals share one scope dictionary
 
 *Cluster: analyzer · Cost: M · Gate: none · Filed: 2026-08-21*
