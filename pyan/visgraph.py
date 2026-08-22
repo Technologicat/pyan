@@ -219,8 +219,10 @@ class VisualGraph:
         if grouped:
             # The body node earns its place two ways: something links to or
             # from it, or it is the only thing its own box would hold. Dropping
-            # it in the latter case would leave an empty box — representing the
-            # module by an absence, and an empty cluster renders poorly besides.
+            # it in the latter case would leave nothing in the box, and an
+            # empty cluster is not drawn — neither by us, since a subgraph is
+            # opened only when a node lands in it, nor by GraphViz, which
+            # discards one it is handed. The module would go missing.
             visited_nodes = [node for node in visited_nodes
                              if not (draws_own_cluster(node)
                                      and node not in nodes_with_uses

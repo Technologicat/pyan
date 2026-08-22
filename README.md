@@ -743,7 +743,7 @@ def lift():
 
 Three boxes, one edge:
 
-- **`harbor`** holds `<module>` alone. It has no members, and an empty box would represent the module by an absence.
+- **`harbor`** holds `<module>` alone. It has no members, so without that node the box would be empty — and an empty box is not drawn at all, which would leave the module missing from the graph.
 - **`harbor.pier`** holds `unload` alone. Its module-level import edge was subsumed by `unload`'s (above), leaving the body using nothing, and nothing uses `harbor.pier` either.
 - **`harbor.crane`** holds `lift` alone, for the same reason.
 - The only edge drawn is `unload → lift`. `harbor.pier`'s defines edge to `unload` is not, the box having said it.
