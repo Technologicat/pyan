@@ -272,11 +272,12 @@ def cull_subsumed(visitor):
     defined in its own file also uses ``T``, or ``T`` is a module and ``S``
     also uses something anywhere under it.
 
-    Only modules widen. An edge whose target is a module came from an
-    ``import``, and says nothing a finer edge into that module does not
-    already say; an edge whose target is a class is a constructor call, and
-    stands on its own. The same asymmetry holds on the source side: a module's
-    edge duplicates its members' edges, where a function's does not.
+    Only a module stands in for its contents. An edge whose target is a
+    module came from an ``import``, and says nothing a finer edge into that
+    module does not already say; an edge whose target is a class is a
+    constructor call, and stands on its own. The same asymmetry holds on the
+    source side: a module's edge duplicates its members' edges, where a
+    function's does not.
     """
     # A bare `import b` yields a uses edge whether or not the name is ever
     # referenced, so a module node accumulates one edge per imported name on
