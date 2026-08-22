@@ -557,6 +557,10 @@ def main(cli_args=None):
     # determine root
     root = os.path.abspath(known_args.root) if known_args.root is not None else None
 
+    # The length check is deliberate where its sibling below is a plain truth test:
+    # `not unknown_args` beside an error about filenames reads as though the program
+    # wanted unknown arguments. Spelling it out makes a reader pause exactly long
+    # enough to see that here an unrecognized argument *is* a filename.
     if len(unknown_args) == 0:
         parser.error("Need one or more filenames to process")
     elif not filenames:

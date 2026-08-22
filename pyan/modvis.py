@@ -619,6 +619,8 @@ def main(cli_args=None):
         parser.error("unrecognized option(s): {}".format(" ".join(misspelled)))
 
     filenames = expand_sources(unknown_args, exclude=known_args.exclude)
+    # Length check rather than a truth test, for the reason given at the same
+    # place in `pyan.main.main`: an unrecognized argument is a filename here.
     if len(unknown_args) == 0:
         parser.error("Need one or more filenames to process")
     elif not filenames:
