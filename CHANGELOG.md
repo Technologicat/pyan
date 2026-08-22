@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.8.1 (in progress)
+## 2.8.1 (22 August 2026)
 
 ### Fixed
 
@@ -14,6 +14,7 @@
 - **A misspelled option is now an error instead of being ignored.** Filenames are whatever the argument parser does not claim, so `--with-init` — a plausible misspelling of `--init` — was taken for a glob, matched nothing, and left pyan running with the setting the user was trying to change. Both the call graph and `--module-level` were affected. A glob matching no files is likewise an error in `--module-level` now, as it already was for the call graph.
 
 - **[What the graph leaves out](README.md#what-the-graph-leaves-out) now describes grouped output correctly, and gives an example of each rule.** Every module is drawn as a box under `--grouped`; the README said a module without members stays a plain node, which it does not — an empty `__init__.py` gets a box holding `<module>` alone. Only the first of the culling rules came with an example, so the rest have one now.
+  - It also warns that folding a lambda or comprehension into its enclosing function hides a scope boundary Python really has, so a call made inside one cannot be told from a call in the function body. Name resolution is unaffected — a lambda parameter or comprehension target shadows the enclosing binding, as it should.
 
 
 ---
