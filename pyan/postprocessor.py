@@ -312,19 +312,20 @@ def cull_subsumed(visitor):
     def is_subsumed(from_node, to_node):
         """Is there a finer edge carrying the same dependency?
 
-        Exactly one end widens per test. Widening both at once would let an
-        edge between two unrelated nodes stand in for this one: for a package
-        importing its own subpackage, ``S`` contains ``T``, so a module inside
-        the subpackage importing its neighbour would qualify — an edge that is
-        not ``S``'s code and does not reach ``T``.
+        Exactly one end stands in for its contents per test. Letting both
+        stand in at once would accept an edge between two unrelated nodes as
+        evidence for this one: for a package importing its own subpackage,
+        ``S`` contains ``T``, so a module inside the subpackage importing its
+        neighbour would qualify — an edge that is not ``S``'s code and does
+        not reach ``T``.
         """
-        widened_sources = members[from_node.get_name()] if from_node.flavor == Flavor.MODULE else ()
-        widened_targets = within[to_node.get_name()] if to_node.flavor == Flavor.MODULE else ()
+        source_contents = members[from_node.get_name()] if from_node.flavor == Flavor.MODULE else ()
+        target_contents = within[to_node.get_name()] if to_node.flavor == Flavor.MODULE else ()
         return (
             # something in the module's own file reaches the same target
-            any(to_node in visitor.uses_edges.get(s, ()) for s in widened_sources) or
+            any(to_node in visitor.uses_edges.get(s, ()) for s in source_contents) or
             # this same source reaches somewhere inside the module
-            any(t in widened_targets for t in visitor.uses_edges.get(from_node, ()))
+            any(t in target_contents for t in visitor.uses_edges.get(from_node, ()))
         )
 
     # Decide against the original graph, then remove; culling as we go would
