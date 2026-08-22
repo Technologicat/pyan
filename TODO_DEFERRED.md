@@ -154,6 +154,35 @@ Raised 2026-08-17 during the Python 3.15 support work. The normalization fix lan
 restores the real scope on 3.15 — this item is about the general shape, not that bug.
 
 
+## Optionally draw lambdas and comprehensions as their own nodes
+
+*Cluster: what the graph leaves out · Cost: M · Gate: needs a decision on whether it earns a flag · Filed: 2026-08-22*
+
+`collapse_inner` folds every anonymous scope into its parent, so a call written inside a
+lambda or a comprehension is drawn as a call from the enclosing function. The nodes exist
+during analysis — `rig.lambda.0`, `rig.listcomp.1` — and the folding is a postprocessing
+stage, so exposing them would mostly be a matter of not running it.
+
+The case for a flag: the folding erases a scope boundary Python really has, which the
+analyzer itself is careful to honour (a lambda parameter or comprehension target shadows
+the enclosing binding, and synthetic scopes exist on 3.12+ partly to keep that true — see
+the shadowing tests in `tests/test_iteration.py`). Someone reading a graph cannot tell a
+call in the function body from one three scopes in.
+
+The case against: for a *call* graph the enclosing function is usually the unit of
+interest, and anonymous scopes would multiply nodes in exactly the code that has most of
+them. The folding is a good default and nobody has asked for the other one.
+
+So this is a question of whether the option earns its keep, not of whether it is
+implementable. Worth knowing before deciding: how many nodes it adds on a real codebase,
+and whether the anonymous names read well enough in a rendered graph to be worth looking
+at. Note the names are per-parent-and-kind and nest (`lambda.0.lambda.0`), so a deeply
+nested scope gets a long label.
+
+Raised during review of the README's "What the graph leaves out" section (2026-08-22),
+where the folding is now documented as hiding a real boundary.
+
+
 ## The cycle report and the module graph name packages differently
 
 *Cluster: modvis dependency resolution · Cost: S · Gate: needs a decision on the speculative deps · Filed: 2026-08-21*
