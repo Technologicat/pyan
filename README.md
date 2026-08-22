@@ -703,7 +703,7 @@ def tie_up():
     return crane                    # harbor.quay.bollard.tie_up -> harbor.quay.crane  ...kept
 ```
 
-The first line is the both-ends case: `tie_up`'s use of `crane` is the edge that would wrongly count for it. The second is the source-side one — `tie_up` does use exactly `harbor.quay.crane`, but it lives in `bollard.py`, and what `quay/__init__.py` imports is its own business. The third is the ordinary first case, applying inside `bollard.py`: there `tie_up` *is* a same-file member, so its edge does subsume the module-level import.
+The first line is the both-ends case: `tie_up`'s use of `crane` is the edge that would wrongly count for it. The second is the source-side one — `tie_up` does use exactly `harbor.quay.crane`, but it lives in `bollard.py`, and only what `quay/__init__.py` itself defines can account for what `quay/__init__.py` imports. The third is the ordinary first case, applying inside `bollard.py`: there `tie_up` *is* a same-file member, so its edge does subsume the module-level import.
 
 What survives is anything nothing else records — a module-level use no function reproduces, and an import whose name is never referenced:
 
