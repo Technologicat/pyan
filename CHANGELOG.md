@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.8.2 (in progress)
+
+*No user-visible changes yet.*
+
+
+---
+
 ## 2.8.1 (22 August 2026)
 
 ### Fixed
