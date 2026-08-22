@@ -621,7 +621,7 @@ def main(cli_args=None):
     filenames = expand_sources(unknown_args, exclude=known_args.exclude)
     if len(unknown_args) == 0:
         parser.error("Need one or more filenames to process")
-    elif len(filenames) == 0:
+    elif not filenames:
         parser.error("No files found matching given glob: {}".format(" ".join(unknown_args)))
 
     if known_args.nested_groups:
