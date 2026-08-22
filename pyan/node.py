@@ -107,14 +107,24 @@ class Node:
             return self.name
 
     def get_class_prefixed_name(self):
-        """Return the name prefixed with the owning class for methods, or the short name otherwise.
+        """Return a name carrying enough context to read without a group title.
+
+        A method is prefixed with its owning class, a module gets its full dotted
+        path, and anything else is the short name.
 
         Useful for ungrouped display where no group title provides namespace context."""
+        # A module's dotted path is its identity — `utils` alone names a dozen
+        # different files in a large project, and two of them would print
+        # identically here. The call-graph analyzer avoids this by construction,
+        # putting the whole path in `name` with an empty namespace; the module-level
+        # analyzer splits it, so ask for the full name rather than the field.
         if self.namespace is None:
             return "*." + self.name
         if self.flavor in (Flavor.METHOD, Flavor.STATICMETHOD, Flavor.CLASSMETHOD):
             class_name = self.namespace.rsplit(".", 1)[-1]
             return f"{class_name}.{self.name}"
+        if self.flavor == Flavor.MODULE:
+            return self.get_name()
         return self.name
 
     def get_annotation_parts(self):

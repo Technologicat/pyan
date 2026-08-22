@@ -492,6 +492,17 @@ class TestCLI:
         # Should not contain spurious deps (prepare_graph filters them)
         assert "MY_CONST" not in captured.out
 
+    def test_text_output_names_modules_by_their_dotted_path(self, capsys):
+        # Ungrouped output carries no cluster title, so a bare `alpha` would not say
+        # which package it belongs to — and in a large project several packages have
+        # a module of the same name, which would then print identically. The
+        # call-graph analyzer prints the dotted path, and this matches it.
+        main(fixture_files() + ["--text", "--root", FIXTURE_DIR])
+        lines = [line.strip() for line in capsys.readouterr().out.splitlines() if line.strip()]
+        assert "pkg_a.alpha" in lines
+        assert "[U] pkg_b.gamma" in lines
+        assert not [line for line in lines if line in ("alpha", "gamma", "[U] alpha", "[U] gamma")]
+
 
 # ---------------------------------------------------------------------------
 # CLI integration (--module-level dispatch through pyan.main)

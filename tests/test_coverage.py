@@ -105,6 +105,18 @@ class TestClassPrefixedName:
         n = Node("", "main", None, "test.py", Flavor.FUNCTION)
         assert n.get_class_prefixed_name() == "main"
 
+    def test_module_keeps_its_dotted_path(self):
+        # Ungrouped output has no cluster title to supply the package, and a bare
+        # `utils` names a dozen different files in a large project.
+        n = Node("pkg.sub", "utils", None, "test.py", Flavor.MODULE)
+        assert n.get_class_prefixed_name() == "pkg.sub.utils"
+
+    def test_module_built_with_the_whole_path_in_name(self):
+        # How the call-graph analyzer builds module nodes: empty namespace, dotted
+        # name. Same label either way, so the two analyzers agree.
+        n = Node("", "pkg.sub.utils", None, "test.py", Flavor.MODULE)
+        assert n.get_class_prefixed_name() == "pkg.sub.utils"
+
 
 class TestNodeNamespace:
     """Cover get_toplevel_namespace edge cases."""
