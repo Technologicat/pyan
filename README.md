@@ -754,7 +754,7 @@ Neither bullet applies without grouping. There, module nodes keep their full dot
 
 An analyzed module is drawn even when it connects to nothing — a package whose `__init__.py` is empty appears as a node with no edges, and that is the point: you handed pyan the file, so "this links nowhere" is an answer rather than clutter. When grouping, it becomes a box holding `<module>`, like any other module. Modules that were only ever imported, never analyzed, are not drawn at all.
 
-- **Lambdas and comprehensions are folded into the function that contains them.** A lambda that calls `knot` is drawn as its enclosing function calling `knot`.
+- **Lambdas and comprehensions are folded into the function that contains them.** A lambda that calls `knot` is drawn as its enclosing function calling `knot`. This hides a scope boundary that is really there: below, `x` belongs to the lambda and `y` to the comprehension, not to `rig`. The analyzer honours it — a name bound in one of those scopes shadows the enclosing function's, and a call resolved against it does not reach what the outer name held — but the graph does not show it, so a call made inside a lambda looks like one made in the function body.
 - **A module-level binding that nothing uses is not drawn.** Names like `__version__` or a private constant become nodes during analysis so that other modules can import them; when nothing does, they would be isolated dots.
 
 Both, in one module:

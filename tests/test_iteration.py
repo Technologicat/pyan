@@ -81,6 +81,28 @@ def test_multi_listcomp_isolated_scopes(v):
     get_node(defines, f"{PREFIX}.multi_listcomp.listcomp.1")
 
 
+# --- Nested-scope shadowing ---
+
+def test_lambda_parameter_shadows_enclosing_binding(v):
+    """A lambda's parameter is its own, so the call must not resolve to the outer type."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.shadowed_by_lambda")
+    assert f"{PREFIX}.Alpha.alpha_method" not in {n.get_name() for n in uses}
+
+def test_comprehension_target_shadows_enclosing_binding(v):
+    """A comprehension's target is its own, so the call must not resolve to the outer type."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.shadowed_by_comprehension")
+    assert f"{PREFIX}.Alpha.alpha_method" not in {n.get_name() for n in uses}
+
+def test_lambda_closure_still_resolves(v):
+    """The counterpart: with nothing shadowing it, a closed-over name resolves through.
+
+    Without this, the two tests above would pass just as well against an analyzer
+    that resolved nothing at all inside a lambda.
+    """
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.closed_over_by_lambda")
+    get_node(uses, f"{PREFIX}.Alpha.alpha_method")
+
+
 # --- For-else ---
 
 def test_for_else(v):

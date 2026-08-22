@@ -455,3 +455,25 @@ class Settings:
 
 def read_setting():
     return Settings.DEBUG
+
+
+# --- Nested-scope shadowing ---
+#
+# In both of these, the enclosing function binds the name to an Alpha, and the
+# nested scope rebinds it to something the analyzer knows nothing about. The
+# call must not resolve to Alpha.alpha_method: the name it is written on
+# belongs to the lambda / the comprehension.
+
+def shadowed_by_lambda(values):
+    thing = Alpha()  # noqa: F841  # test fixture
+    caller = lambda thing: thing.alpha_method()  # noqa: E731  # test fixture
+    return [caller(v) for v in values]
+
+def shadowed_by_comprehension(values):
+    thing = Alpha()  # noqa: F841  # test fixture
+    return [thing.alpha_method() for thing in values]
+
+def closed_over_by_lambda():
+    thing = Alpha()
+    caller = lambda: thing.alpha_method()  # noqa: E731  # test fixture
+    return caller()
