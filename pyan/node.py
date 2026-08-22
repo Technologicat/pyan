@@ -114,7 +114,7 @@ class Node:
 
         Useful for ungrouped display where no group title provides namespace context."""
         # A module's dotted path is its identity — `utils` alone names a dozen
-        # different files in a large project, and two of them would print
+        # different files in a large project, and every one of them would print
         # identically here. The call-graph analyzer avoids this by construction,
         # putting the whole path in `name` with an empty namespace; the module-level
         # analyzer splits it, so ask for the full name rather than the field.
