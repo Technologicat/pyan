@@ -681,11 +681,11 @@ def cast_off():
 
 Note what this is *not*. A module that merely **defines** a function has a `defines` edge to it, and defines edges are never touched — so in a module where `cast_off()` calls `moor()`, nothing is dropped, there being no module-level *use* of `moor` in the first place. The rule needs the module's own body to use something, which in practice means an import.
 
-Both cases work by letting one end of the edge stand in for what is inside it, so that the question becomes whether a finer edge already runs between the same two places. Three restrictions on that keep the rule from eating real information:
+Both cases work by narrowing one end of the edge to something inside it, and asking whether that narrower edge exists. Three restrictions on the narrowing keep the rule from eating real information:
 
-- **Only a module stands in for its contents.** `cast_off → Berth` alongside `cast_off → Berth.assign` stays: the first is a constructor call, which a call graph exists to show. Between modules, the same shape is an import.
-- **Only one end stands in at a time.** For a package that imports its own subpackage, `S` contains `T`, so allowing both at once would accept an edge between two modules *inside* the subpackage as evidence for the package's own import.
-- **On the source side, a module stands in only for what its own file defines**, since a package's dotted-name descendants are separate files: `quay/bollard.py` importing `crane` says nothing about what `quay/__init__.py` imports.
+- **Only a module narrows.** `cast_off → Berth` alongside `cast_off → Berth.assign` stays: the first is a constructor call, which a call graph exists to show. Between modules, the same shape is an import.
+- **Only one end narrows at a time.** For a package that imports its own subpackage, `S` contains `T`, so narrowing both at once would accept an edge between two modules *inside* the subpackage as evidence for the package's own import.
+- **Narrowing the source reaches only same-file members**, since a package's dotted-name descendants are separate files: `quay/bollard.py` importing `crane` says nothing about what `quay/__init__.py` imports.
 
 The last two are both about packages, and one arrangement shows each:
 
@@ -703,7 +703,7 @@ def tie_up():
     return crane                    # harbor.quay.bollard.tie_up -> harbor.quay.crane  ...kept
 ```
 
-`harbor → harbor.quay` is the both-ends case: `harbor` contains `harbor.quay`, so letting both stand in at once would accept `tie_up`'s use of `crane` as evidence for it — code that is not in `harbor/__init__.py` and does not point at `harbor.quay`. `harbor.quay → harbor.quay.crane` is the source-side one: `tie_up` does use exactly that target, but it lives in `bollard.py`, and what `quay/__init__.py` imports is its own business. Inside `bollard.py` the first case then applies normally, and the module-level import goes.
+`harbor → harbor.quay` is the both-ends case: `harbor` contains `harbor.quay`, so narrowing both at once would accept `tie_up`'s use of `crane` as evidence for it — code that is not in `harbor/__init__.py` and does not point at `harbor.quay`. `harbor.quay → harbor.quay.crane` is the source-side one: `tie_up` does use exactly that target, but it lives in `bollard.py`, and what `quay/__init__.py` imports is its own business. Inside `bollard.py` the first case then applies normally, and the module-level import goes.
 
 What survives is anything nothing else records — a module-level use no function reproduces, and an import whose name is never referenced:
 
