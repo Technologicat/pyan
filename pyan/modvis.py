@@ -21,8 +21,19 @@ __all__ = [
 ]
 
 
-def filename_to_module_name(fullpath, root=None):  # Not anutils.get_module_name: module-level analysis needs __init__ as a distinct node (not folded into the package name).
+# Not anutils.get_module_name, which the call-graph analyzer uses: that one folds a
+# package's __init__.py into the package name. Here the suffix has to survive, because
+# resolve_import strips one dotted component per level of a relative import, and lands
+# on the containing package only if an __init__ module's own name is the last component
+# (its contract says so).
+#
+# That is a constraint on the analysis, not on the picture: prepare_graph draws the
+# module as the package again unless with_init says otherwise.
+def filename_to_module_name(fullpath, root=None):
     """'some/path/module.py' -> 'some.path.module'
+
+    A package's ``__init__.py`` keeps the suffix: ``pkg/sub/__init__.py`` ->
+    ``'pkg.sub.__init__'``, not ``'pkg.sub'``.
 
     Args:
         fullpath: path to a ``.py`` file (relative or absolute).
