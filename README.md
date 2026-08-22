@@ -703,7 +703,7 @@ def tie_up():
     return crane                    # harbor.quay.bollard.tie_up -> harbor.quay.crane  ...kept
 ```
 
-`harbor → harbor.quay` is the both-ends case: `tie_up` lies under `harbor` and `crane` lies under `harbor.quay`, so if both ends narrowed at once, the `tie_up → crane` edge at the bottom would qualify as the finer edge — though it is written in `bollard.py` rather than in `harbor/__init__.py`, and neither of its ends is one of the two in question. `harbor.quay → harbor.quay.crane` is the source-side one — `tie_up` does use exactly that target, but it lives in `bollard.py`, and only what `quay/__init__.py` itself defines can account for what `quay/__init__.py` imports. The dropped edge is neither restriction: inside `bollard.py`, `tie_up` *is* a same-file member, so the ordinary first case applies and the module-level import goes.
+`harbor → harbor.quay` is the both-ends case: `tie_up` lies under `harbor` and `crane` lies under `harbor.quay`, so if both ends narrowed at once, the `tie_up → crane` edge at the bottom would qualify as the finer edge — though it is written in `bollard.py` rather than in `harbor/__init__.py`, and neither of its ends is one of the two in question. `harbor.quay → harbor.quay.crane` is the source-side one — `tie_up` does use exactly that target, but it lives in `bollard.py`, and only what `quay/__init__.py` itself defines can account for what `quay/__init__.py` imports. But inside `bollard.py`, `tie_up` *is* a same-file member, so the ordinary first case applies and the module-level import goes.
 
 What survives is anything nothing else records — a module-level use no function reproduces, and an import whose name is never referenced:
 
