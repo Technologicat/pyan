@@ -5,6 +5,7 @@ import os
 
 import pytest
 
+from pyan.analyzer import CallGraphVisitor
 from pyan.anutils import infer_root, resolve_import
 from pyan.modvis import (
     ImportVisitor,
@@ -13,6 +14,7 @@ from pyan.modvis import (
     main,
     split_module_name,
 )
+from pyan.node import Flavor
 
 # ---------------------------------------------------------------------------
 # Pure functions
@@ -419,6 +421,20 @@ class TestImportVisitor:
         epsilon_node = visitor.nodes["pkg_a.epsilon"][0]
         target_names = {n.get_name() for n in visitor.uses_edges.get(epsilon_node, ())}
         assert "pkg_b.__init__" in target_names
+
+    def test_module_names_agree_with_the_call_graph_analyzer(self, visitor):
+        # The two analyzers derive module names by different routes — modvis keeps
+        # the `.__init__` suffix, which relative-import resolution needs, and folds
+        # it away when preparing the graph, while the call-graph analyzer folds it
+        # at the source. Nothing forces the results to match, so pin that they do:
+        # a package is `pkg` in both, and the two graphs are comparable node for node.
+        visitor.prepare_graph()
+        logger = logging.getLogger("test_modvis")
+        logger.setLevel(logging.WARNING)
+        cg = CallGraphVisitor(fixture_files(), root=FIXTURE_DIR, logger=logger)
+        cg_modules = {n.get_name() for items in cg.nodes.values() for n in items
+                      if n.flavor == Flavor.MODULE and n.defined}
+        assert set(visitor.nodes) == cg_modules
 
     def test_prepare_graph_edges(self, visitor):
         visitor.prepare_graph()
