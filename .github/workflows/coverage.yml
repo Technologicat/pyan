@@ -14,6 +14,10 @@ permissions:
 
 jobs:
   codecov:
+    # Upstream only. A fork runs this on its own pushes with no `CODECOV_TOKEN` of its own, and
+    # Codecov wants one for a permanent branch even on a public repo, so without this the workflow
+    # greets every contributor with a red run about a secret they were never meant to hold.
+    if: github.repository == 'Technologicat/pyan'
     runs-on: ubuntu-latest
 
     steps:
