@@ -13,6 +13,8 @@ README = os.path.join(os.path.dirname(os.path.dirname(__file__)), "README.md")
 # A list item that is nothing but a link to an anchor in this same document.
 TOC_ENTRY = re.compile(r"^\s*- \[.*\]\(#([^)]+)\)\s*$")
 ANCHOR_LINK = re.compile(r"\[[^\]]*\]\(#([^)]+)\)")
+# An inline code span. A whole link inside one is being *quoted*, not made.
+INLINE_CODE = re.compile(r"`[^`]*`")
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*$")
 
 
@@ -68,7 +70,13 @@ def toc_anchors(lines):
 
 
 def dangling_links(lines):
-    """Anchor links anywhere in the prose that point at no heading."""
+    """Anchor links anywhere in the prose that point at no heading.
+
+    Inline code spans are removed before matching, so prose *about* link syntax — a note explaining
+    that ``[text](#anchor)`` is what something walks — does not read as a reference to a heading
+    called "anchor". This README has no such sentence; Raven's briefs do, which is where the gap
+    showed up. The copy of this checker in `raven/scripts/check_doc_links.py` carries the same fix.
+    """
     headings = set(heading_anchors(lines))
     found = []
     in_fence = False
@@ -78,7 +86,7 @@ def dangling_links(lines):
             continue
         if in_fence:
             continue
-        found.extend(a for a in ANCHOR_LINK.findall(line) if a not in headings)
+        found.extend(a for a in ANCHOR_LINK.findall(INLINE_CODE.sub("", line)) if a not in headings)
     return found
 
 
@@ -147,3 +155,23 @@ def test_checker_notices_a_dangling_prose_link():
 def test_checker_ignores_shell_comments_in_fenced_blocks():
     lines = GOOD + ["", "```bash", "# Generate DOT, then render it", "```"]
     assert toc_problems(lines) == []
+
+
+def test_a_link_quoted_in_an_inline_code_span_is_not_a_link():
+    """Prose about link syntax names no heading."""
+    assert dangling_links(GOOD + ["", "The notation `[term](#term-anchor)` is what it follows."]) == []
+
+
+def test_an_unquoted_link_is_still_reported():
+    """The control for the case above: skipping code spans must not skip everything."""
+    assert dangling_links(GOOD + ["", "The notation [term](#term-anchor) is what it follows."]) == ["term-anchor"]
+
+
+def test_punctuation_is_dropped_before_spaces_become_hyphens():
+    """GitHub removes `&` and keeps the spaces that flanked it, so the slug has a double hyphen.
+
+    Pinned because the obvious "tidier" rewrite — collapsing whitespace — silently breaks every link
+    to a heading of this shape, and reports correct documents as broken. A reimplementation elsewhere
+    got exactly this wrong.
+    """
+    assert slugify("Install & run") == "install--run"
