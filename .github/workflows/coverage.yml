@@ -2,7 +2,11 @@ name: Coverage
 
 on:
   push:
-    branches: [ master ]
+    # Every branch, so work in progress gets the same coverage run as `master` does.
+    # Dependabot's are the exception: GitHub hands its runs Dependabot secrets rather than Actions
+    # secrets, so `CODECOV_TOKEN` would be empty and the upload would fail on every bump. A bump's
+    # coverage run is the one that happens on `master` after it merges.
+    branches-ignore: ['dependabot/**']
   workflow_dispatch:
 
 permissions:
