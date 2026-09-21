@@ -24,7 +24,14 @@ def read_readme():
 
 
 def slugify(title):
-    """GitHub's heading-anchor rule: lowercase, drop punctuation, spaces to hyphens."""
+    """GitHub's heading-anchor rule: lowercase, drop punctuation, spaces to hyphens.
+
+    A link in the heading contributes its text and not its target, GitHub anchoring from what the
+    heading *renders* as. Without this the URL survives as letters — `## 0.2.9 — ["Pleiades"](https://
+    en.wikipedia.org/wiki/Pleiades) edition` would anchor as `029--pleiadeshttpsenwikipediaorg...`,
+    and a TOC generated from the same function would agree with itself while disagreeing with GitHub.
+    """
+    title = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", title)
     return re.sub(r"[^\w\s-]", "", title.strip().lower()).replace(" ", "-")
 
 
@@ -175,3 +182,16 @@ def test_punctuation_is_dropped_before_spaces_become_hyphens():
     got exactly this wrong.
     """
     assert slugify("Install & run") == "install--run"
+
+
+def test_a_link_in_a_heading_contributes_its_text_and_not_its_target():
+    """GitHub anchors from what the heading renders as, so the URL is not part of the slug.
+
+    Pinned because the failure is quiet: a table of contents generated from this same function agrees
+    with itself and disagrees only with GitHub, which is the one place nobody runs the checker. Raven
+    met it first, on a release heading naming its edition, which without this anchors as
+    `029-in-progress--pleiadeshttpsenwikipediaorgwikipleiades-edition`.
+    """
+    assert slugify('0.2.9 (in progress) — *["Pleiades"](https://en.wikipedia.org/wiki/Pleiades)* edition') == \
+        "029-in-progress--pleiades-edition"
+    assert slugify("See [the notes](notes.md)") == "see-the-notes"
