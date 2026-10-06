@@ -1476,6 +1476,23 @@ class CallGraphVisitor(ast.NodeVisitor):
     def visit_Call(self, node):
         self.logger.debug(f"Call {get_ast_node_name(node.func)}, {self.filename}:{node.lineno}")
 
+        # see if we can predict the result
+        try:
+            result_node = self.resolve_builtins(node)
+        except UnresolvedSuperCallError:
+            result_node = None
+        resolved = isinstance(result_node, Node)
+
+        # Visit the callee before the arguments, which is Python's evaluation order and also the
+        # order `symtable` numbers anonymous scopes in. In `x.do(lambda: ...).do(lambda: ...)` the
+        # first lambda lives in `node.func`; visiting the arguments first would number the second
+        # lambda `lambda.0`, and its nested scopes would then miss their `symtable` entries.
+        #
+        # A resolved built-in has a bare name as its callee, which holds no scopes, so skipping
+        # its visit does not disturb the numbering.
+        if not resolved:
+            func_node = self.visit(node.func)
+
         # visit args to detect uses
         for arg in node.args:
             self.visit(arg)
@@ -1489,13 +1506,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         # three name-resolution levels (literal / scope-local / cross-module).
         maybe_register_setattr_call(self, node)
 
-        # see if we can predict the result
-        try:
-            result_node = self.resolve_builtins(node)
-        except UnresolvedSuperCallError:
-            result_node = None
-
-        if isinstance(result_node, Node):  # resolved result
+        if resolved:
             from_node = self.get_node_of_current_namespace()
             to_node = result_node
             self.logger.debug(f"Use from {from_node} to {to_node} (via resolved call to built-ins)")
@@ -1506,8 +1517,6 @@ class CallGraphVisitor(ast.NodeVisitor):
             return result_node
 
         else:  # unresolved call — general case
-            func_node = self.visit(node.func)
-
             # If the call target is a known class (e.g. MyClass()),
             # add a uses edge to MyClass.__init__().
             if func_node in self.class_base_ast_nodes:

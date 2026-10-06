@@ -2,7 +2,9 @@
 
 ## 2.8.2 (in progress)
 
-*No user-visible changes yet.*
+### Fixed
+
+- **A call chain with several lambdas no longer aborts with `ValueError: Unknown scope`** ([#142](https://github.com/Technologicat/pyan/issues/142)). In `x.do(lambda: ...).do(lambda a: a.do(lambda: ...))`, pyan numbered the two outer lambdas in the opposite order to Python, so the inner lambda was looked up under the wrong one and not found. The same applied to a lambda called directly with a lambda argument.
 
 
 ---
