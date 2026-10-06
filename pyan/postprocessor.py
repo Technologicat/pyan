@@ -209,8 +209,8 @@ def expand_unknowns(visitor):
             if n2.namespace is None:
                 for n3 in visitor.nodes[n2.name]:
                     if (n3.namespace is not None and n3.defined and
-                        _name_referenced_in_scope(visitor, n, n2.name) and
-                        _has_import_to(visitor, n, n3.namespace)):
+                            _name_referenced_in_scope(visitor, n, n2.name) and
+                            _has_import_to(visitor, n, n3.namespace)):
                         new_defines_edges.append((n, n3))
 
     for from_node, to_node in new_defines_edges:
@@ -223,8 +223,8 @@ def expand_unknowns(visitor):
             if n2.namespace is None:
                 for n3 in visitor.nodes[n2.name]:
                     if (n3.namespace is not None and n3.defined and
-                        _name_referenced_in_scope(visitor, n, n2.name) and
-                        _has_import_to(visitor, n, n3.namespace)):
+                            _name_referenced_in_scope(visitor, n, n2.name) and
+                            _has_import_to(visitor, n, n3.namespace)):
                         new_uses_edges.append((n, n3))
 
     for from_node, to_node in new_uses_edges:
