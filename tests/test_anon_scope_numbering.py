@@ -75,14 +75,6 @@ TEMPLATES = {
 
 ORDERS = {"nested second": (PLAIN, NESTED), "nested first": (NESTED, PLAIN)}
 
-# The visitor does not walk the subexpressions of an assignment target, so a lambda there is never analyzed
-# and these cannot tell a right name from a wrong one; the negative control below says so.
-UNVISITED = {"subscript target and value", "chained assignment", "augmented assignment", "attribute target"}
-CASES = [pytest.param(template, order,
-                      marks=pytest.mark.xfail(strict=True, reason="assignment targets are not visited"))
-         if template in UNVISITED and order == "nested first" else (template, order)
-         for template in TEMPLATES for order in ORDERS]
-
 
 def _analyze(tmp_path, body):
     source = f"def f(x, g):\n    {body}\n"
@@ -92,7 +84,8 @@ def _analyze(tmp_path, body):
 
 
 @pytest.mark.filterwarnings("ignore::SyntaxWarning")  # `(lambda: 0)[...]` is valid, and the compiler says so
-@pytest.mark.parametrize(("template", "order"), CASES)
+@pytest.mark.parametrize("order", ORDERS)
+@pytest.mark.parametrize("template", TEMPLATES)
 def test_nested_lambda_is_found_in_either_slot(tmp_path, template, order):
     a, b = ORDERS[order]
     v = _analyze(tmp_path, TEMPLATES[template].format(a=a, b=b))

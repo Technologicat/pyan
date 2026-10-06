@@ -477,3 +477,23 @@ def closed_over_by_lambda():
     thing = Alpha()
     caller = lambda: thing.alpha_method()  # noqa: E731  # test fixture
     return caller()
+
+
+# --- Expressions inside assignment targets ---
+
+def slot_index():
+    pass
+
+
+def slot_owner():
+    pass
+
+
+def deep_index():
+    pass
+
+
+def store_through_targets(table):
+    table[slot_index()] = 1
+    slot_owner().attr = 2
+    table.rows[deep_index()].cell = 3

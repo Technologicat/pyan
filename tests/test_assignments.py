@@ -89,3 +89,12 @@ def test_annassign_annotation_uses(v):
     """result: MyType = None creates uses edge to MyType (from annotation)."""
     uses = get_in_dict(v.uses_edges, f"{PREFIX}.annotated_func")
     get_node(uses, f"{PREFIX}.MyType")
+
+
+# --- Expressions inside assignment targets ---
+
+@pytest.mark.parametrize("callee", ["slot_index", "slot_owner", "deep_index"])
+def test_calls_inside_a_target_are_uses(v, callee):
+    """Python evaluates a target's index and base before storing: `table[slot_index()] = 1` calls it."""
+    uses = get_in_dict(v.uses_edges, f"{PREFIX}.store_through_targets")
+    get_node(uses, f"{PREFIX}.{callee}")

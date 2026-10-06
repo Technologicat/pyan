@@ -11,6 +11,9 @@
 
 ### Fixed
 
+- **Calls and names inside an assignment target are now recorded as uses.**
+  - In `table[slot()] = 1` and `make().attr = 2`, the calls to `slot` and `make` were missing from the graph, as was the read of `table`.
+
 - **Lambdas and comprehensions are now always analyzed in their own scopes** ([#142](https://github.com/Technologicat/pyan/issues/142)).
   - Wherever pyan met two lambdas in a different order than Python does, they could trade scopes. A nested lambda then aborted the run with `ValueError: Unknown scope`, as in the reported `x.do(lambda: ...).do(lambda a: a.do(lambda: ...))`.
   - Affected: method chains, assignments with a lambda on both sides of the `=`, a lambda among a function's defaults and another in its decorator, a lambda default of a lambda, and lambdas in annotations and class bases.

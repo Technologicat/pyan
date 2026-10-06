@@ -1698,6 +1698,15 @@ class CallGraphVisitor(ast.NodeVisitor):
                 maybe_register_name_literal(self, target, rhs_ast)
                 maybe_register_namespace_object(self, target, rhs_ast)
         elif isinstance(target, ast.Attribute):
+            # `make().attr = v` evaluates `make()` before storing. A dotted name
+            # is covered by the attribute-write fallback below; anything else at
+            # the base of the chain — a call, a subscript — is visited for the
+            # uses it makes.
+            base = target.value
+            while isinstance(base, ast.Attribute):
+                base = base.value
+            if not isinstance(base, ast.Name):
+                self.visit(base)
             try:
                 if self.set_attribute(target, value):
                     self.logger.info(f"setattr {get_ast_node_name(target.value)}.{target.attr} to {value}")
@@ -1718,6 +1727,10 @@ class CallGraphVisitor(ast.NodeVisitor):
                             self.logger.info(f"New edge added for Use from {from_node} to defined ancestor {ancestor} (attribute-write fallback)")
             except UnresolvedSuperCallError:
                 pass
+        elif isinstance(target, ast.Subscript):
+            # `x[i] = v` evaluates `x` and `i` before storing; they are uses like
+            # any others. Nothing is bound: pyan does not track container contents.
+            self.visit(target)
         elif isinstance(target, (ast.Tuple, ast.List)):
             for elt in target.elts:
                 self._bind_target(elt, value)
