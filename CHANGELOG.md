@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.8.2 (in progress)
+## 2.9.0 (6 October 2026) — *Toponymy*
 
 ### Changed
 
