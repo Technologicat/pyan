@@ -1,9 +1,9 @@
-"""Anonymous scopes must be named in the order `symtable` numbers them (#142).
+"""Each lambda and comprehension must be named for, and get, its own scope (#142).
 
-`symtable` numbers the lambdas and comprehensions of a scope in its own traversal order, and the
-visitor looks each one up by the name it generates. When the two orders disagree, sibling lambdas
-swap names, which goes unnoticed until one of them holds a scope of its own: then the lookup of
-`lambda.0.lambda.0` finds nothing and the whole analysis aborts with ``ValueError: Unknown scope``.
+Scopes come from `symtable`, and the visitor looks each one up by name, so the name has to say which
+table belongs to which AST node. When it does not, sibling lambdas trade scopes. That goes unnoticed until
+one of them holds a scope of its own: then the lookup of `lambda.0.lambda.0` finds nothing and the whole
+analysis aborts with ``ValueError: Unknown scope``.
 
 Each template below has two slots, `{a}` before `{b}` in the source. One slot gets a plain lambda
 and the other a lambda containing a lambda, both ways round — the reported shape only failed with
@@ -57,9 +57,31 @@ TEMPLATES = {
     "def two kwonly defaults": "def h(*, z={a}, w={b}): pass",
     "match subject and guard": "match {a}:\n        case 1 if {b}: pass",
     "delete": "del x[{a}], x[{b}]",
+    # Assignments: `symtable` numbers the targets before the value.
+    "subscript target and value": "x[{a}] = {b}",
+    "chained assignment": "x[{a}] = y[0] = {b}",
+    "augmented assignment": "x[{a}] += {b}",
+    "attribute target": "{a}().z = {b}",
+    "annotated assignment": "y: {a} = {b}",
+    # Definitions: `symtable` numbers a function's defaults before its decorators.
+    "decorator and default": "@{a}\n    def h(z={b}): pass",
+    "default and annotation": "def h(z: {b} = {a}): pass",
+    "lambda default and body": "lambda z={a}: {b}",
+    "class base and body": "class C({a}):\n        z = {b}",
+    # Scopes inside comprehensions, which Python 3.12+ inlines.
+    "genexpr": "list({b} for _ in {a})",
+    "inlined comprehension": "[x.do({a}).do({b}) for x in g]",
 }
 
 ORDERS = {"nested second": (PLAIN, NESTED), "nested first": (NESTED, PLAIN)}
+
+# The visitor does not walk the subexpressions of an assignment target, so a lambda there is never analyzed
+# and these cannot tell a right name from a wrong one; the negative control below says so.
+UNVISITED = {"subscript target and value", "chained assignment", "augmented assignment", "attribute target"}
+CASES = [pytest.param(template, order,
+                      marks=pytest.mark.xfail(strict=True, reason="assignment targets are not visited"))
+         if template in UNVISITED and order == "nested first" else (template, order)
+         for template in TEMPLATES for order in ORDERS]
 
 
 def _analyze(tmp_path, body):
@@ -70,8 +92,7 @@ def _analyze(tmp_path, body):
 
 
 @pytest.mark.filterwarnings("ignore::SyntaxWarning")  # `(lambda: 0)[...]` is valid, and the compiler says so
-@pytest.mark.parametrize("order", ORDERS)
-@pytest.mark.parametrize("template", TEMPLATES)
+@pytest.mark.parametrize(("template", "order"), CASES)
 def test_nested_lambda_is_found_in_either_slot(tmp_path, template, order):
     a, b = ORDERS[order]
     v = _analyze(tmp_path, TEMPLATES[template].format(a=a, b=b))
@@ -79,3 +100,48 @@ def test_nested_lambda_is_found_in_either_slot(tmp_path, template, order):
     defined = sorted(n.get_name() for targets in v.defines_edges.values() for n in targets)
     assert any(re.search(r"\.lambda\.\d+\.lambda\.0$", name) for name in defined), (
         f"no lambda inside a lambda was analyzed, so this fixture cannot detect misnumbering: {defined}")
+
+
+# Which scope gets which name. Each lambda's parameter names it the way it should be named, and its body
+# refers to nothing else, so its scope must hold exactly that one name: a scope traded with a sibling, or
+# merged with one, holds the wrong name or two of them.
+ORDER_SOURCE = """\
+def chain(x):
+    x.do(lambda first: 0).do(lambda second: 0)
+
+def decorated():
+    @(lambda second: second)
+    def h(z=lambda first: 0):
+        pass
+
+def inlined(xs):
+    [x.do(lambda first: 0).do(lambda second: 0) for x in xs]
+
+def after_comprehension(x, xs):
+    [lambda inner: 0 for _ in xs]
+    x.do(lambda first: 0)
+"""
+
+EXPECTED_SCOPES = {
+    # A call's callee is evaluated, and numbered, before its arguments.
+    "chain.lambda.0": "first",
+    "chain.lambda.1": "second",
+    # The compiler meets a function's defaults before its decorators, against the reading order. The order
+    # `symtable` reports is the one that holds wherever there is one.
+    "decorated.lambda.0": "first",
+    "decorated.lambda.1": "second",
+    # Python 3.12+ reports no table for the comprehension, and the lambdas in it as children of the
+    # function; numbered in reading order within the comprehension, they come out as on 3.11.
+    "inlined.listcomp.0.lambda.0": "first",
+    "inlined.listcomp.0.lambda.1": "second",
+    # So, likewise, a lambda after a comprehension holding one is still the function's first lambda.
+    "after_comprehension.listcomp.0.lambda.0": "inner",
+    "after_comprehension.lambda.0": "first",
+}
+
+
+def test_each_scope_is_named_for_its_own_lambda(tmp_path):
+    (tmp_path / "m.py").write_text(ORDER_SOURCE)
+    v = CallGraphVisitor([str(tmp_path / "m.py")], root=str(tmp_path), logger=logging.getLogger())
+    found = {ns.removeprefix("m."): sorted(scope.defs) for ns, scope in v.scopes.items() if ".lambda." in ns}
+    assert found == {ns: [param] for ns, param in EXPECTED_SCOPES.items()}

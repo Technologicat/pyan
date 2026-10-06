@@ -6,8 +6,8 @@ import ast
 from collections.abc import Iterable
 from contextlib import contextmanager
 import logging
-import symtable
 
+from .anonscopes import plan_anonymous_scopes, scope_key
 from .anutils import (
     ANON_SCOPE_NAMES,
     NAMESPACE_CONSTRUCTORS,
@@ -15,7 +15,6 @@ from .anutils import (
     Scope,
     UnresolvedSuperCallError,
     canonize_exprs,
-    enclosing_namespaces,
     format_alias,
     get_ast_node_name,
     get_module_name,
@@ -250,8 +249,7 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.scope_stack = []  # the Scope objects currently in scope
         self.class_stack = []  # Nodes for class definitions currently in scope
         self.context_stack = []  # for detecting which FunctionDefs are methods
-        self._anon_scope_idx = {}  # (parent_ns, scope_type) → next index
-        self._inlined_comprehension_scopes = set()  # namespaces synthesized for PEP 709
+        self._scope_plans = {}  # filename → `ScopePlan`; see `_scope_plan`
 
     ###########################################################################
     # Graph state — properties read/write through self.graph so existing call
@@ -386,8 +384,6 @@ class CallGraphVisitor(ast.NodeVisitor):
                 self._import_module_name = self.module_name + ".__init__"
             else:
                 self._import_module_name = self.module_name
-        self._anon_scope_idx = {}  # reset per source unit — must match between analyze_scopes and visitor
-        self._inlined_comprehension_scopes = set()
         self.analyze_scopes(content, self.filename)  # add to the currently known scopes
         self.visit(ast.parse(content, self.filename))
         self.module_name = None
@@ -1348,44 +1344,19 @@ class CallGraphVisitor(ast.NodeVisitor):
         self.logger.debug(f"GeneratorExp, {self.filename}:{node.lineno}")
         return self.analyze_comprehension(node, "genexpr")
 
-    def is_inside_inlined_comprehension(self, namespace):
-        """Does *namespace* sit anywhere below a comprehension scope we synthesized?
-
-        PEP 709 (Python 3.12+) inlines comprehensions into the enclosing
-        function. Their lexical scope is unchanged — iteration variables still
-        do not leak — but `symtable` no longer reports a table for it, and
-        reports whatever the comprehension contains as a child of the enclosing
-        function instead. So nothing below such a level can be looked up under
-        the namespace the visitor walks, which still models the scope.
-
-        Checks every ancestor rather than the immediate parent: a lambda inside a
-        lambda inside a comprehension is two levels down, and only the outermost
-        of the three is the inlined one.
-        """
-        return any(ns in self._inlined_comprehension_scopes
-                   for ns in enclosing_namespaces(parent_namespace(namespace)))
-
     def _next_anon_scope_name(self, scope_type, ast_node):
-        """Return a numbered scope name like ``listcomp.0``, ``lambda.1``, etc.
+        """Return the numbered scope name of *ast_node*, like ``listcomp.0`` or ``lambda.1``.
 
         Each anonymous scope instance in a parent namespace gets a unique index,
-        so that multiple comprehensions or lambdas don't share bindings.
-
-        The AST node is used for deduplication: if the same node is visited
-        more than once (e.g. a ``for`` loop iter expression visited by both
-        ``visit_For`` and ``analyze_binding``), the same name is returned.
+        so that multiple comprehensions or lambdas don't share bindings. The name
+        is the one `analyze_scopes` registered the scope under, so visiting the
+        same node again returns the same name.
         """
-        parent_ns = self.get_node_of_current_namespace().get_name()
-        # Dedup by AST node identity (line + col is unique per scope instance).
-        dedup_key = (parent_ns, scope_type, ast_node.lineno, ast_node.col_offset)
-        if dedup_key in self._anon_scope_idx:
-            return self._anon_scope_idx[dedup_key]
-        count_key = (parent_ns, scope_type)
-        idx = self._anon_scope_idx.get(count_key, 0)
-        self._anon_scope_idx[count_key] = idx + 1
-        name = f"{scope_type}.{idx}"
-        self._anon_scope_idx[dedup_key] = name
-        return name
+        label = self._scope_plans[self.filename].labels[scope_key(ast_node)]
+        if not label.startswith(f"{scope_type}."):
+            raise ValueError(f"Anonymous scope at {self.filename}:{ast_node.lineno} is labelled '{label}', "
+                             f"expected a {scope_type}")
+        return label
 
     def analyze_comprehension(self, node, label, field1="elt", field2=None):
         """Analyze a comprehension node (listcomp, setcomp, dictcomp, genexpr).
@@ -1422,8 +1393,7 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         # Give each comprehension instance a unique scope name (e.g. listcomp.0,
         # listcomp.1) so that multiple comprehensions in the same function don't
-        # share bindings.  The numbering must match analyze_scopes() (pre-3.12)
-        # since both iterate children/nodes in AST order.
+        # share bindings.
         numbered_label = self._next_anon_scope_name(label, node)
 
         # Ensure comprehension scope exists. On Python 3.12+ (PEP 709),
@@ -1432,15 +1402,11 @@ class CallGraphVisitor(ast.NodeVisitor):
         # variable isolation during analysis.
         parent_ns = self.get_node_of_current_namespace().get_name()
         inner_ns = f"{parent_ns}.{numbered_label}"
-        if inner_ns not in self.scopes:
+        if scope_key(node) in self._scope_plans[self.filename].synthesized and inner_ns not in self.scopes:
             target_names = set()
             for gen in gens:
                 self._collect_target_names(gen.target, target_names)
             self.scopes[inner_ns] = Scope.from_names(numbered_label, target_names)
-            # Remember that this level exists only in our namespace, not in
-            # symtable's — anything nested inside it is reported one level up,
-            # so its scope has to be synthesized too. See ExecuteInInnerScope.
-            self._inlined_comprehension_scopes.add(inner_ns)
 
         with ExecuteInInnerScope(self, numbered_label) as scope_ctx:
             # Bind outermost targets to the iterator value in inner scope.
@@ -2021,6 +1987,12 @@ class CallGraphVisitor(ast.NodeVisitor):
     ###########################################################################
     # Scope analysis
 
+    def _scope_plan(self, code, filename):
+        """Return the `ScopePlan` of the source unit *filename*, computed once and shared by every pass."""
+        if filename not in self._scope_plans:
+            self._scope_plans[filename] = plan_anonymous_scopes(code, filename, self.module_name)
+        return self._scope_plans[filename]
+
     def analyze_scopes(self, code, filename):
         """Gather lexical scope information.
 
@@ -2071,43 +2043,36 @@ class CallGraphVisitor(ast.NodeVisitor):
 
         def register(parent_ns, table):
             """Register *table* under its own namespace, then its children."""
-            sc = Scope(table)
+            sc = Scope(table, plan.marker_prefix)
             ns = f"{parent_ns}.{sc.name}" if len(sc.name) else parent_ns
             scopes[ns] = sc
             register_children(ns, table)
 
         def register_children(ns, table):
-            """Register the child scopes of *table*, which is itself registered as *ns*.
+            """Register the named child scopes of *table*, which is itself registered as *ns*.
 
-            Anonymous scopes are numbered per (namespace, kind). That numbering has
-            to match `_next_anon_scope_name`, since the visitor looks a scope up by
-            the name it generates there, and a miss is a hard error.
+            Anonymous scopes are registered from the plan instead, which names them
+            the way the visitor does. Nothing named sits inside one.
             """
-            anon_counts = {}  # number duplicate anonymous scope children
             for t in table.get_children():
                 child_name = normalize_symtable_scope_name(t.get_name())
                 if child_name in ANON_SCOPE_NAMES:
-                    idx = anon_counts.get(child_name, 0)
-                    anon_counts[child_name] = idx + 1
-                    child_sc = Scope(t)
-                    child_sc.name = f"{child_name}.{idx}"
-                    child_ns = f"{ns}.{child_sc.name}"
-                    scopes[child_ns] = child_sc
-                    # Recurse through here rather than through `register`, so that
-                    # the numbering is applied at every depth: a lambda inside a
-                    # lambda is `lambda.0.lambda.0`, which is what the visitor asks
-                    # for. Going through `register` would name it `lambda.0.lambda`.
-                    register_children(child_ns, t)
-                elif _is_type_params_scope(t):
+                    continue
+                if _is_type_params_scope(t):
                     # PEP 695 (#123): store the type-parameter scope
                     # under a synthetic key and process its children
                     # under the current namespace (see docstring above).
-                    scopes[f"{ns}.<type_params>.{child_name}"] = Scope(t)
+                    scopes[f"{ns}.<type_params>.{child_name}"] = Scope(t, plan.marker_prefix)
                     register_children(ns, t)
                 else:
                     register(ns, t)
 
-        register(self.module_name, symtable.symtable(code, filename, compile_type="exec"))
+        plan = self._scope_plan(code, filename)
+        register(self.module_name, plan.table)
+        for ns, table in plan.anon_tables:
+            sc = Scope(table, plan.marker_prefix)
+            sc.name = split_qualified_name(ns)[1]  # e.g. `lambda.1`
+            scopes[ns] = sc
 
         # add to existing scopes (while not overwriting any existing definitions with None)
         for ns in scopes:

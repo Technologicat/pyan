@@ -514,17 +514,23 @@ class Scope:
     """Adaptor that makes scopes look somewhat like those from the Python 2
     compiler module, as far as Pyan's CallGraphVisitor is concerned."""
 
-    def __init__(self, table):
-        """table: SymTable instance from symtable.symtable()"""
+    def __init__(self, table, marker_prefix=None):
+        """table: SymTable instance from symtable.symtable()
+
+        marker_prefix: names starting with this are left out. They are the markers
+        `pyan.anonscopes` tags the source with to tell its tables apart.
+        """
         name = normalize_symtable_scope_name(table.get_name())
         if name == "top":
             name = ""  # Pyan defines the top level as anonymous
         self.name = name
         self.type = table.get_type()  # useful for __repr__()
-        self.defs = dict.fromkeys(table.get_identifiers())  # name:assigned_value
+        symbols = [sym for sym in table.get_symbols()
+                   if marker_prefix is None or not sym.get_name().startswith(marker_prefix)]
+        self.defs = dict.fromkeys(sym.get_name() for sym in symbols)  # name:assigned_value
         # Pure locals: assigned in this scope, not free/global/imported.
         # Used by visit_Name to skip UNKNOWN node creation for unresolved locals.
-        self.locals = {sym.get_name() for sym in table.get_symbols()
+        self.locals = {sym.get_name() for sym in symbols
                        if sym.is_assigned() and not sym.is_imported()
                        and not sym.is_global() and not sym.is_free()}
 
@@ -586,22 +592,12 @@ class ExecuteInInnerScope:
         analyzer.name_stack.append(scopename)
         inner_ns = analyzer.get_node_of_current_namespace().get_name()
         if inner_ns not in analyzer.scopes:
-            # A scope nested inside an inlined comprehension is reported by
-            # symtable as a child of the *enclosing function*: PEP 709 did not
-            # remove the comprehension's scope, only symtable's table for it. So
-            # the nested scope never gets registered under the namespace we walk.
-            # Synthesize it: a lambda's locals are its parameters, and those are
-            # bound explicitly on entry anyway.
-            #
-            # Deliberately narrow. Any other miss is a disagreement between
-            # `analyze_scopes` and `_next_anon_scope_name` — a bug that should
-            # be loud, not papered over with an empty scope.
-            if analyzer.is_inside_inlined_comprehension(inner_ns):
-                analyzer.logger.debug(f"Synthesizing scope '{inner_ns}' nested in an inlined comprehension")
-                analyzer.scopes[inner_ns] = Scope.from_names(scopename, set())
-            else:
-                analyzer.name_stack.pop()
-                raise ValueError(f"Unknown scope '{inner_ns}'")
+            # Every scope is registered before the walk, from `symtable` or, for a
+            # comprehension inlined by PEP 709, by the visitor just before entering
+            # it. A miss is a bug, and should be loud rather than papered over with
+            # an empty scope.
+            analyzer.name_stack.pop()
+            raise ValueError(f"Unknown scope '{inner_ns}'")
         analyzer.scope_stack.append(analyzer.scopes[inner_ns])
         analyzer.context_stack.append(scopename)
 
