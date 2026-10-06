@@ -130,7 +130,8 @@ def _inner_parts(node):
         for gen in rest:
             parts.extend([gen.target, gen.iter, *gen.ifs])
         if isinstance(node, ast.DictComp):
-            return [*parts, node.key, node.value]
+            # `value` is `None` in an unpacking comprehension, `{**d for d in ds}` (Python 3.15+).
+            return [*parts, node.key, *([node.value] if node.value is not None else [])]
         return [*parts, node.elt]
     return []
 
