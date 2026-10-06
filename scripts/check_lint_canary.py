@@ -46,6 +46,10 @@ def command_for(linter: str, workflow: str) -> list[str] | None:
     arguments = [argument for argument in shlex.split(match.group(1))
                  if not argument.startswith("--exclude")]
     arguments = [str(FIXTURE) if argument == "." else argument for argument in arguments]
+    if arguments[0] == "python":
+        # This interpreter, rather than whichever `python` the OS finds first: on Windows that search begins in
+        # the running interpreter's own directory, which for a venv's launcher is the base installation's.
+        arguments[0] = sys.executable
     if linter == "ruff":
         arguments += ["--no-cache", "--output-format", "concise"]  # where the output goes, not which rules
     return arguments
@@ -66,6 +70,8 @@ def main() -> int:
         print(f"    reported: {' '.join(sorted(reported)) or '(nothing)'}")
         if missing := expected - reported:
             print(f"    MISSING: {' '.join(sorted(missing))} — the rule is no longer running as CI runs it")
+            if result.stderr.strip():
+                print(f"    stderr: {result.stderr.strip()}")
             problems += 1
         if allowed := reported & ALLOWED_BY_THE_HOUSE:
             print(f"    UNEXPECTED: {' '.join(sorted(allowed))} — the house allows these, and CI now rejects them")
