@@ -120,6 +120,13 @@ def inlined(xs):
 def after_comprehension(x, xs):
     [lambda inner: 0 for _ in xs]
     x.do(lambda first: 0)
+
+def lambda_default():
+    lambda second=(lambda first: 0): 0
+
+def annotated():
+    def h(z: (lambda first: 0)):
+        pass
 """
 
 EXPECTED_SCOPES = {
@@ -137,6 +144,13 @@ EXPECTED_SCOPES = {
     # So, likewise, a lambda after a comprehension holding one is still the function's first lambda.
     "after_comprehension.listcomp.0.lambda.0": "inner",
     "after_comprehension.lambda.0": "first",
+    # A lambda's defaults are evaluated where the lambda is, so a lambda among them belongs to the
+    # function, and the compiler meets it before the lambda it is a default of.
+    "lambda_default.lambda.0": "first",
+    "lambda_default.lambda.1": "second",
+    # Annotations are analyzed as part of the function they annotate, though Python evaluates them outside
+    # it, so that what they use is attributed to the function.
+    "annotated.h.lambda.0": "first",
 }
 
 

@@ -655,10 +655,9 @@ class CallGraphVisitor(ast.NodeVisitor):
             # scope (like defaults), so visiting them here — inside the function
             # scope — is technically wrong. We do it anyway because attributing
             # annotation uses edges to the function (rather than the module) is
-            # far more useful in the call graph. This works because annotations
-            # rarely contain expressions that trigger scope lookups (lambdas,
-            # comprehensions). If an edge case surfaces, defaults show the
-            # pattern: visit in enclosing scope, bind inside.
+            # far more useful in the call graph. A lambda or comprehension in an
+            # annotation is accordingly named and scoped as part of the function;
+            # `pyan.anonscopes` mirrors this placement.
             self._visit_function_annotations(node)
 
             # ...and let an annotated parameter carry its type into the body, so
@@ -676,10 +675,13 @@ class CallGraphVisitor(ast.NodeVisitor):
 
     def visit_Lambda(self, node):
         self.logger.debug(f"Lambda, {self.filename}:{node.lineno}")
+        # Defaults are evaluated in the enclosing scope, when the lambda is created; same as for a def.
+        default_values = self._visit_function_defaults(node.args)
         numbered_label = self._next_anon_scope_name("lambda", node)
         with ExecuteInInnerScope(self, numbered_label) as scope_ctx:
             self.generate_args_nodes(node.args, scope_ctx.inner_ns)
-            self.analyze_arguments(node.args)
+            self._bind_function_defaults(node.args, default_values)
+            self._record_default_uses_in_function(node.args)
             self.visit(node.body)  # single expr
         return scope_ctx.inner_scope_node
 
@@ -709,27 +711,6 @@ class CallGraphVisitor(ast.NodeVisitor):
             sc.defs[a.arg] = nonsense_node
         if ast_args.kwarg is not None:  # **kwargs if present
             sc.defs[ast_args.kwarg] = nonsense_node
-
-    def analyze_arguments(self, ast_args):
-        """Analyze an arguments node of the AST.
-
-        Record bindings of args to the given default values, if present.
-
-        Used for analyzing FunctionDefs and Lambdas."""
-        # https://greentreesnakes.readthedocs.io/en/latest/nodes.html?highlight=functiondef#arguments
-        if ast_args.defaults:
-            n = len(ast_args.defaults)
-            for tgt, val in zip(ast_args.args[-n:], ast_args.defaults, strict=False):
-                targets = canonize_exprs(tgt)
-                values = canonize_exprs(val)
-                self.analyze_binding(targets, values)
-        if ast_args.kw_defaults:
-            n = len(ast_args.kw_defaults)
-            for tgt, val in zip(ast_args.kwonlyargs, ast_args.kw_defaults, strict=False):
-                if val is not None:
-                    targets = canonize_exprs(tgt)
-                    values = canonize_exprs(val)
-                    self.analyze_binding(targets, values)
 
     def _visit_function_defaults(self, ast_args):
         """Visit default value expressions and return the resolved Nodes.
@@ -787,7 +768,10 @@ class CallGraphVisitor(ast.NodeVisitor):
                     self.add_uses_edge(from_node, to_node)
 
     def _visit_function_annotations(self, node):
-        """Visit type annotations on a FunctionDef in the current (enclosing) scope."""
+        """Visit the type annotations of the FunctionDef *node* in the current scope.
+
+        The caller runs this inside the function's own scope; see the comment there.
+        """
         if node.returns is not None:
             self.visit(node.returns)
         for arg in node.args.args + node.args.posonlyargs + node.args.kwonlyargs:

@@ -115,7 +115,7 @@ def _inner_parts(node):
     """Return the children of *node* that the visitor walks inside *node*'s own namespace.
 
     This mirrors the visitor, not Python: annotations and class bases are visited inside the function or
-    class, and a lambda's defaults inside the lambda. A comprehension's outermost iterable belongs outside.
+    class. Defaults belong outside, and so does a comprehension's outermost iterable.
     """
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         a = node.args
@@ -125,7 +125,7 @@ def _inner_parts(node):
     if isinstance(node, ast.ClassDef):
         return [*node.bases, *node.body]
     if isinstance(node, ast.Lambda):
-        return [*node.args.defaults, *(d for d in node.args.kw_defaults if d is not None), node.body]
+        return [node.body]
     if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
         first, *rest = node.generators
         parts = [first.target, *first.ifs]
