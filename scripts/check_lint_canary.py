@@ -30,8 +30,8 @@ EXPECTED = {"ruff": {"F841", "E711", "SIM201"},
             "pycodestyle": {"E128", "E129"}}
 ALLOWED_BY_THE_HOUSE = {"E126", "E127"}
 
-# The blocking ruff run, and the pycodestyle run. CI runs both under `pdm run`, and so does this script, so the
-# prefix is dropped: `ruff` and `python` then resolve to the same environment's.
+# The blocking ruff run (the advisory one ends in `|| true`), and the pycodestyle run. A `pdm run` prefix is
+# dropped: this script runs in the same environment, so `ruff` and `python` resolve to its own.
 _COMMANDS = {"ruff": re.compile(r"^\s*run:\s*(?:pdm run )?(ruff check \.(?:(?!\|\|).)*?)\s*$", re.MULTILINE),
              "pycodestyle": re.compile(r"^\s*run:\s*(?:pdm run )?(python -m pycodestyle .*?)\s*$", re.MULTILINE)}
 
