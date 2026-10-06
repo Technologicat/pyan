@@ -124,9 +124,12 @@ class ImportVisitor(ast.NodeVisitor):
         for source, module_name in sources:
             if isinstance(source, ast.AST):
                 source = ast.unparse(source)
+            tree = self._parse_or_skip(source, module_name)
+            if tree is None:
+                continue
             self.current_module = module_name
             self.fullpaths[module_name] = module_name  # use module name as stand-in
-            self.visit(ast.parse(source, module_name))
+            self.visit(tree)
         return self
 
     def analyze(self, filenames):
@@ -152,8 +155,21 @@ class ImportVisitor(ast.NodeVisitor):
         for m, fullpath in modules_to_visit:
             with open(fullpath, encoding="utf-8") as f:
                 content = f.read()
+            tree = self._parse_or_skip(content, fullpath)
+            if tree is None:  # we cannot say what it imports, so it is not drawn at all
+                del self.modules[m]
+                del self.fullpaths[m]
+                continue
             self.current_module = m
-            self.visit(ast.parse(content, fullpath))
+            self.visit(tree)
+
+    def _parse_or_skip(self, source, filename):
+        """Return the AST of *source*, or `None` after a warning if it is not valid Python."""
+        try:
+            return ast.parse(source, filename)
+        except SyntaxError as err:
+            self.logger.warning(f"{err.filename}:{err.lineno}: {err.msg}; leaving this file out of the analysis")
+            return None
 
     def add_dependency(self, target_module):  # source module is always self.current_module
         m = self.current_module

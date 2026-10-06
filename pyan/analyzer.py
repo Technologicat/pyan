@@ -316,8 +316,19 @@ class CallGraphVisitor(ast.NodeVisitor):
         # before the main visitor passes. This lets cross-module lookups
         # (wildcard desugaring, chiefly) succeed in pass 1 regardless of
         # the order in which filenames were given.
+        #
+        # A file Python would not compile cannot be analyzed, and is left out
+        # rather than costing the whole run. Besides syntax errors, that is a
+        # scoping error such as a `nonlocal` after an assignment, which code
+        # using macros can contain before the macros are expanded.
+        skipped = set()
         for filename in self.filenames:
-            self._prescan_one(filename)
+            try:
+                self._prescan_one(filename)
+            except SyntaxError as err:
+                self.logger.warning(f"{err.filename}:{err.lineno}: {err.msg}; leaving this file out of the analysis")
+                skipped.add(filename)
+        self.filenames = [filename for filename in self.filenames if filename not in skipped]
         for pas in range(2):
             for filename in self.filenames:
                 self.logger.info(f"========== pass {pas + 1}, file '{filename}' ==========")

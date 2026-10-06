@@ -2,6 +2,13 @@
 
 ## 2.8.2 (in progress)
 
+### Changed
+
+- **A file Python would not compile is now left out with a warning, instead of aborting the whole run.**
+  - The warning names the file and line, and the rest of the files are analyzed as usual.
+  - Besides syntax errors, this covers scoping errors such as a `nonlocal` after an assignment, which code using syntactic macros can contain before expansion.
+  - `--module-level` skips only what does not parse, since it does not check scopes.
+
 ### Fixed
 
 - **Lambdas and comprehensions are now always analyzed in their own scopes** ([#142](https://github.com/Technologicat/pyan/issues/142)).
