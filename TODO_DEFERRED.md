@@ -231,3 +231,14 @@ change to how dependencies are recorded, not a filter at the end.
 
 Discovered while fixing the sibling case, where a dependency on a package was dropped because
 the package's node was named `pkg.__init__` and the dependency was named `pkg` (2026-08-21).
+
+## Reconsider ruff's blanket `F401` ignore
+
+*Cluster: lint · Cost: ? · Gate: none · Filed: 2026-10-06*
+
+`[tool.ruff.lint]` ignores `F401` (unused import) project-wide, as "too noisy for legacy code". So ruff, which
+is all CI ran for imports, never reports an unused import: three got past it into `analyzer.py`, `modvis.py`
+and `main.py`, and only flake8 found them. Turning the rule on costs one `ruff check --select F401` run to size
+the backlog, and site-level `# noqa: F401` on the re-exports in `__init__.py`.
+
+Discovered during the #142 work (2026-10-06).
