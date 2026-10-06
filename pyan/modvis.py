@@ -4,7 +4,6 @@
 
 from argparse import ArgumentParser
 import ast
-from glob import glob
 import io
 import logging
 import os
@@ -87,8 +86,6 @@ def _package_of_init(m):
 #                 fullpath = os.path.join(root, filename)
 #                 py_files.append(fullpath)
 #     return py_files
-
-
 
 
 class ImportVisitor(ast.NodeVisitor):

@@ -10,7 +10,6 @@
 """
 
 from argparse import ArgumentParser
-from glob import glob
 import io
 import logging
 import os
