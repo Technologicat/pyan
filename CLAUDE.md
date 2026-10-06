@@ -51,7 +51,13 @@ GitHub Actions: test matrix across 3.10–3.15 on Linux plus macOS and Windows o
 ```bash
 # ruff (configured in pyproject.toml)
 ruff check .
+# continuation-line indentation, which ruff does not check; the exact command is in .github/workflows/ci.yml
+python -m pycodestyle --select=E121,E122,E123,E124,E125,E128,E129,E131 --exclude=... .
+# whether both of the above still catch what CI relies on them for
+python scripts/check_lint_canary.py
 ```
+
+CI runs all three. The canary lints `scripts/lint_canary_fixture.py`, a file of deliberate violations excluded from the other two, using the commands it reads out of `ci.yml`; when the CI lint steps change, its `EXPECTED` codes may need to follow.
 
 Legacy `flake8rc` also present (used by Emacs flycheck, not CI).
 

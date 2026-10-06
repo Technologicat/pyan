@@ -60,8 +60,9 @@ dev = [
     # `[project.optional-dependencies].sphinx` user-facing extra.
     "sphinx",
     "docutils",
-    # Linters (for local checks — CI installs them separately)
+    # Linters. CI runs ruff and pycodestyle from here, via `pdm install`.
     "ruff>=0.14.0",
+    "pycodestyle>=2.14.0",
     "flake8",
     "autopep8",
     # Editor tooling (jedi-based IDE features in Emacs)
@@ -141,6 +142,7 @@ exclude = [
     "site-packages",
     "venv",
     "tests/test_code_312",  # 3.12+ syntax — ruff targets 3.10
+    "scripts/lint_canary_fixture.py",  # deliberate violations; see scripts/check_lint_canary.py
     "tests/test_code_315",  # 3.15 syntax ruff cannot parse yet: "Iterable unpacking cannot be used in a comprehension" (ruff 0.15.10). Retry dropping this once ruff supports PEP 798.
 ]
 
