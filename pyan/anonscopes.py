@@ -41,6 +41,7 @@ def scope_key(node):
 
 class ScopePlan(NamedTuple):
     """The anonymous scopes of one module, as returned by `plan_anonymous_scopes`."""
+    source: str  # the source this was made from
     table: symtable.SymbolTable  # the module's table, from the tagged source
     marker_prefix: str  # every marker name starts with this, and no name in the source does
     labels: dict  # `scope_key` → label, such as ``lambda.1``
@@ -101,7 +102,8 @@ def plan_anonymous_scopes(source, filename, module_name):
             names[node] = f"{qualified_name(owners[node])}.{own}"
         return names[node]
 
-    return ScopePlan(table=top,
+    return ScopePlan(source=source,
+                     table=top,
                      marker_prefix=prefix,
                      labels={scope_key(node): label for node, label in labels.items()},
                      anon_tables=[(qualified_name(node), table) for node, table in tables.items()

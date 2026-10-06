@@ -145,3 +145,22 @@ def test_each_scope_is_named_for_its_own_lambda(tmp_path):
     v = CallGraphVisitor([str(tmp_path / "m.py")], root=str(tmp_path), logger=logging.getLogger())
     found = {ns.removeprefix("m."): sorted(scope.defs) for ns, scope in v.scopes.items() if ".lambda." in ns}
     assert found == {ns: [param] for ns, param in EXPECTED_SCOPES.items()}
+
+
+def test_a_file_edited_between_passes_is_planned_again(tmp_path, monkeypatch):
+    """A file can change on disk while pyan runs, say under an editor's save, and each pass reads it afresh.
+
+    A plan made from the old text then names spans the new text no longer has.
+    """
+    path = tmp_path / "m.py"
+    path.write_text("def f(x):\n    x.do(lambda first: 0)\n")
+    prescan = CallGraphVisitor._prescan_one
+
+    def prescan_then_edit(self, filename):
+        prescan(self, filename)
+        path.write_text("\n\n" + path.read_text())  # every span moves down two lines
+
+    monkeypatch.setattr(CallGraphVisitor, "_prescan_one", prescan_then_edit)
+    v = CallGraphVisitor([str(path)], root=str(tmp_path), logger=logging.getLogger())
+    assert path.read_text().startswith("\n\n"), "the file was not edited, so this fixture tests nothing"
+    assert sorted(v.scopes["m.f.lambda.0"].defs) == ["first"]

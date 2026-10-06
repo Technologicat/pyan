@@ -1988,10 +1988,15 @@ class CallGraphVisitor(ast.NodeVisitor):
     # Scope analysis
 
     def _scope_plan(self, code, filename):
-        """Return the `ScopePlan` of the source unit *filename*, computed once and shared by every pass."""
-        if filename not in self._scope_plans:
-            self._scope_plans[filename] = plan_anonymous_scopes(code, filename, self.module_name)
-        return self._scope_plans[filename]
+        """Return the `ScopePlan` of the source unit *filename*, whose source is *code*.
+
+        Computed once and shared by every pass, unless the file has changed on
+        disk between them: the plan's names are keyed by source positions.
+        """
+        plan = self._scope_plans.get(filename)
+        if plan is None or plan.source != code:
+            plan = self._scope_plans[filename] = plan_anonymous_scopes(code, filename, self.module_name)
+        return plan
 
     def analyze_scopes(self, code, filename):
         """Gather lexical scope information.
