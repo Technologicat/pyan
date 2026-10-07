@@ -2,6 +2,9 @@
 
 Items with GitHub ticket numbers are tracked externally. The rest are internal notes.
 
+Items filed 2026-04-17 are older than that date: they were carried over from the TODO list of Juha's
+original Python 3 port of Pyan, and the date is when they moved into this file.
+
 <!-- New items go below this line. -->
 
 ## "Node" terminology overload
